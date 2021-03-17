@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  * Copyright (c) 2020 terryky1220@gmail.com
  * ------------------------------------------------ */
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -634,6 +635,27 @@ setup_imgui (int win_w, int win_h)
 }
 
 
+void save_pose_ret(posenet_result_t* pose_ret, int count, char* input_name){
+//  printf("count: %d, input_name: %s\n", count, input_name);
+  FILE *myfile;
+  char out_name[100];
+//  char* token, * name;
+//  name = token = strtok(input_name, "/");
+//  for(;(token = strtok(NULL, "/")) != NULL; name = token);
+//#if defined (USE_EDGETPU)
+//  sprintf(out_name, "%s%s", "./pose_ret_edgetpu_", name);
+//#else
+//  sprintf(out_name, "%s%s", "./pose_ret____nano_", name);
+//#endif
+//  printf("out_name: %s \n", out_name);
+  myfile = fopen(/*out_name*/"./pose_ret_edgetpu_ice.txt", "a+");
+  if(myfile == NULL){ printf("file %s open fail.", out_name); }
+  for(int i = 0 ; i < kPoseKeyNum ; i++){
+    fprintf(myfile, "%f %f %f ", pose_ret->pose[0].key3d[i].x, pose_ret->pose[0].key3d[i].y, pose_ret->pose[0].key3d[i].z);
+  }
+  fprintf(myfile, "\n");
+}
+
 /*--------------------------------------------------------------------------- *
  *      M A I N    F U N C T I O N
  *--------------------------------------------------------------------------- */
@@ -816,6 +838,9 @@ main(int argc, char *argv[])
         invoke_imgui (&s_gui_prop);
 #endif
         egl_swap();
+
+	save_pose_ret(&pose_ret, count, input_name);
+
     }
 
     return 0;
