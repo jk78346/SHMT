@@ -6,8 +6,12 @@
 #include "tflite_pose3d.h"
 #include <float.h>
 
-#define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_float.tflite"
-#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
+#define POSENET_MODEL_PATH            "./model/human_pose_estimation_3d_0001_256x448_float.tflite"
+//#define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_float16_quant.tflite"
+//#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_integer_quant.tflite"
+//#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_weight_quant.tflite"
+#define POSENET_EDGETPU_MODEL_PATH    "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
+//#define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
 
 static tflite_interpreter_t s_interpreter;
 static tflite_tensor_t      s_tensor_input;

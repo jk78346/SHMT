@@ -1,2 +1,2 @@
 #include <stdint.h>
-float SSIM(int draw_w, int draw_h, uint8_t* buf1, uint8_t* buf2);
+float SSIM(int draw_w, int draw_h, unsigned char* buf1, unsigned char* buf2);

@@ -7,8 +7,8 @@
 #include "tflite_pose3d.h"
 #include <float.h>
 
-#define POSENET_MODEL_PATH          "./model/conv_128_float.tflite"
-#define POSENET_EDGETPU_MODEL_PATH  "./model/conv_1080_quant_edgetpu.tflite"
+#define POSENET_MODEL_PATH          "./model/mobilenet_v2_224_dm10_integer_quant.tflite"
+//#define POSENET_EDGETPU_MODEL_PATH  "./model/conv_1080_quant_edgetpu.tflite"
 extern char* model_name;
 
 static tflite_interpreter_t s_interpreter;

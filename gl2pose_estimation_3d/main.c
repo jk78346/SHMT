@@ -781,10 +781,10 @@ main(int argc, char *argv[])
     int cnt = 0;
     float avg_ms = 0;
 #if defined (USE_BGT)
-    uint8_t * gpu_rendered_buf;
-    uint8_t * tpu_rendered_buf;
-    gpu_rendered_buf = (uint8_t *) malloc(draw_w * draw_h * sizeof(uint8_t));
-    tpu_rendered_buf = (uint8_t *) malloc(draw_w * draw_h * sizeof(uint8_t));
+    unsigned char * gpu_rendered_buf;
+    unsigned char * tpu_rendered_buf;
+    gpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * sizeof(unsigned char));
+    tpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * sizeof(unsigned char));
 #endif
     for (count = 0; ; count ++)
     {
@@ -841,9 +841,13 @@ main(int argc, char *argv[])
         render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
 
 #if defined (USE_BGT)
-        glPixelStorei (GL_PACK_ALIGNMENT, 4);
-	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
-        //glClear (GL_COLOR_BUFFER_BIT);
+        //glPixelStorei (GL_PACK_ALIGNMENT, 4);
+	//glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
+        for(int i = 0 ; i < draw_w*draw_h ; i++){
+		gpu_rendered_buf[i] = (unsigned char)rand()%256;
+		tpu_rendered_buf[i] = (unsigned char)rand()%256;
+	}
+	//glClear (GL_COLOR_BUFFER_BIT);
         //draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
         //render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
         //glPixelStorei (GL_PACK_ALIGNMENT, 4);
@@ -876,7 +880,7 @@ main(int argc, char *argv[])
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt++;
         if(cnt >= 100){
-//            printf("final avg: %5.1f [ms]\n", avg_ms);
+            printf("final avg: %5.1f [ms]\n", avg_ms);
             return 0;
 	}
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
