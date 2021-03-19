@@ -138,11 +138,15 @@ static void
 get_index_to_pos (int idx_x, int idx_y, int key_id, fvec2 *pos2d, fvec3 *pos3d, int device)
 {
     float ofst_x, ofst_y, ofst_z;
+#if defined (USE_BGT)
     if(device == 0){
     	get_offset_vector (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
     }else{
-    	get_offset_vector_tpu (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
+        get_offset_vector_tpu (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
     }
+#else
+    get_offset_vector (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
+#endif
     /* pos 2D */
     pos2d->x = (float)idx_x / (float)(s_hmp_w -1);
     pos2d->y = (float)idx_y / (float)(s_hmp_h -1);
@@ -199,8 +203,12 @@ decode_single_pose (posenet_result_t *pose_result, int device)
         {
             for (int x = 0; x < s_hmp_w; x ++)
             {
-                float confidence = (device == 0)?get_heatmap_score (y, x, i):get_heatmap_score_tpu (y, x, i);
-                if (confidence > max_confidence)
+#if defined (USE_BGT)
+    		    float confidence = (device == 0)?get_heatmap_score (y, x, i):get_heatmap_score_tpu (y, x, i);
+#else
+    		    float confidence = get_heatmap_score (y, x, i);
+#endif
+    		    if (confidence > max_confidence)
                 {
                     max_confidence = confidence;
                     max_block_cnf[i] = confidence;

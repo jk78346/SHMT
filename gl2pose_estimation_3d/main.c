@@ -847,8 +847,6 @@ main(int argc, char *argv[])
         glViewport (0, 0, win_w, win_h);
 	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-	/* TODO: if command out the next line, SSIM is about 0.99xx, which means the next line draws the exact same skeleton as GPU, need to see why!!!*/
-	/* if pose_ret != pose_ret_tpu , does the rendering draw the exact same skeleton? And does these two equal? */
 	render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
 
 	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
@@ -883,14 +881,24 @@ main(int argc, char *argv[])
         }
 
 	avg_ms   = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
+#if defined (USE_BGT)
 	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
+#endif
 	cnt++;
         if(cnt >= 100){
-            printf("final avg: %5.1f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
-            return 0;
+#if defined (USE_BGT)
+    		printf("final avg: %5.1f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
+#else
+    		printf("final avg: %5.1f [ms]\n", avg_ms);
+#endif
+    		return 0;
 	}
+#if defined (USE_BGT)
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
-        draw_dbgstr (strbuf, 10, 10); // draw the string above
+#else
+	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
+#endif
+	draw_dbgstr (strbuf, 10, 10); // draw the string above
 
 #if defined (USE_IMGUI)
         invoke_imgui (&s_gui_prop);

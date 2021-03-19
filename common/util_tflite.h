@@ -30,7 +30,7 @@
 
 #if defined (USE_EDGETPU) || defined (USE_BGT)
 #include "edgetpu.h"
-#include "tensorflow/lite/interpreter.h"
+//#include "tensorflow/lite/interpreter.h"
 #endif
 
 typedef struct tflite_interpreter_t
