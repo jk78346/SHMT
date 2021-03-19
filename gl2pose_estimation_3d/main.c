@@ -787,8 +787,8 @@ main(int argc, char *argv[])
         ttime[1] = pmeter_get_time_ms ();
         interval = (count > 0) ? ttime[1] - ttime[0] : 0;
         ttime[0] = ttime[1];
-
-        glClear (GL_COLOR_BUFFER_BIT);
+        
+	glClear (GL_COLOR_BUFFER_BIT);
         glViewport (0, 0, win_w, win_h);
 
 #if defined (USE_INPUT_VIDEO_DECODE)

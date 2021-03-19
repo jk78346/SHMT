@@ -554,12 +554,12 @@ tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tf
     case kTfLiteUInt8:
         ptr = (io == 0) ? interpreter->typed_input_tensor <uint8_t>(io_idx) :
                           interpreter->typed_output_tensor<uint8_t>(io_idx);
-	printf("tensor type uint8 mapped\n");
+	printf("    tensor type uint8 mapped\n");
 	break;
     case kTfLiteFloat32:
         ptr = (io == 0) ? interpreter->typed_input_tensor <float>(io_idx) :
                           interpreter->typed_output_tensor<float>(io_idx);
-	printf("tensor type float32 mapped\n");
+	printf("    tensor type float32 mapped\n");
         break;
     case kTfLiteInt64:
         ptr = (io == 0) ? interpreter->typed_input_tensor <int64_t>(io_idx) :
