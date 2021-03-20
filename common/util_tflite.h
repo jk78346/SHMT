@@ -74,7 +74,11 @@ extern "C" {
 int tflite_create_interpreter (tflite_interpreter_t *p, const char *model_buf, size_t model_size);
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
 
+#if defined (USE_BGT)
+int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path, const char *tpu_model_path);
+#else
 int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path);
+#endif
 int tflite_create_interpreter_ex_from_file (tflite_interpreter_t *p, const char *model_path, tflite_createopt_t *opt);
 
 

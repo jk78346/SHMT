@@ -731,7 +731,7 @@ main(int argc, char *argv[])
 
     setup_imgui (win_w * 2, win_h);
 
-#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2)
+#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
     glBindFramebuffer (GL_FRAMEBUFFER, 0);
     glViewport (0, 0, win_w, win_h);
@@ -847,10 +847,10 @@ main(int argc, char *argv[])
 
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt++;
-        if(cnt >= 100){
-            printf("final avg: %5.1f [ms]\n", avg_ms);
-            return 0;
-	}
+//        if(cnt >= 100){
+//            printf("final avg: %5.1f [ms]\n", avg_ms);
+//            return 0;
+//	}
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
         draw_dbgstr (strbuf, 10, 10);
 
@@ -859,7 +859,7 @@ main(int argc, char *argv[])
 #endif
         egl_swap();
 
-	save_pose_ret(&pose_ret, count, input_name);
+	//save_pose_ret(&pose_ret, count, input_name);
 
     }
 

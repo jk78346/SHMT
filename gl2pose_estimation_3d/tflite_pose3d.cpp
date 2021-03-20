@@ -29,6 +29,9 @@ static _result_quality s_result_quality;
 int
 init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
 {
+#if defined (USE_BGT)
+    tflite_create_interpreter_from_file (&s_interpreter, POSENET_MODEL_PATH, POSENET_EDGETPU_MODEL_PATH);
+#else
     const char *posenet_model;
 
     if(use_quantized_tflite == 0){
@@ -37,6 +40,7 @@ init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
       posenet_model = POSENET_EDGETPU_MODEL_PATH;
     }
     tflite_create_interpreter_from_file (&s_interpreter, posenet_model);
+#endif
     tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
     tflite_get_tensor_by_name (&s_interpreter, 1, "Identity",   &s_tensor_offsets); /* (1,  32,  56, 57) */
     tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1", &s_tensor_heatmap); /* (1,  32,  56, 19) */

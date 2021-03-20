@@ -268,7 +268,11 @@ std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatB
 #endif
 
 int
+#if defined (USE_BGT)
+tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path, const char *tpu_model_path)
+#else
 tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path)
+#endif
 {
     p->model = FlatBufferModel::BuildFromFile (model_path);
     if (!p->model)
@@ -289,7 +293,7 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
     }
 #else
 #if defined (USE_BGT)
-    p->tpu_model = FlatBufferModel::BuildFromFile (model_path);
+    p->tpu_model = FlatBufferModel::BuildFromFile (tpu_model_path);
     if (!p->tpu_model)
     {
         DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
@@ -347,10 +351,11 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
 #if 1 /* for debug */
     DBG_LOG ("\n");
     DBG_LOG ("##### LOAD TFLITE FILE: \"%s\"\n", model_path);
+    tflite_print_tensor_info (p->interpreter);
 #if defined (USE_BGT)
+    DBG_LOG ("##### LOAD TFLITE FILE: \"%s\"\n", tpu_model_path);
     tflite_print_tensor_info (p->tpu_interpreter);
 #endif
-    tflite_print_tensor_info (p->interpreter);
 #endif
 
     return 0;
