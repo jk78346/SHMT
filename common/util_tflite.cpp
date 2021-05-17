@@ -2,13 +2,17 @@
  * The MIT License (MIT)
  * Copyright (c) 2019 terryky1220@gmail.com
  * ------------------------------------------------ */
+#include "iostream"
 #include "util_tflite.h"
 #include "util_debug.h"
 #include <thread>
 
 using namespace tflite;
 
-
+#if defined (USE_EDGETPU)
+edgetpu::EdgeTpuManager::DeviceEnumerationRecord enumerate_edgetpu;
+std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
+#endif
 
 static std::string
 tflite_get_tensor_dim_str (TfLiteTensor *tensor)
@@ -243,6 +247,23 @@ modify_graph_with_delegate (tflite_interpreter_t *p, tflite_createopt_t *opt)
     return 0;
 }
 
+#if defined (USE_EDGETPU)
+std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatBufferModel& model, edgetpu::EdgeTpuContext* edgetpu_context) {
+  tflite::ops::builtin::BuiltinOpResolver resolver;
+  resolver.AddCustom(edgetpu::kCustomOp, edgetpu::RegisterCustomOp());
+  std::unique_ptr<tflite::Interpreter> interpreter;
+  if (tflite::InterpreterBuilder(model, resolver)(&interpreter) != kTfLiteOk) {
+    std::cerr << "Failed to build interpreter." << std::endl;
+  }
+  // Bind given context with interpreter.
+  interpreter->SetExternalContext(kTfLiteEdgeTpuContext, edgetpu_context);
+  interpreter->SetNumThreads(2);
+  if (interpreter->AllocateTensors() != kTfLiteOk) {
+    std::cerr << "Failed to allocate tensors." << std::endl;
+  }
+  return interpreter;
+}
+#endif
 
 int
 tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path)
@@ -254,12 +275,22 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
         return -1;
     }
 
+#if defined (USE_EDGETPU)
+    printf("Open devices...\n");
+    edgetpu_context = edgetpu::EdgeTpuManager::GetSingleton()->OpenDevice(enumerate_edgetpu.type, enumerate_edgetpu.path);
+    p->interpreter = BuildEdgeTpuInterpreter(*(p->model), edgetpu_context.get());
+    if(p->interpreter == nullptr){
+      std::cerr << "Fail to build interpreter." << std::endl;
+      std::abort();
+    }
+#else
     InterpreterBuilder(*(p->model), p->resolver)(&(p->interpreter));
     if (!p->interpreter)
     {
         DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
     }
+#endif
 
     int num_threads = std::thread::hardware_concurrency();
     char *env_tflite_num_threads = getenv ("FORCE_TFLITE_NUM_THREADS");

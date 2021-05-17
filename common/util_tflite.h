@@ -28,6 +28,10 @@
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #endif
 
+#if defined (USE_EDGETPU)
+#include "edgetpu.h"
+#include "tensorflow/lite/interpreter.h"
+#endif
 
 typedef struct tflite_interpreter_t
 {
