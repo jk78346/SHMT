@@ -715,6 +715,10 @@ main(int argc, char *argv[])
     init_dbgstr (win_w, win_h);
     init_cube ((float)win_w / (float)win_h);
 
+
+#if defined (USE_EDGETPU)
+    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
+#endif
     init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config);
 
     setup_imgui (win_w * 2, win_h);
@@ -762,6 +766,8 @@ main(int argc, char *argv[])
     /* --------------------------------------- *
      *  Render Loop
      * --------------------------------------- */
+    int cnt = 0;
+    float avg_ms = 0;
     for (count = 0; ; count ++)
     {
         posenet_result_t pose_ret = {0};
@@ -831,7 +837,13 @@ main(int argc, char *argv[])
             draw_pmeter (0, 40);
         }
 
-        sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]", interval, invoke_ms);
+	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
+	cnt++;
+        if(cnt >= 100){
+            printf("final avg: %5.1f [ms]\n", avg_ms);
+            return 0;
+	}
+	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
         draw_dbgstr (strbuf, 10, 10);
 
 #if defined (USE_IMGUI)

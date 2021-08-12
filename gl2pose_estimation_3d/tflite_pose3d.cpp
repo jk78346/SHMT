@@ -7,6 +7,7 @@
 #include <float.h>
 
 #define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_float.tflite"
+#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
 
 static tflite_interpreter_t s_interpreter;
 static tflite_tensor_t      s_tensor_input;
@@ -30,7 +31,11 @@ init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
 {
     const char *posenet_model;
 
-    posenet_model = POSENET_MODEL_PATH;
+    if(use_quantized_tflite == 0){
+      posenet_model = POSENET_MODEL_PATH;
+    }else{
+      posenet_model = POSENET_EDGETPU_MODEL_PATH;
+    }
     tflite_create_interpreter_from_file (&s_interpreter, posenet_model);
     tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
     tflite_get_tensor_by_name (&s_interpreter, 1, "Identity",   &s_tensor_offsets); /* (1,  32,  56, 57) */

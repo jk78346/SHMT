@@ -10,7 +10,8 @@
  * https://www.tensorflow.org/lite/guide/hosted_models
  */
 #define CLASSIFY_MODEL_PATH        "./classification_model/mobilenet_v1_1.0_224.tflite"
-#define CLASSIFY_QUANT_MODEL_PATH  "./classification_model/mobilenet_v1_1.0_224_quant.tflite"
+//#define CLASSIFY_QUANT_MODEL_PATH  "./classification_model/mobilenet_v1_1.0_224_quant.tflite"
+#define CLASSIFY_QUANT_MODEL_PATH  "./classification_model/mobilenet_v1_1.0_224_quant_edgetpu.tflite"
 #define CLASSIFY_LABEL_MAP_PATH    "./classification_model/class_label.txt"
 
 static tflite_interpreter_t s_interpreter;

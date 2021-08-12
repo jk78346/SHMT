@@ -399,7 +399,7 @@ main(int argc, char *argv[])
     int texw, texh, draw_x, draw_y, draw_w, draw_h;
     texture_2d_t captex = {0};
     double ttime[10] = {0}, interval, invoke_ms0 = 0, invoke_ms1 = 0;
-    int use_quantized_tflite = 0;
+    int use_quantized_tflite = 1;
     int enable_camera = 1;
     imgui_data_t imgui_data = {0};
     UNUSED (argc);
@@ -491,6 +491,8 @@ main(int argc, char *argv[])
     /* --------------------------------------- *
      *  Render Loop
      * --------------------------------------- */
+    int cnt = 0;
+    float avg_ms = 0;
     for (count = 0; ; count ++)
     {
         pose_detect_result_t    detect_ret = {0};
@@ -570,8 +572,14 @@ main(int argc, char *argv[])
          * --------------------------------------- */
         draw_pmeter (0, 40);
 
-        sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite0 :%5.1f [ms]\nTFLite1 :%5.1f [ms]",
-            interval, invoke_ms0, invoke_ms1);
+        avg_ms = (avg_ms * cnt + invoke_ms0) / (cnt + 1);
+	cnt++;
+        if(cnt >= 100){
+		printf("final avg: %5.1f [ms]", avg_ms);
+		return 0;
+	}
+	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite0 :%5.1f [ms]\nTFLite1 :%5.1f [ms]\n invoke 0 avg: %5.1f [ms]",
+            interval, invoke_ms0, invoke_ms1, avg_ms);
         draw_dbgstr (strbuf, 10, 10);
 
 #if defined (USE_IMGUI)
