@@ -19,7 +19,7 @@ static int     s_img_h = 0;
 static int     s_hmp_w = 0;
 static int     s_hmp_h = 0;
 
-
+static _result_quality s_result_quality;
 
 
 
@@ -62,6 +62,13 @@ get_pose3d_input_buf (int *w, int *h)
     return s_tensor_input.ptr;
 }
 
+#if defined (USE_BGT)
+void *
+get_pose3d_input_buf_tpu()
+{
+    return s_tensor_input.tpu_ptr;
+}
+#endif
 
 /* -------------------------------------------------- *
  * Invoke TensorFlow Lite
@@ -73,6 +80,15 @@ get_heatmap_score (int idx_y, int idx_x, int key_id)
     float *heatmap_ptr = (float *)s_tensor_heatmap.ptr;
     return heatmap_ptr[idx];
 }
+#if defined (USE_BGT)
+static float
+get_heatmap_score_tpu (int idx_y, int idx_x, int key_id)
+{
+    int idx = (idx_y * s_hmp_w * kPoseKeyNum) + (idx_x * kPoseKeyNum) + key_id;
+    float *heatmap_ptr = (float *)s_tensor_heatmap.tpu_ptr;
+    return heatmap_ptr[idx];
+}
+#endif
 
 static void
 get_offset_vector (float *ofst_x, float *ofst_y, float *ofst_z, int idx_y, int idx_x, int pose_id_)
@@ -110,7 +126,20 @@ get_index_to_pos (int idx_x, int idx_y, int key_id, fvec2 *pos2d, fvec3 *pos3d)
     pos3d->z = ofst_z;
 }
 
+void mpjpe(pose_t target, pose_t pred)
+{
+    float sum = 0;
+    for(int i = 0 ; i < kPoseKeyNum ; i++)
+    {
+        sum += sqrt(pow(pred.key3d[i].x - target.key3d[i].x, 2.0) + pow(pred.key3d[i].y - target.key3d[i].y, 2.0) + pow(pred.key3d[i].z - target.key3d[i].z, 2.0));
+    }
 
+    float mpjpe     = s_result_quality.curr_mpjpe = sum/kPoseKeyNum;
+    int cnt         = s_result_quality.cnt++;
+    float avg_mpjpe = s_result_quality.avg_mpjpe  = (s_result_quality.avg_mpjpe * cnt + mpjpe) / (cnt + 1);    
+
+    printf("curr mpjpe: %f, avg mpjpe: %f\n", mpjpe, avg_mpjpe);
+}
 
 
 static void
@@ -144,6 +173,30 @@ decode_single_pose (posenet_result_t *pose_result)
             }
         }
     }
+#if defined (USE_BGT)
+    int   tpu_max_block_idx[kPoseKeyNum][2] = {0};
+    float tpu_max_block_cnf[kPoseKeyNum]    = {0};
+
+    /* find the highest heatmap block for each key */
+    for (int i = 0; i < kPoseKeyNum; i ++)
+    {
+        float max_confidence = -FLT_MAX;
+        for (int y = 0; y < s_hmp_h; y ++)
+        {
+            for (int x = 0; x < s_hmp_w; x ++)
+            {
+                float confidence = get_heatmap_score_tpu (y, x, i);
+                if (confidence > max_confidence)
+                {
+                    max_confidence = confidence;
+                    tpu_max_block_cnf[i] = confidence;
+                    tpu_max_block_idx[i][0] = x;
+                    tpu_max_block_idx[i][1] = y;
+                }
+            }
+        }
+    }
+#endif
 
 #if 0
     for (int i = 0; i < kPoseKeyNum; i ++)
@@ -187,6 +240,33 @@ decode_single_pose (posenet_result_t *pose_result)
     }
     pose_result->num = 1;
     pose_result->pose[0].pose_score = 1.0f;
+
+#if defined (USE_BGT)
+    /* find the offset vector and calculate the keypoint coordinates. */
+    for (int i = 0; i < kPoseKeyNum;i ++ )
+    {
+        int idx_x = tpu_max_block_idx[i][0];
+        int idx_y = tpu_max_block_idx[i][1];
+        fvec2 pos2d;
+        fvec3 pos3d;
+        get_index_to_pos (idx_x, idx_y, i, &pos2d, &pos3d);
+
+        pose_result->tpu_pose[0].key[i].x     = pos2d.x;
+        pose_result->tpu_pose[0].key[i].y     = pos2d.y;
+        pose_result->tpu_pose[0].key[i].score = tpu_max_block_cnf[i];
+
+        pose_result->tpu_pose[0].key3d[i].x   = pos3d.x;
+        pose_result->tpu_pose[0].key3d[i].y   = pos3d.y;
+        pose_result->tpu_pose[0].key3d[i].z   = pos3d.z;
+        pose_result->tpu_pose[0].key3d[i].score = tpu_max_block_cnf[i];
+    }
+    pose_result->num = 1;
+    pose_result->tpu_pose[0].pose_score = 1.0f;
+
+    /* eval pose result. */
+    mpjpe(pose_result->pose[0], pose_result->tpu_pose[0]);
+#endif
+
 }
 
 
@@ -201,7 +281,13 @@ invoke_pose3d (posenet_result_t *pose_result)
         fprintf (stderr, "ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
     }
-
+#if defined (USE_BGT)
+    if (s_interpreter.tpu_interpreter->Invoke() != kTfLiteOk)
+    {
+        fprintf (stderr, "ERR: %s(%d)\n", __FILE__, __LINE__);
+        return -1;
+    }
+#endif
     if (0)
         decode_multiple_poses (pose_result);
     else
@@ -210,7 +296,12 @@ invoke_pose3d (posenet_result_t *pose_result)
     pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
     pose_result->pose[0].heatmap_dims[0] = s_hmp_w;
     pose_result->pose[0].heatmap_dims[1] = s_hmp_h;
-
+#if defined (USE_BGT)
+    pose_result->tpu_pose[0].heatmap = s_tensor_heatmap.tpu_ptr;
+    pose_result->tpu_pose[0].heatmap_dims[0] = s_hmp_w;
+    pose_result->tpu_pose[0].heatmap_dims[1] = s_hmp_h;
+#endif
     return 0;
 }
+
 

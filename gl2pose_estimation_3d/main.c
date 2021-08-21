@@ -46,6 +46,9 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
 {
     int dst_w, dst_h;
     float *buf_fp32 = (float *)get_pose3d_input_buf (&dst_w, &dst_h);
+#if defined (USE_BGT)
+    float *tpu_buf_fp32 = (float *)get_pose3d_input_buf_tpu ();
+#endif
     unsigned char *buf_ui8 = NULL;
     static unsigned char *pui8 = NULL;
 
@@ -98,8 +101,13 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
             buf_ui8 ++;          /* skip alpha */
             *buf_fp32 ++ = (float)(r - mean) / std;
             *buf_fp32 ++ = (float)(g - mean) / std;
-            *buf_fp32 ++ = (float)(b - mean) / std;
-        }
+	    *buf_fp32 ++ = (float)(b - mean) / std;
+#if defined (USE_BGT)
+            *tpu_buf_fp32 ++ = (float)(r - mean) / std;
+            *tpu_buf_fp32 ++ = (float)(g - mean) / std;
+            *tpu_buf_fp32 ++ = (float)(b - mean) / std;
+#endif
+	}
     }
 
     s_srctex_region.width  = dst_w;     /* full rect width  with margin */
@@ -807,7 +815,7 @@ main(int argc, char *argv[])
         ttime[3] = pmeter_get_time_ms ();
         invoke_ms = ttime[3] - ttime[2];
 
-        /* --------------------------------------- *
+	/* --------------------------------------- *
          *  render scene (left half)
          * --------------------------------------- */
         glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

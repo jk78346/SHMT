@@ -12,7 +12,7 @@
 #if defined (USE_GL_DELEGATE)
 #include "tensorflow/lite/delegates/gpu/gl_delegate.h"
 #endif
-#if defined (USE_GPU_DELEGATEV2)
+#if defined (USE_GPU_DELEGATEV2) || defined (USE_BGT)
 #include "tensorflow/lite/delegates/gpu/delegate.h"
 #endif
 
@@ -28,7 +28,7 @@
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #endif
 
-#if defined (USE_EDGETPU)
+#if defined (USE_EDGETPU) || defined (USE_BGT)
 #include "edgetpu.h"
 #include "tensorflow/lite/interpreter.h"
 #endif
@@ -38,6 +38,12 @@ typedef struct tflite_interpreter_t
     std::unique_ptr<tflite::FlatBufferModel> model;
     std::unique_ptr<tflite::Interpreter>     interpreter;
     tflite::ops::builtin::BuiltinOpResolver  resolver;
+#if defined (USE_BGT)
+    // second set of interpreter for edgeTPU besides GPU
+    std::unique_ptr<tflite::FlatBufferModel> tpu_model;
+    std::unique_ptr<tflite::Interpreter>     tpu_interpreter;
+    tflite::ops::builtin::BuiltinOpResolver  tpu_resolver;
+#endif
 } tflite_interpreter_t;
 
 typedef struct tflite_createopt_t
@@ -52,6 +58,9 @@ typedef struct tflite_tensor_t
     int         io_idx;     /* in/out tensor index */
     TfLiteType  type;       /* [1] kTfLiteFloat32, [2] kTfLiteInt32, [3] kTfLiteUInt8 */
     void        *ptr;
+#if defined (USE_BGT)
+    void        *tpu_ptr;
+#endif
     int         dims[4];
     float       quant_scale;
     int         quant_zerop;

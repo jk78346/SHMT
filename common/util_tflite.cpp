@@ -9,7 +9,7 @@
 
 using namespace tflite;
 
-#if defined (USE_EDGETPU)
+#if defined (USE_EDGETPU) || defined (USE_BGT)
 edgetpu::EdgeTpuManager::DeviceEnumerationRecord enumerate_edgetpu;
 std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
 #endif
@@ -173,7 +173,7 @@ modify_graph_with_delegate (tflite_interpreter_t *p, tflite_createopt_t *opt)
 #endif
 #endif
 
-#if defined (USE_GPU_DELEGATEV2)
+#if defined (USE_GPU_DELEGATEV2) || defined (USE_BGT)
     const TfLiteGpuDelegateOptionsV2 options = {
         .is_precision_loss_allowed = 1, // FP16
         .inference_preference = TFLITE_GPU_INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER,
@@ -247,7 +247,7 @@ modify_graph_with_delegate (tflite_interpreter_t *p, tflite_createopt_t *opt)
     return 0;
 }
 
-#if defined (USE_EDGETPU)
+#if defined (USE_EDGETPU) || defined (USE_BGT)
 std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatBufferModel& model, edgetpu::EdgeTpuContext* edgetpu_context) {
   tflite::ops::builtin::BuiltinOpResolver resolver;
   resolver.AddCustom(edgetpu::kCustomOp, edgetpu::RegisterCustomOp());
@@ -288,6 +288,23 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
       printf("edgetpu itpr built.\n");
     }
 #else
+#if defined (USE_BGT)
+    p->tpu_model = FlatBufferModel::BuildFromFile (model_path);
+    if (!p->tpu_model)
+    {
+        DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+        return -1;
+    }
+    printf("[BGT]Open devices...\n");
+    edgetpu_context = edgetpu::EdgeTpuManager::GetSingleton()->OpenDevice(enumerate_edgetpu.type, enumerate_edgetpu.path);
+    p->tpu_interpreter = BuildEdgeTpuInterpreter(*(p->tpu_model), edgetpu_context.get());
+    if(p->tpu_interpreter == nullptr){
+      std::cerr << "Fail to build interpreter." << std::endl;
+      std::abort();
+    }else{
+      printf("[bgt]edgetpu itpr built.\n");
+    }
+#endif
     InterpreterBuilder(*(p->model), p->resolver)(&(p->interpreter));
     if (!p->interpreter)
     {
@@ -305,6 +322,9 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
     }
     DBG_LOG ("@@@@@@ TFLITE_NUM_THREADS=%d\n", num_threads);
     p->interpreter->SetNumThreads(num_threads);
+#if defined (USE_BGT)
+    p->tpu_interpreter->SetNumThreads(num_threads);
+#endif
 
     if (modify_graph_with_delegate (p, NULL) < 0)
     {
@@ -317,10 +337,19 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
         DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
     }
-
+#if defined (USE_BGT)
+    if (p->tpu_interpreter->AllocateTensors() != kTfLiteOk)
+    {
+        DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+        return -1;
+    }
+#endif
 #if 1 /* for debug */
     DBG_LOG ("\n");
     DBG_LOG ("##### LOAD TFLITE FILE: \"%s\"\n", model_path);
+#if defined (USE_BGT)
+    tflite_print_tensor_info (p->tpu_interpreter);
+#endif
     tflite_print_tensor_info (p->interpreter);
 #endif
 
@@ -489,7 +518,9 @@ int
 tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor)
 {
     std::unique_ptr<Interpreter> &interpreter = p->interpreter;
-
+#if defined (USE_BGT)
+    std::unique_ptr<Interpreter> &tpu_interpreter = p->tpu_interpreter;
+#endif
     memset (ptensor, 0, sizeof (*ptensor));
 
     int tensor_idx;
@@ -538,12 +569,61 @@ tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tf
         DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
     }
+#if defined (USE_BGT)
+    io_idx = -1;
+    num_tensor = (io == 0) ? tpu_interpreter->inputs ().size() :
+                             tpu_interpreter->outputs().size();
 
+    for (int i = 0; i < num_tensor; i ++)
+    {
+        tensor_idx = (io == 0) ? tpu_interpreter->inputs ()[i] :
+                                 tpu_interpreter->outputs()[i];
+
+        const char *tensor_name = tpu_interpreter->tensor(tensor_idx)->name;
+        if (strcmp (tensor_name, name) == 0)
+        {
+            io_idx = i;
+            break;
+        }
+    }
+
+    if (io_idx < 0)
+    {
+        DBG_LOGE ("can't find tensor: \"%s\"\n", name);
+        return -1;
+    }
+
+    void *tpu_ptr = NULL;
+    TfLiteTensor *tpu_tensor = tpu_interpreter->tensor(tensor_idx);
+    switch (tpu_tensor->type)
+    {
+    case kTfLiteUInt8:
+        tpu_ptr = (io == 0) ? tpu_interpreter->typed_input_tensor <uint8_t>(io_idx) :
+                              tpu_interpreter->typed_output_tensor<uint8_t>(io_idx);
+	printf("tpu tensor type uint8 mapped\n");
+	break;
+    case kTfLiteFloat32:
+        tpu_ptr = (io == 0) ? tpu_interpreter->typed_input_tensor <float>(io_idx) :
+                              tpu_interpreter->typed_output_tensor<float>(io_idx);
+	printf("tpu tensor type float32 mapped\n");
+        break;
+    case kTfLiteInt64:
+        tpu_ptr = (io == 0) ? tpu_interpreter->typed_input_tensor <int64_t>(io_idx) :
+                              tpu_interpreter->typed_output_tensor<int64_t>(io_idx);
+        break;
+    default:
+        DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+        return -1;
+    }
+#endif
     ptensor->idx    = tensor_idx;
     ptensor->io     = io;
     ptensor->io_idx = io_idx;
     ptensor->type   = tensor->type;
     ptensor->ptr    = ptr;
+#if defined (USE_BGT)
+    ptensor->tpu_ptr    = tpu_ptr;
+#endif
     ptensor->quant_scale = tensor->params.scale;
     ptensor->quant_zerop = tensor->params.zero_point;
 
