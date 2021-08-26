@@ -74,9 +74,6 @@ typedef struct _posenet_result_t
 {
     int num;
     pose_t pose[MAX_POSE_NUM];
-#if defined (USE_BGT)
-    pose_t tpu_pose[MAX_POSE_NUM];
-#endif
 } posenet_result_t;
 
 
@@ -99,6 +96,10 @@ int  init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config);
 void *get_pose3d_input_buf (int *w, int *h);
 void *get_pose3d_input_buf_tpu ();
 int invoke_pose3d (posenet_result_t *pose_result);
+
+#if defined (USE_BGT)
+int invoke_pose3d_tpu (posenet_result_t *pose_result);
+#endif
 
 #ifdef __cplusplus
 }

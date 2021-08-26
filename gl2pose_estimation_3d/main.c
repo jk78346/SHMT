@@ -21,6 +21,10 @@
 #include "render_pose3d.h"
 #include "touch_event.h"
 #include "render_imgui.h"
+#if defined (USE_BGT)
+#include "util_quality.h"
+#endif
+
 
 #define UNUSED(x) (void)(x)
 
@@ -776,10 +780,19 @@ main(int argc, char *argv[])
      * --------------------------------------- */
     int cnt = 0;
     float avg_ms = 0;
+#if defined (USE_BGT)
+    uint8_t * gpu_rendered_buf;
+    uint8_t * tpu_rendered_buf;
+    gpu_rendered_buf = (uint8_t *) malloc(draw_w * draw_h * sizeof(uint8_t));
+    tpu_rendered_buf = (uint8_t *) malloc(draw_w * draw_h * sizeof(uint8_t));
+#endif
     for (count = 0; ; count ++)
     {
         posenet_result_t pose_ret = {0};
-        char strbuf[512];
+#if defined (USE_BGT)
+        posenet_result_t pose_ret_tpu = {0};
+#endif
+	char strbuf[512];
 
         PMETER_RESET_LAP ();
         PMETER_SET_LAP ();
@@ -812,6 +825,9 @@ main(int argc, char *argv[])
 
         ttime[2] = pmeter_get_time_ms ();
         invoke_pose3d (&pose_ret);
+#if defined (USE_BGT)
+        invoke_pose3d_tpu (&pose_ret_tpu);
+#endif
         ttime[3] = pmeter_get_time_ms ();
         invoke_ms = ttime[3] - ttime[2];
 
@@ -823,6 +839,18 @@ main(int argc, char *argv[])
         /* visualize the object detection results. */
         draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
         render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
+
+#if defined (USE_BGT)
+        glPixelStorei (GL_PACK_ALIGNMENT, 4);
+	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
+        //glClear (GL_COLOR_BUFFER_BIT);
+        //draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
+        //render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
+        //glPixelStorei (GL_PACK_ALIGNMENT, 4);
+	//glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
+	/* Quality eval: SSIM */
+        float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
+#endif
 
 #if 0
         render_posenet_heatmap (draw_x, draw_y, draw_w, draw_h, &pose_ret);
@@ -847,10 +875,10 @@ main(int argc, char *argv[])
 
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt++;
-//        if(cnt >= 100){
+        if(cnt >= 100){
 //            printf("final avg: %5.1f [ms]\n", avg_ms);
-//            return 0;
-//	}
+            return 0;
+	}
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
         draw_dbgstr (strbuf, 10, 10);
 
