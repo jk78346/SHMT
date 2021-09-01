@@ -16,13 +16,13 @@ float average(int n, unsigned char* x, int type/*RBGA*/){
     return sum / (float)n;
 }
 
-float variance(int n, unsigned char* x, float ux, int type/*RBGA*/){
+float sdev(int n, unsigned char* x, float ux, int type/*RBGA*/){
     float sum = 0;
     float avg = ux;
     for(int i = 0 ; i < n ; i++){
         sum += pow((float)x[4*i+type] - avg, 2);
     }
-    return sum / (float)n;
+    return pow(sum / (float)n, 0.5);
 }
 
 float covariance(int n , unsigned char* x, unsigned char* y, float ux, float uy, int type/*RBGA*/){
@@ -44,16 +44,16 @@ float SSIM(int draw_w, int draw_h, unsigned char* buf1, unsigned char* buf2){
     int n = draw_w * draw_h;
     float ux; // average of x
     float uy; // average of y
-    float vx; // variance of x
-    float vy; // variance of y
+    float vx; // standard variation of x
+    float vy; // standard variation of y
     float cov; // covariance of x and y
 
 /*rgba order for each pixel*/
     for(int i = 0 ; i < 3 ; i++){ // loop through RGB and skip A
         ux = average(n, buf1, i);
         uy = average(n, buf2, i);
-	vx = variance(n, buf1, ux, i);
-	vy = variance(n, buf2, uy, i);
+	vx = sdev(n, buf1, ux, i);
+	vy = sdev(n, buf2, uy, i);
 	cov = covariance(n, buf1, buf2, ux, uy, i);
         ssim_per_channel = ((2*ux*uy + c1)*(2*cov+c2)) / ((pow(ux, 2)+pow(uy, 2)+c1)*(pow(vx, 2)+pow(vy, 2)+c2));
 	printf("SSIM: %f, ux: %f, uy: %f, vx: %f, vy: %f, cov: %f\n", ssim_per_channel, ux, uy, vx, vy, cov);

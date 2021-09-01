@@ -850,7 +850,12 @@ main(int argc, char *argv[])
 
 	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
 	/* Quality eval: SSIM */
-        float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
+	// /* dummy values to test correctness of SSIM API */
+	//for(int i = 0 ; i < draw_w * draw_h * 4 ; i++){
+	//	tpu_rendered_buf[i] = rand()%256;
+	//	gpu_rendered_buf[i] = tpu_rendered_buf[i] ;//+ 1;
+	//}
+	float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
 #endif
 
 #if 0
