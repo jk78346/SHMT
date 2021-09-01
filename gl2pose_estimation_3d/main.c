@@ -783,8 +783,8 @@ main(int argc, char *argv[])
 #if defined (USE_BGT)
     unsigned char * gpu_rendered_buf;
     unsigned char * tpu_rendered_buf;
-    gpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * sizeof(unsigned char));
-    tpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * sizeof(unsigned char));
+    gpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * 4 * sizeof(unsigned char));
+    tpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * 4 * sizeof(unsigned char));
 #endif
     for (count = 0; ; count ++)
     {
@@ -841,17 +841,14 @@ main(int argc, char *argv[])
         render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
 
 #if defined (USE_BGT)
-        //glPixelStorei (GL_PACK_ALIGNMENT, 4);
-	//glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
-        for(int i = 0 ; i < draw_w*draw_h ; i++){
-		gpu_rendered_buf[i] = (unsigned char)rand()%256;
-		tpu_rendered_buf[i] = (unsigned char)rand()%256;
-	}
-	//glClear (GL_COLOR_BUFFER_BIT);
-        //draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-        //render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
-        //glPixelStorei (GL_PACK_ALIGNMENT, 4);
-	//glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
+	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
+
+        glViewport (0, 0, win_w, win_h);
+	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
+        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
+
+	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
 	/* Quality eval: SSIM */
         float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
 #endif
@@ -883,8 +880,8 @@ main(int argc, char *argv[])
             printf("final avg: %5.1f [ms]\n", avg_ms);
             return 0;
 	}
-	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
-        draw_dbgstr (strbuf, 10, 10);
+	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n SSIM: %f\n", interval, invoke_ms, avg_ms, ssim);
+        draw_dbgstr (strbuf, 10, 10); // draw the string above
 
 #if defined (USE_IMGUI)
         invoke_imgui (&s_gui_prop);
