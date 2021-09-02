@@ -56,10 +56,10 @@ float SSIM(int draw_w, int draw_h, unsigned char* buf1, unsigned char* buf2){
 	vy = sdev(n, buf2, uy, i);
 	cov = covariance(n, buf1, buf2, ux, uy, i);
         ssim_per_channel = ((2*ux*uy + c1)*(2*cov+c2)) / ((pow(ux, 2)+pow(uy, 2)+c1)*(pow(vx, 2)+pow(vy, 2)+c2));
-	printf("SSIM: %f, ux: %f, uy: %f, vx: %f, vy: %f, cov: %f\n", ssim_per_channel, ux, uy, vx, vy, cov);
+//	printf("SSIM: %f, ux: %f, uy: %f, vx: %f, vy: %f, cov: %f\n", ssim_per_channel, ux, uy, vx, vy, cov);
 	ssim += ssim_per_channel; 
     }
     ssim = ssim / 3.0;
-    printf("ssim (average over RGB): %f\n", ssim);
+//    printf("ssim (average over RGB): %f\n", ssim);
     return ssim ;
 }

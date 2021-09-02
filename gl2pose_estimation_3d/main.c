@@ -781,6 +781,7 @@ main(int argc, char *argv[])
     int cnt = 0;
     float avg_ms = 0;
 #if defined (USE_BGT)
+    float avg_ssim = 0;
     unsigned char * gpu_rendered_buf;
     unsigned char * tpu_rendered_buf;
     gpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * 4 * sizeof(unsigned char));
@@ -837,8 +838,8 @@ main(int argc, char *argv[])
         glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* visualize the object detection results. */
-        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
+        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0); // render raw video ??
+        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);     // render skeleton ??
 
 #if defined (USE_BGT)
 	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
@@ -846,7 +847,9 @@ main(int argc, char *argv[])
         glViewport (0, 0, win_w, win_h);
 	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
+	/* TODO: if command out the next line, SSIM is about 0.99xx, which means the next line draws the exact same skeleton as GPU, need to see why!!!*/
+	/* if pose_ret != pose_ret_tpu , does the rendering draw the exact same skeleton? And does these two equal? */
+	render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
 
 	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
 	/* Quality eval: SSIM */
@@ -879,13 +882,14 @@ main(int argc, char *argv[])
             draw_pmeter (0, 40);
         }
 
-	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
+	avg_ms   = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
+	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
 	cnt++;
         if(cnt >= 100){
-            printf("final avg: %5.1f [ms]\n", avg_ms);
+            printf("final avg: %5.1f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
             return 0;
 	}
-	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n SSIM: %f\n", interval, invoke_ms, avg_ms, ssim);
+	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
         draw_dbgstr (strbuf, 10, 10); // draw the string above
 
 #if defined (USE_IMGUI)

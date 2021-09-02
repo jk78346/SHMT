@@ -88,6 +88,15 @@ get_heatmap_score (int idx_y, int idx_x, int key_id)
     float *heatmap_ptr = (float *)s_tensor_heatmap.ptr;
     return heatmap_ptr[idx];
 }
+#if defined (USE_BGT)
+static float
+get_heatmap_score_tpu (int idx_y, int idx_x, int key_id)
+{
+    int idx = (idx_y * s_hmp_w * kPoseKeyNum) + (idx_x * kPoseKeyNum) + key_id;
+    float *heatmap_ptr = (float *)s_tensor_heatmap.tpu_ptr;
+    return heatmap_ptr[idx];
+}
+#endif
 
 static void
 get_offset_vector (float *ofst_x, float *ofst_y, float *ofst_z, int idx_y, int idx_x, int pose_id_)
@@ -106,15 +115,34 @@ get_offset_vector (float *ofst_x, float *ofst_y, float *ofst_z, int idx_y, int i
     *ofst_z = offsets_ptr[idx2];
 }
 
+#if defined (USE_BGT)
+static void
+get_offset_vector_tpu (float *ofst_x, float *ofst_y, float *ofst_z, int idx_y, int idx_x, int pose_id_)
+{
+    int map_id_to_panoptic[] = {1, 0,  9, 10, 11, 3, 4, 5, 12, 13, 14, 6, 7, 8, 15, 16, 17, 18, 2};
+    int pose_id = map_id_to_panoptic[pose_id_];
 
+    int idx0 = (idx_y * s_hmp_w * kPoseKeyNum*3) + (idx_x * kPoseKeyNum*3) + (3 * pose_id + 0);
+    int idx1 = (idx_y * s_hmp_w * kPoseKeyNum*3) + (idx_x * kPoseKeyNum*3) + (3 * pose_id + 1);
+    int idx2 = (idx_y * s_hmp_w * kPoseKeyNum*3) + (idx_x * kPoseKeyNum*3) + (3 * pose_id + 2);
 
+    float *offsets_ptr = (float *)s_tensor_offsets.tpu_ptr;
+
+    *ofst_x = offsets_ptr[idx0];
+    *ofst_y = offsets_ptr[idx1];
+    *ofst_z = offsets_ptr[idx2];
+}
+#endif
 
 static void
-get_index_to_pos (int idx_x, int idx_y, int key_id, fvec2 *pos2d, fvec3 *pos3d)
+get_index_to_pos (int idx_x, int idx_y, int key_id, fvec2 *pos2d, fvec3 *pos3d, int device)
 {
     float ofst_x, ofst_y, ofst_z;
-    get_offset_vector (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
-
+    if(device == 0){
+    	get_offset_vector (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
+    }else{
+    	get_offset_vector_tpu (&ofst_x, &ofst_y, &ofst_z, idx_y, idx_x, key_id);
+    }
     /* pos 2D */
     pos2d->x = (float)idx_x / (float)(s_hmp_w -1);
     pos2d->y = (float)idx_y / (float)(s_hmp_h -1);
@@ -158,7 +186,7 @@ decode_multiple_poses (posenet_result_t *pose_result)
 }
 
 static void
-decode_single_pose (posenet_result_t *pose_result)
+decode_single_pose (posenet_result_t *pose_result, int device)
 {
     int   max_block_idx[kPoseKeyNum][2] = {0};
     float max_block_cnf[kPoseKeyNum]    = {0};
@@ -171,7 +199,7 @@ decode_single_pose (posenet_result_t *pose_result)
         {
             for (int x = 0; x < s_hmp_w; x ++)
             {
-                float confidence = get_heatmap_score (y, x, i);
+                float confidence = (device == 0)?get_heatmap_score (y, x, i):get_heatmap_score_tpu (y, x, i);
                 if (confidence > max_confidence)
                 {
                     max_confidence = confidence;
@@ -212,7 +240,8 @@ decode_single_pose (posenet_result_t *pose_result)
         int idx_y = max_block_idx[i][1];
         fvec2 pos2d;
         fvec3 pos3d;
-        get_index_to_pos (idx_x, idx_y, i, &pos2d, &pos3d);
+
+	get_index_to_pos (idx_x, idx_y, i, &pos2d, &pos3d, device);
 
         pose_result->pose[0].key[i].x     = pos2d.x;
         pose_result->pose[0].key[i].y     = pos2d.y;
@@ -246,7 +275,7 @@ invoke_pose3d (posenet_result_t *pose_result)
     if (0)
         decode_multiple_poses (pose_result);
     else
-        decode_single_pose (pose_result);
+        decode_single_pose (pose_result, 0);
 
     pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
     pose_result->pose[0].heatmap_dims[0] = s_hmp_w;
@@ -267,9 +296,9 @@ invoke_pose3d_tpu (posenet_result_t *pose_result)
     if (0)
         decode_multiple_poses (pose_result);
     else
-        decode_single_pose (pose_result);
+        decode_single_pose (pose_result, 1);
 
-    pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
+    pose_result->pose[0].heatmap = s_tensor_heatmap.tpu_ptr;
     pose_result->pose[0].heatmap_dims[0] = s_hmp_w;
     pose_result->pose[0].heatmap_dims[1] = s_hmp_h;
     return 0;
