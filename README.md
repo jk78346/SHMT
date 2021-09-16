@@ -1,3 +1,12 @@
+# [edit] Prepare runtime for TPU usage
+```
+$ sudo cp ./libtensorflowlite_clean.so /lib/libtensorflowlite.so
+$ sudo cp ./libedgetpu_clean.so.1.0 /usr/lib/aarch64-linux-gnu/libedgetpu.so.1.0
+```
+
+
+
+
 # GPU accelerated TensorFlow Lite / TensorRT applications.
 This repository contains several applications which invoke DNN inference with **TensorFlow Lite GPU Delegate** or **TensorRT**.
 
