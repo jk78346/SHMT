@@ -684,6 +684,7 @@ main(int argc, char *argv[])
     double ttime[10] = {0}, interval, invoke_ms;
     int use_quantized_tflite = 0;
     int enable_camera = 1;
+    int enable_rendering = 1;
     UNUSED (argc);
     UNUSED (*argv);
 #if defined (USE_INPUT_VIDEO_DECODE)
@@ -692,7 +693,7 @@ main(int argc, char *argv[])
 
     {
         int c;
-        const char *optstring = "qv:x";
+        const char *optstring = "qdv:x"; // char followed by : needs argument
 
         while ((c = getopt (argc, argv, optstring)) != -1)
         {
@@ -701,6 +702,9 @@ main(int argc, char *argv[])
             case 'q':
                 use_quantized_tflite = 1;
                 break;
+	    case 'd':
+	  	enable_rendering = 0;
+		break;
 #if defined (USE_INPUT_VIDEO_DECODE)
             case 'v':
                 enable_video = 1;
@@ -737,8 +741,10 @@ main(int argc, char *argv[])
 
 #if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
-    glBindFramebuffer (GL_FRAMEBUFFER, 0);
-    glViewport (0, 0, win_w, win_h);
+    if(enable_rendering == 1){
+        glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        glViewport (0, 0, win_w, win_h);
+    }
 #endif
 
 #if defined (USE_INPUT_VIDEO_DECODE)
@@ -773,8 +779,9 @@ main(int argc, char *argv[])
     }
     adjust_texture (win_w, win_h, texw, texh, &draw_x, &draw_y, &draw_w, &draw_h);
 
-    glClearColor (0.f, 0.f, 0.f, 1.0f);
-
+    if(enable_rendering == 1){
+        glClearColor (0.f, 0.f, 0.f, 1.0f);
+    }
     /* --------------------------------------- *
      *  Render Loop
      * --------------------------------------- */
@@ -802,9 +809,10 @@ main(int argc, char *argv[])
         interval = (count > 0) ? ttime[1] - ttime[0] : 0;
         ttime[0] = ttime[1];
         
-	glClear (GL_COLOR_BUFFER_BIT);
-        glViewport (0, 0, win_w, win_h);
-
+	if(enable_rendering == 1){
+	    glClear (GL_COLOR_BUFFER_BIT);
+            glViewport (0, 0, win_w, win_h);
+        }
 #if defined (USE_INPUT_VIDEO_DECODE)
         /* initialize FFmpeg video decode */
         if (enable_video)
@@ -835,28 +843,29 @@ main(int argc, char *argv[])
 	/* --------------------------------------- *
          *  render scene (left half)
          * --------------------------------------- */
-        glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if(enable_rendering == 1){
+	    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* visualize the object detection results. */
-        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0); // render raw video ??
-        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);     // render skeleton ??
+            draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0); // render raw video ??
+            render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);     // render skeleton ??
 
 #if defined (USE_BGT)
-	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
+	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
 
-        glViewport (0, 0, win_w, win_h);
-	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-	render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
+            glViewport (0, 0, win_w, win_h);
+	    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
+	    render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
 
-	glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
+	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
 	/* Quality eval: SSIM */
 	// /* dummy values to test correctness of SSIM API */
 	//for(int i = 0 ; i < draw_w * draw_h * 4 ; i++){
 	//	tpu_rendered_buf[i] = rand()%256;
 	//	gpu_rendered_buf[i] = tpu_rendered_buf[i] ;//+ 1;
 	//}
-	float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
+	    float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
 #endif
 
 #if 0
@@ -866,20 +875,20 @@ main(int argc, char *argv[])
         /* --------------------------------------- *
          *  render scene  (right half)
          * --------------------------------------- */
-        glViewport (win_w, 0, win_w, win_h);
-        render_3d_scene (draw_x, draw_y, &pose_ret);
+            glViewport (win_w, 0, win_w, win_h);
+            render_3d_scene (draw_x, draw_y, &pose_ret);
 
 
         /* --------------------------------------- *
          *  post process
          * --------------------------------------- */
-        glViewport (0, 0, win_w, win_h);
+            glViewport (0, 0, win_w, win_h);
 
-        if (s_gui_prop.draw_pmeter)
-        {
-            draw_pmeter (0, 40);
+            if (s_gui_prop.draw_pmeter)
+            {
+                draw_pmeter (0, 40);
+            }
         }
-
 	avg_ms   = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 #if defined (USE_BGT)
 	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
@@ -898,13 +907,16 @@ main(int argc, char *argv[])
 #else
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
 #endif
-	draw_dbgstr (strbuf, 10, 10); // draw the string above
+        if(enable_rendering == 1){
+	    draw_dbgstr (strbuf, 10, 10); // draw the string above
 
 #if defined (USE_IMGUI)
-        invoke_imgui (&s_gui_prop);
+            invoke_imgui (&s_gui_prop);
 #endif
-        egl_swap();
-
+            egl_swap();
+        }else{
+	    printf ("Interval:%5.1f [ms]\tTFLite  :%5.1f [ms]\tavg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
+	}
 	//save_pose_ret(&pose_ret, count, input_name);
 
     }

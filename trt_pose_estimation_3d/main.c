@@ -648,6 +648,7 @@ main(int argc, char *argv[])
     texture_2d_t captex = {0};
     double ttime[10] = {0}, interval, invoke_ms;
     int enable_camera = 1;
+    int enable_rendering = 1;
     UNUSED (argc);
     UNUSED (*argv);
 #if defined (USE_INPUT_VIDEO_DECODE)
@@ -656,12 +657,15 @@ main(int argc, char *argv[])
 
     {
         int c;
-        const char *optstring = "v:x";
+        const char *optstring = "dv:x";
 
         while ((c = getopt (argc, argv, optstring)) != -1)
         {
             switch (c)
             {
+	    case 'd':
+		enable_rendering = 0;
+		break;
 #if defined (USE_INPUT_VIDEO_DECODE)
             case 'v':
                 enable_video = 1;
@@ -697,8 +701,10 @@ main(int argc, char *argv[])
 
 #if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
-    glBindFramebuffer (GL_FRAMEBUFFER, 0);
-    glViewport (0, 0, win_w, win_h);
+    if(enable_rendering == 1){
+        glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        glViewport (0, 0, win_w, win_h);
+    }
 #endif
 
 #if defined (USE_INPUT_VIDEO_DECODE)
@@ -733,7 +739,9 @@ main(int argc, char *argv[])
     }
     adjust_texture (win_w, win_h, texw, texh, &draw_x, &draw_y, &draw_w, &draw_h);
 
-    glClearColor (0.f, 0.f, 0.f, 1.0f);
+    if(enable_rendering == 1){
+        glClearColor (0.f, 0.f, 0.f, 1.0f);
+    }
 
     /* --------------------------------------- *
      *  Render Loop
@@ -752,8 +760,10 @@ main(int argc, char *argv[])
         interval = (count > 0) ? ttime[1] - ttime[0] : 0;
         ttime[0] = ttime[1];
 
-        glClear (GL_COLOR_BUFFER_BIT);
-        glViewport (0, 0, win_w, win_h);
+        if(enable_rendering == 1){
+	    glClear (GL_COLOR_BUFFER_BIT);
+            glViewport (0, 0, win_w, win_h);
+	}
 
 #if defined (USE_INPUT_VIDEO_DECODE)
         /* initialize FFmpeg video decode */
@@ -782,11 +792,12 @@ main(int argc, char *argv[])
         /* --------------------------------------- *
          *  render scene (left half)
          * --------------------------------------- */
-        glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if(enable_rendering == 1){
+	    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* visualize the object detection results. */
-        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
+            draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
+            render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
 
 #if 0
         render_posenet_heatmap (draw_x, draw_y, draw_w, draw_h, &pose_ret);
@@ -795,20 +806,20 @@ main(int argc, char *argv[])
         /* --------------------------------------- *
          *  render scene  (right half)
          * --------------------------------------- */
-        glViewport (win_w, 0, win_w, win_h);
-        render_3d_scene (draw_x, draw_y, &pose_ret);
+            glViewport (win_w, 0, win_w, win_h);
+            render_3d_scene (draw_x, draw_y, &pose_ret);
 
 
         /* --------------------------------------- *
          *  post process
          * --------------------------------------- */
-        glViewport (0, 0, win_w, win_h);
+            glViewport (0, 0, win_w, win_h);
 
-        if (s_gui_prop.draw_pmeter)
-        {
-            draw_pmeter (0, 40);
+            if (s_gui_prop.draw_pmeter)
+            {
+                draw_pmeter (0, 40);
+            }
         }
- 
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt+=1;
 	if(cnt >= 100){
@@ -816,13 +827,17 @@ main(int argc, char *argv[])
 	    exit(0);
 	}
 
-        sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]", interval, invoke_ms);
-        draw_dbgstr (strbuf, 10, 10);
+	if(enable_rendering == 1){
+            sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]", interval, invoke_ms);
+            draw_dbgstr (strbuf, 10, 10);
 
 #if defined (USE_IMGUI)
-        invoke_imgui (&s_gui_prop);
+            invoke_imgui (&s_gui_prop);
 #endif
-        egl_swap();
+            egl_swap();
+	}else{
+            printf ("Interval:%5.1f [ms]\tTFLite  :%5.1f [ms]\n", interval, invoke_ms);
+	}
     }
 
     return 0;
