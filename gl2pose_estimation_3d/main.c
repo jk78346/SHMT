@@ -896,9 +896,9 @@ main(int argc, char *argv[])
 	cnt++;
         if(cnt >= 100){
 #if defined (USE_BGT)
-    		printf("final avg: %5.1f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
+    		printf("final avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
 #else
-    		printf("final avg: %5.1f [ms]\n", avg_ms);
+    		printf("final avg: %f [ms]\tinput_name: %s\n", avg_ms, input_name);
 #endif
     		return 0;
 	}

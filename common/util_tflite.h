@@ -44,6 +44,11 @@ typedef struct tflite_interpreter_t
     std::unique_ptr<tflite::Interpreter>     tpu_interpreter;
     tflite::ops::builtin::BuiltinOpResolver  tpu_resolver;
 #endif
+#if defined (USE_BLK)
+    std::vector<std::unique_ptr<tflite::FlatBufferModel>> blk_models;
+    std::vector<std::unique_ptr<tflite::Interpreter>>     blk_interpreters;
+    std::vector<tflite::ops::builtin::BuiltinOpResolver>  blk_resolvers;
+#endif
 } tflite_interpreter_t;
 
 typedef struct tflite_createopt_t
@@ -61,6 +66,10 @@ typedef struct tflite_tensor_t
 #if defined (USE_BGT)
     void        *tpu_ptr;
 #endif
+#if defined (USE_BLK)
+    void        **blk_ptrs; // an array of blocks
+    int         blk_dims[4];
+#endif
     int         dims[4];
     float       quant_scale;
     int         quant_zerop;
@@ -72,10 +81,16 @@ extern "C" {
 #endif
 
 int tflite_create_interpreter (tflite_interpreter_t *p, const char *model_buf, size_t model_size);
+#if defined (USE_BLK)
+int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, int blk_cnt);
+#else
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
+#endif
 
-#if defined (USE_BGT)
+#if defined (USE_BGT) 
 int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path, const char *tpu_model_path);
+#elif defined (USE_BLK)
+int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *full_model_path, const char *sub_model_path, int blk_cnt);
 #else
 int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path);
 #endif

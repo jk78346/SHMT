@@ -853,8 +853,8 @@ main(int argc, char *argv[])
 
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt++;
-        if(cnt >= 100){
-            printf("final avg: %5.1f [ms]\n", avg_ms);
+        if(cnt >= 1000){
+            printf("final avg: %f [ms]\n", avg_ms);
             return 0;
 	}
 	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);

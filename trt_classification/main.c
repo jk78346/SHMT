@@ -231,6 +231,8 @@ main(int argc, char *argv[])
     /* --------------------------------------- *
      *  Render Loop
      * --------------------------------------- */
+    int cnt = 0;
+    float avg_ms = 0;
     for (count = 0; ; count ++)
     {
         classification_result_t class_ret = {0};
@@ -282,6 +284,13 @@ main(int argc, char *argv[])
          *  post process
          * --------------------------------------- */
         draw_pmeter (0, 40);
+
+	avg_ms = (avg_ms * cnt + invoke_ms ) / ( cnt + 1 );
+	cnt += 1;
+	if(cnt >= 100){
+        	printf ("Interval:%5.1f [ms]\tTFLite  :%f [ms]\n", interval, invoke_ms);
+		exit(0);
+	}
 
         sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]", interval, invoke_ms);
         draw_dbgstr (strbuf, 10, 10);

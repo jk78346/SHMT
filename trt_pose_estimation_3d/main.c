@@ -823,7 +823,7 @@ main(int argc, char *argv[])
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt+=1;
 	if(cnt >= 100){
-	    printf("final avg: %5.1f [ms]\n", avg_ms);
+	    printf("final avg: %f [ms]\n", avg_ms);
 	    exit(0);
 	}
 
