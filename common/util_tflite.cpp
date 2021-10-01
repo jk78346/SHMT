@@ -327,13 +327,14 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
             return -1;
         }
     }
-#endif
+#else
     InterpreterBuilder(*(p->model), p->resolver)(&(p->interpreter));
     if (!p->interpreter)
     {
         DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
     }
+#endif
 
     int num_threads = std::thread::hardware_concurrency();
     char *env_tflite_num_threads = getenv ("FORCE_TFLITE_NUM_THREADS");
