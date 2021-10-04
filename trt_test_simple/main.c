@@ -2,7 +2,6 @@
  * The MIT License (MIT)
  * Copyright (c) 2020 terryky1220@gmail.com
  * ------------------------------------------------ */
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,7 +14,7 @@
 #include "util_texture.h"
 #include "util_render2d.h"
 #include "util_matrix.h"
-#include "tflite_pose3d.h"
+#include "trt_pose3d.h"
 #include "util_camera_capture.h"
 #include "util_video_decode.h"
 #include "render_pose3d.h"
@@ -39,16 +38,12 @@ static imgui_data_t s_gui_prop = {0};
 
 
 
-
 /* resize image to DNN network input size and convert to fp32. */
 void
 feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
 {
     int dst_w, dst_h;
     float *buf_fp32 = (float *)get_pose3d_input_buf (&dst_w, &dst_h);
-#if defined (USE_BGT)
-    float *tpu_buf_fp32 = (float *)get_pose3d_input_buf_tpu ();
-#endif
     unsigned char *buf_ui8 = NULL;
     static unsigned char *pui8 = NULL;
 
@@ -101,13 +96,8 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
             buf_ui8 ++;          /* skip alpha */
             *buf_fp32 ++ = (float)(r - mean) / std;
             *buf_fp32 ++ = (float)(g - mean) / std;
-	    *buf_fp32 ++ = (float)(b - mean) / std;
-#if defined (USE_BGT)
-            *tpu_buf_fp32 ++ = (float)(r - mean) / std;
-            *tpu_buf_fp32 ++ = (float)(g - mean) / std;
-            *tpu_buf_fp32 ++ = (float)(b - mean) / std;
-#endif
-	}
+            *buf_fp32 ++ = (float)(b - mean) / std;
+        }
     }
 
     s_srctex_region.width  = dst_w;     /* full rect width  with margin */
@@ -284,7 +274,6 @@ render_posenet_heatmap (int ofstx, int ofsty, int draw_w, int draw_h, posenet_re
     }
 }
 
-
 static void
 compute_3d_skelton_pos (posenet_result_t *dst_pose, posenet_result_t *src_pose)
 {
@@ -316,6 +305,7 @@ compute_3d_skelton_pos (posenet_result_t *dst_pose, posenet_result_t *src_pose)
         dst_pose->pose[0].key3d[i].score = s;
     }
 }
+
 
 static void
 render_3d_bone (float *mtxGlobal, pose_t *pose, int idx0, int idx1,
@@ -643,28 +633,6 @@ setup_imgui (int win_w, int win_h)
 }
 
 
-void save_pose_ret(posenet_result_t* pose_ret, int count, char* input_name){
-//  printf("count: %d, input_name: %s\n", count, input_name);
-  FILE *myfile;
-  char out_name[100];
-//  char* token, * name;
-//  name = token = strtok(input_name, "/");
-//  for(;(token = strtok(NULL, "/")) != NULL; name = token);
-//#if defined (USE_EDGETPU)
-//  sprintf(out_name, "%s%s", "./pose_ret_edgetpu_", name);
-//#else
-//  sprintf(out_name, "%s%s", "./pose_ret____nano_", name);
-//#endif
-//  printf("out_name: %s \n", out_name);
-  myfile = fopen(/*out_name*/"./pose_ret_edgetpu_ice.txt", "a+");
-  if(myfile == NULL){ printf("file %s open fail.", out_name); }
-  for(int i = 0 ; i < kPoseKeyNum ; i++){
-    fprintf(myfile, "%f %f %f ", pose_ret->pose[0].key3d[i].x, pose_ret->pose[0].key3d[i].y, pose_ret->pose[0].key3d[i].z);
-  }
-  fprintf(myfile, "\n");
-  fclose(myfile);
-}
-
 /*--------------------------------------------------------------------------- *
  *      M A I N    F U N C T I O N
  *--------------------------------------------------------------------------- */
@@ -672,38 +640,34 @@ char *model_name;
 int
 main(int argc, char *argv[])
 {
-    char input_name_default[] = "pakutaso_person.jpg";
-    char *input_name = input_name_default;
+    char input_name_default[] = "./assets/pakutaso_person.jpg";
+    char *input_name = NULL;
     int count;
     int win_w = 900;
     int win_h = 900;
     int texw, texh, draw_x, draw_y, draw_w, draw_h;
     texture_2d_t captex = {0};
     double ttime[10] = {0}, interval, invoke_ms;
-    int use_quantized_tflite = 0;
     int enable_camera = 1;
+    int enable_rendering = 1;
     UNUSED (argc);
     UNUSED (*argv);
 #if defined (USE_INPUT_VIDEO_DECODE)
     int enable_video = 0;
 #endif
-    //if(strlen(argv[1]) >= sizeof(model_name)){
-    //    printf("model name too long: %s\n", model_name);
-    //    exit(1);
-    //}
-    model_name = malloc(100);
+    model_name = malloc(1000);
     strcpy(model_name, argv[1]);
     printf("model name: %s\n", model_name);
     {
         int c;
-        const char *optstring = "qv:x";
+        const char *optstring = "dv:x";
 
         while ((c = getopt (argc, argv, optstring)) != -1)
         {
             switch (c)
             {
-            case 'q':
-		use_quantized_tflite = 1;
+	    case 'd':
+		enable_rendering = 0;
 		break;
 #if defined (USE_INPUT_VIDEO_DECODE)
             case 'v':
@@ -724,6 +688,9 @@ main(int argc, char *argv[])
         }
     }
 
+    if (input_name == NULL)
+        input_name = input_name_default;
+
     egl_init_with_platform_window_surface (2, 8, 0, 0, win_w * 2, win_h);
 
     init_2d_renderer (win_w, win_h);
@@ -731,18 +698,16 @@ main(int argc, char *argv[])
     init_dbgstr (win_w, win_h);
     init_cube ((float)win_w / (float)win_h);
 
-
-#if defined (USE_EDGETPU)
-//    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
-#endif
-    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config);
+    init_trt_pose3d (&s_gui_prop.pose3d_config, model_name);
 
     setup_imgui (win_w * 2, win_h);
 
 #if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
-    glBindFramebuffer (GL_FRAMEBUFFER, 0);
-    glViewport (0, 0, win_w, win_h);
+    if(enable_rendering == 1){
+        glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        glViewport (0, 0, win_w, win_h);
+    }
 #endif
 
 #if defined (USE_INPUT_VIDEO_DECODE)
@@ -751,6 +716,8 @@ main(int argc, char *argv[])
     {
         create_video_texture (&captex, input_name);
         texw = captex.width;
+        texh = captex.height;
+        enable_camera = 0;
     }
     else
 #endif
@@ -775,7 +742,9 @@ main(int argc, char *argv[])
     }
     adjust_texture (win_w, win_h, texw, texh, &draw_x, &draw_y, &draw_w, &draw_h);
 
-    glClearColor (0.f, 0.f, 0.f, 1.0f);
+    if(enable_rendering == 1){
+        glClearColor (0.f, 0.f, 0.f, 1.0f);
+    }
 
     /* --------------------------------------- *
      *  Render Loop
@@ -793,9 +762,11 @@ main(int argc, char *argv[])
         ttime[1] = pmeter_get_time_ms ();
         interval = (count > 0) ? ttime[1] - ttime[0] : 0;
         ttime[0] = ttime[1];
-        
-	glClear (GL_COLOR_BUFFER_BIT);
-        glViewport (0, 0, win_w, win_h);
+
+        if(enable_rendering == 1){
+	    glClear (GL_COLOR_BUFFER_BIT);
+            glViewport (0, 0, win_w, win_h);
+	}
 
 #if defined (USE_INPUT_VIDEO_DECODE)
         /* initialize FFmpeg video decode */
@@ -814,59 +785,21 @@ main(int argc, char *argv[])
         /* --------------------------------------- *
          *  Pose estimation
          * --------------------------------------- */
-//        feed_pose3d_image (&captex, win_w, win_h);
+        feed_pose3d_image (&captex, win_w, win_h);
 
         ttime[2] = pmeter_get_time_ms ();
         invoke_pose3d (&pose_ret);
         ttime[3] = pmeter_get_time_ms ();
         invoke_ms = ttime[3] - ttime[2];
 
-	/* --------------------------------------- *
-         *  render scene (left half)
-         * --------------------------------------- */
-        glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        /* visualize the object detection results. */
-        draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
-        render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);
-
-#if 0
-        render_posenet_heatmap (draw_x, draw_y, draw_w, draw_h, &pose_ret);
-#endif
-
-        /* --------------------------------------- *
-         *  render scene  (right half)
-         * --------------------------------------- */
-        glViewport (win_w, 0, win_w, win_h);
-        render_3d_scene (draw_x, draw_y, &pose_ret);
-
-
-        /* --------------------------------------- *
-         *  post process
-         * --------------------------------------- */
-        glViewport (0, 0, win_w, win_h);
-
-        if (s_gui_prop.draw_pmeter)
-        {
-            draw_pmeter (0, 40);
-        }
-
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
-	cnt++;
-        if(cnt >= 1000){
-            printf("final avg: %f [ms]\n", avg_ms);
-            return 0;
+	cnt+=1;
+	if(cnt >= 1000){
+	    printf("final avg: %f [ms]\n", avg_ms);
+	    exit(0);
 	}
-	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]", interval, invoke_ms, avg_ms);
-        draw_dbgstr (strbuf, 10, 10);
 
-#if defined (USE_IMGUI)
-        invoke_imgui (&s_gui_prop);
-#endif
-        egl_swap();
-
-//	save_pose_ret(&pose_ret, count, input_name);
-
+        printf ("Interval:%5.1f [ms]\tTFLite  :%f [ms]\n", interval, invoke_ms);
     }
 
     return 0;
