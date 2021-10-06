@@ -410,7 +410,7 @@ decode_single_pose_blk (posenet_result_t *pose_result, int device, int blk_id)
         }
     }
 
-    if(0/*blk_id == blk_cnt - 1*/){ // the last block is responsible for summrize the output
+    if(blk_id == s_blk_pemeter.blk_cnt - 1){ // the last block is responsible for summrize the output
     /* find the offset vector and calculate the keypoint coordinates. */
    	 for (int i = 0; i < kPoseKeyNum;i ++ )
    	 {
@@ -492,8 +492,8 @@ invoke_pose3d_blk (posenet_result_t *pose_result)
         }
 	if (0)
 	    decode_multiple_poses (pose_result);
-//	else
-//	    decode_single_pose_blk (pose_result, 1, i);
+	else
+	    decode_single_pose_blk (pose_result, 1, i);
     }
 
     pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
