@@ -735,7 +735,7 @@ main(int argc, char *argv[])
 #if defined (USE_EDGETPU)
 //    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
 #endif
-    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config);
+    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config, model_name);
 
     setup_imgui (win_w * 2, win_h);
 
@@ -853,7 +853,7 @@ main(int argc, char *argv[])
 
 	avg_ms = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
 	cnt++;
-        if(cnt >= 1000){
+        if(cnt >= 100){
             printf("final avg: %f [ms]\n", avg_ms);
             return 0;
 	}

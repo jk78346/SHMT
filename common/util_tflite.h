@@ -75,6 +75,17 @@ typedef struct tflite_tensor_t
     int         quant_zerop;
 } tflite_tensor_t;
 
+#if defined (USE_BLK)
+typedef struct _blk_pemeter
+{
+    int w_cnt; // number of block counts in width direction
+    int h_cnt; // number of block counts in height direction
+    int w_size; // per block size in width direction (# of pixels)
+    int h_size; // per block size in height direction (# of pixels)
+    int blk_cnt; //block counts in total
+    int blk_size; // block size in total (# of pixels)
+} blk_pemeter;
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,7 +93,7 @@ extern "C" {
 
 int tflite_create_interpreter (tflite_interpreter_t *p, const char *model_buf, size_t model_size);
 #if defined (USE_BLK)
-int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, int blk_cnt);
+int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, _blk_pemeter *s_blk_pemeter);
 #else
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
 #endif
@@ -96,7 +107,9 @@ int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *mo
 #endif
 int tflite_create_interpreter_ex_from_file (tflite_interpreter_t *p, const char *model_path, tflite_createopt_t *opt);
 
-
+#if defined (USE_BLK)
+void get_blk_coordinates(int w_cnt, int h_cnt, int w_size, int blk_id, int& g_w_id, int& g_h_id);
+#endif
 
 #ifdef __cplusplus
 }

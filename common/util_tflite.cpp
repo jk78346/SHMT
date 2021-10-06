@@ -14,6 +14,19 @@ edgetpu::EdgeTpuManager::DeviceEnumerationRecord enumerate_edgetpu;
 std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
 #endif
 
+#if defined (USE_BLK)
+void get_blk_coordinates(int w_cnt, int h_cnt, int w_size, int blk_id, int& g_w_id, int& g_h_id){
+  if(blk_id >= w_cnt * h_cnt){
+      printf("%s, %d: blk_id %d exceeeds total blk cnts = w: %d x h: %d\n", __func__, __LINE__, blk_id, w_cnt, h_cnt);
+      exit(0);
+  }
+  g_h_id = blk_id / w_size;
+  g_w_id = blk_id % w_size;
+  return;
+} // get blk index from linear blk id
+
+#endif
+
 static std::string
 tflite_get_tensor_dim_str (TfLiteTensor *tensor)
 {
@@ -293,7 +306,8 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
     }else{
       printf("edgetpu itpr built.\n");
     }
-#elif defined (USE_BGT) 
+#else
+#if defined (USE_BGT) 
     p->tpu_models = FlatBufferModel::BuildFromFile (tpu_model_path);
     if (!p->tpu_model)
     {
@@ -327,7 +341,7 @@ tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_
             return -1;
         }
     }
-#else
+#endif
     InterpreterBuilder(*(p->model), p->resolver)(&(p->interpreter));
     if (!p->interpreter)
     {
@@ -677,7 +691,7 @@ tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tf
 
 #if defined (USE_BLK)
 int
-tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, int blk_cnt)
+tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, _blk_pemeter *s_blk_pemeter)
 {
     std::unique_ptr<Interpreter> &interpreter = p->interpreter;
 
@@ -731,6 +745,7 @@ tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name
     }
 // =======================================================================
     void *blk_ptr = NULL;
+    int blk_cnt = s_blk_pemeter->blk_cnt;
     for(int i = 0 ; i < blk_cnt ; i++){
 	    std::unique_ptr<Interpreter> &interpreter = p->blk_interpreters[i];
 	    io_idx = -1;

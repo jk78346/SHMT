@@ -5,6 +5,7 @@
 #ifndef TFLITE_POSE3D_H_
 #define TFLITE_POSE3D_H_
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -103,6 +104,7 @@ int invoke_pose3d_tpu (posenet_result_t *pose_result);
 #endif
 #if defined (USE_BLK)
 int invoke_pose3d_blk (posenet_result_t *pose_result);
+void feed_blk_bufs(unsigned char* buf_ui8, float** blk_buf_fp32, int dst_h, int dst_w);
 #endif
 
 

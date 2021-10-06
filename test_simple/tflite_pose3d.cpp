@@ -29,15 +29,15 @@ static _result_quality s_result_quality;
  *  Create TensorFlow Lite Interpreter
  * -------------------------------------------------- */
 int
-init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
+init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config, char* model_name)
 {
     const char *posenet_model;
 
     posenet_model = model_name;
     tflite_create_interpreter_from_file (&s_interpreter, posenet_model);
     tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
-    tflite_get_tensor_by_name (&s_interpreter, 1, "Identity",   &s_tensor_offsets); /* (1,  32,  56, 57) */
-    tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1", &s_tensor_heatmap); /* (1,  32,  56, 19) */
+    tflite_get_tensor_by_name (&s_interpreter, 1, "Identity/Conv2D",   &s_tensor_offsets); /* (1,  32,  56, 57) */
+    tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1/Conv2D", &s_tensor_heatmap); /* (1,  32,  56, 19) */
 
     /* input image dimention */
     s_img_w = s_tensor_input.dims[2];

@@ -21,10 +21,12 @@
 #include "render_pose3d.h"
 #include "touch_event.h"
 #include "render_imgui.h"
-#if defined (USE_BGT) || defined (USE_BLK)
+#if defined (USE_BGT)
 #include "util_quality.h"
 #endif
-
+#if defined (USE_BLK)
+#include "util_quality.h"
+#endif
 
 #define UNUSED(x) (void)(x)
 
@@ -41,22 +43,22 @@ typedef struct letterbox_tex_region_t
 static letterbox_tex_region_t s_srctex_region;
 static imgui_data_t s_gui_prop = {0};
 
-extern int blk_size;
-extern int blk_cnt_w;
-extern int blk_cnt_h;
-extern int blk_cnt;
+//extern int blk_size;
+//extern int blk_cnt_w;
+//extern int blk_cnt_h;
+//extern int blk_cnt;
 
 
 /* resize image to DNN network input size and convert to fp32. */
 void
-feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
+feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h, int enable_rendering)
 {
     int dst_w, dst_h;
     float *buf_fp32 = (float *)get_pose3d_input_buf (&dst_w, &dst_h);
 #if defined (USE_BGT)
     float *tpu_buf_fp32 = (float *)get_pose3d_input_buf_tpu ();
 #elif defined (USE_BLK)
-    float **blk_buf_fp32 = (float **)get_pose3d_input_buf_blk ();
+    float **blk_buf_fp32 = (float **)get_pose3d_input_buf_blk ();  // return the pointer of blk_pts array
 #endif
     unsigned char *buf_ui8 = NULL;
     static unsigned char *pui8 = NULL;
@@ -91,8 +93,9 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
     /* draw valid texture area */
     float dx = offset_x;
     float dy = win_h - dst_h + offset_y;
-    draw_2d_texture_ex (srctex, dx, dy, scaled_w, scaled_h, 1);
-
+    if(enable_rendering == 1){
+    	draw_2d_texture_ex (srctex, dx, dy, scaled_w, scaled_h, 1);
+    }
     /* read full rect with margin */
     glPixelStorei (GL_PACK_ALIGNMENT, 4);
     glReadPixels (0, 0, dst_w, dst_h, GL_RGBA, GL_UNSIGNED_BYTE, buf_ui8);
@@ -100,7 +103,7 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
     /* convert UI8 [0, 255] ==> FP32 [0, 1] */
     float mean =   0.0f;
     float std  = 255.0f;
-    //printf("dst_h: %d, dst_w: %d\n", dst_h, dst_w);
+   // printf("dst_h: %d, dst_w: %d\n", dst_h, dst_w);
     for (int y = 0; y < dst_h; y ++)
     {
         for (int x = 0; x < dst_w; x ++)
@@ -122,22 +125,7 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h)
 
 #if defined (USE_BLK)
     buf_ui8 = pui8;
-    for(int i = 0 ; i < blk_cnt_h ; i++){
-	for(int y = 0 ; y < blk_size ; y++){
-    	    for(int j = 0 ; j < blk_cnt_w ; j++){
-		for(int x = 0 ; x < blk_size ; x++){
-		    int r = *buf_ui8 ++;
-		    int g = *buf_ui8 ++;
-		    int b = *buf_ui8 ++;
-		    buf_ui8 ++;          /* skip alpha */
-		    *blk_buf_fp32[i*blk_cnt_w+j] ++ = (float)(r - mean) / std;
-		    *blk_buf_fp32[i*blk_cnt_w+j] ++ = (float)(g - mean) / std;
-		    *blk_buf_fp32[i*blk_cnt_w+j] ++ = (float)(b - mean) / std;
-		    
-		}
-	    }	
-	}
-    }
+    feed_blk_bufs(buf_ui8, blk_buf_fp32, dst_h, dst_w);
 #endif
 
 
@@ -753,11 +741,12 @@ main(int argc, char *argv[])
 
     egl_init_with_platform_window_surface (2, 8, 0, 0, win_w * 2, win_h);
 
-    init_2d_renderer (win_w, win_h);
-    init_pmeter (win_w, win_h, 500);
-    init_dbgstr (win_w, win_h);
-    init_cube ((float)win_w / (float)win_h);
-
+    if(enable_rendering == 1){
+    	init_2d_renderer (win_w, win_h);
+    	init_pmeter (win_w, win_h, 500);
+    	init_dbgstr (win_w, win_h);
+    	init_cube ((float)win_w / (float)win_h);
+    }
 
 #if defined (USE_EDGETPU)
     use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
@@ -813,7 +802,7 @@ main(int argc, char *argv[])
      *  Render Loop
      * --------------------------------------- */
     int cnt = 0;
-    float avg_ms = 0;
+    float avg_ms = 0, avg_blk_ms = 0;
 #if defined (USE_BGT)
     float avg_ssim = 0;
     unsigned char * gpu_rendered_buf;
@@ -823,7 +812,7 @@ main(int argc, char *argv[])
 #endif
     for (count = 0; ; count ++)
     {
-	printf("count = %d\n", count);
+//	printf("count = %d\n", count);
         posenet_result_t pose_ret = {0};
 #if defined (USE_BGT)
         posenet_result_t pose_ret_tpu = {0};
@@ -860,7 +849,7 @@ main(int argc, char *argv[])
         /* --------------------------------------- *
          *  Pose estimation
          * --------------------------------------- */
-        feed_pose3d_image (&captex, win_w, win_h);
+        feed_pose3d_image (&captex, win_w, win_h, enable_rendering);
 
         ttime[2] = pmeter_get_time_ms ();
         invoke_pose3d (&pose_ret);
@@ -871,7 +860,7 @@ main(int argc, char *argv[])
 #endif
 #if defined (USE_BLK)
         ttime[2] = pmeter_get_time_ms ();
-//        invoke_pose3d_blk (&pose_ret_blk);
+        invoke_pose3d_blk (&pose_ret_blk);
 	ttime[3] = pmeter_get_time_ms ();
         invoke_blk_ms = ttime[3] - ttime[2];
 #endif
@@ -925,25 +914,30 @@ main(int argc, char *argv[])
                 draw_pmeter (0, 40);
             }
         }
-	avg_ms   = (avg_ms * cnt + invoke_ms ) / (cnt + 1);
+	avg_ms       = (avg_ms     * cnt + invoke_ms )     / (cnt + 1);
+	avg_blk_ms   = (avg_blk_ms * cnt + invoke_blk_ms ) / (cnt + 1);
 #if defined (USE_BGT)
 	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
 #endif
 	cnt++;
-        if(0/*cnt >= 100*/){
+        if(cnt >= 100){
 #if defined (USE_BGT)
     		printf("final avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
+#elif defined (USE_BLK)
+    		printf("final avg: %f [ms], blk avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_blk_ms, 0.9487);
 #else
     		printf("final avg: %f [ms]\tinput_name: %s\n", avg_ms, input_name);
 #endif
     		return 0;
 	}
-#if defined (USE_BGT)
-	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
-#else
-	sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms], blk ms: %5.1f [ms]\n", interval, invoke_ms, avg_ms, invoke_blk_ms);
-#endif
         if(enable_rendering == 1){
+#if defined (USE_BGT)
+	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
+#elif defined (USE_BLK)
+	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%f [ms]\navg: %f [ms], blk ms: %f [ms]\n", interval, invoke_ms, avg_ms, invoke_blk_ms);
+#else
+	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
+#endif
 	    draw_dbgstr (strbuf, 10, 10); // draw the string above
 
 #if defined (USE_IMGUI)
@@ -951,7 +945,13 @@ main(int argc, char *argv[])
 #endif
             egl_swap();
         }else{
-	    printf ("Interval:%5.1f [ms]\tTFLite  :%5.1f [ms]\tavg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
+#if defined (USE_BGT)
+	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\tavg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
+#elif defined (USE_BLK)
+	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms], blk ms: %f [ms]\n", interval, invoke_ms, avg_ms, invoke_blk_ms);
+#else
+	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\n", interval, invoke_ms, avg_ms);
+#endif
 	}
 	//save_pose_ret(&pose_ret, count, input_name);
     }
