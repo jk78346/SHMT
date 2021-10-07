@@ -1,7 +1,7 @@
 MAKETOP = $(realpath ..)
 include $(MAKETOP)/Makefile.env
 
-TARGET = gl2pose_estimation_3d
+TARGET = gl2blk_pose3d
 
 SRCS = 
 SRCS += main.c
@@ -20,6 +20,7 @@ SRCS += $(MAKETOP)/common/util_debugstr.c
 SRCS += $(MAKETOP)/common/util_pmeter.c
 SRCS += $(MAKETOP)/common/util_quality.c # new utility
 SRCS += $(MAKETOP)/common/util_tflite.cpp
+SRCS += $(MAKETOP)/common/util_trt.c
 SRCS += $(MAKETOP)/common/winsys/$(WINSYS_SRC).c
 
 OBJS += $(patsubst %.cc,%.o,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
@@ -85,5 +86,24 @@ INCLUDES += -I$(TENSORFLOW_DIR)/external/flatbuffers/include
 INCLUDES += -I$(TENSORFLOW_DIR)/external/com_google_absl
 
 LDFLAGS  += -Wl,--allow-multiple-definition
+
+# ---------------------
+#  for TensorRT
+# ---------------------
+INCLUDES += -I/usr/local/cuda/include
+LIBS     += -L/usr/local/cuda/lib64
+LIBS     += -Wl,--start-group
+LIBS     += -lnvinfer
+LIBS     += -lnvparsers
+LIBS     += -lnvinfer_plugin
+LIBS     += -lnvonnxparser
+LIBS     += -lcudnn
+LIBS     += -lcublas
+LIBS     += -lcudart
+LIBS     += -lrt
+LIBS     += -ldl
+LIBS     += -lpthread
+LIBS     += -Wl,--end-group
+
 
 include ../Makefile.include

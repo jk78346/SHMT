@@ -78,12 +78,20 @@ typedef struct tflite_tensor_t
 #if defined (USE_BLK)
 typedef struct _blk_pemeter
 {
-    int w_cnt; // number of block counts in width direction
-    int h_cnt; // number of block counts in height direction
-    int w_size; // per block size in width direction (# of pixels)
-    int h_size; // per block size in height direction (# of pixels)
-    int blk_cnt; //block counts in total
-    int blk_size; // block size in total (# of pixels)
+    int w_cnt; // number of block counts in input's width  direction
+    int h_cnt; // number of block counts in input's height direction
+    int w_size; // per block size in input's width  direction (# of pixels)
+    int h_size; // per block size in input's height direction (# of pixels)
+    int blk_cnt;  // input's block counts in total
+    int blk_size; // input's block size in total (# of pixels)
+    
+    int w_cnt_out; // number of block counts in output's width  direction
+    int h_cnt_out; // number of block counts in output's height direction
+    int w_size_out; // per block size in output's width  direction (# of pixels)
+    int h_size_out; // per block size in output's height direction (# of pixels)
+    int blk_cnt_out;  // output's block counts in total
+    int blk_size_out; // output's block size in total (# of pixels)
+
 } blk_pemeter;
 #endif
 

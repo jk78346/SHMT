@@ -94,10 +94,13 @@ typedef struct _result_quality
 
 
 int  init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config);
+int  init_trt_pose3d (pose3d_config_t *config/*, char* model_name*/);
 void *get_pose3d_input_buf (int *w, int *h);
+//void *get_pose3d_input_buf_trt (int *w, int *h);
 void *get_pose3d_input_buf_tpu ();
 void **get_pose3d_input_buf_blk ();
 int invoke_pose3d (posenet_result_t *pose_result);
+int invoke_trt_pose3d (posenet_result_t *pose_result);
 
 #if defined (USE_BGT)
 int invoke_pose3d_tpu (posenet_result_t *pose_result);
