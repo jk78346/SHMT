@@ -763,7 +763,7 @@ main(int argc, char *argv[])
 #endif
     setup_imgui (win_w * 2, win_h);
 
-#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT)
+#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT) || defined (USE_BLK)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
     if(enable_rendering == 1){
         glBindFramebuffer (GL_FRAMEBUFFER, 0);
@@ -811,8 +811,8 @@ main(int argc, char *argv[])
      * --------------------------------------- */
     int cnt = 0;
     float avg_ms = 0, avg_blk_ms = 0;
-#if defined (USE_BGT)
-    float avg_ssim = 0;
+#if defined (USE_BGT) || defined (USE_BLK)
+    float ssim = 0, avg_ssim = 0;
     unsigned char * gpu_rendered_buf;
     unsigned char * tpu_rendered_buf;
     gpu_rendered_buf = (unsigned char *) malloc(draw_w * draw_h * 4 * sizeof(unsigned char));
@@ -883,14 +883,17 @@ main(int argc, char *argv[])
             draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0); // render raw video ??
             render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);     // render skeleton ??
 
-#if defined (USE_BGT)
+#if defined (USE_BGT) || defined (USE_BLK)
 	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
 
             glViewport (0, 0, win_w, win_h);
 	    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
+#if defined (USE_BGT)
 	    render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
-
+#elif defined (USE_BLK)
+	    render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_blk);
+#endif
 	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
 	/* Quality eval: SSIM */
 	// /* dummy values to test correctness of SSIM API */
@@ -898,7 +901,7 @@ main(int argc, char *argv[])
 	//	tpu_rendered_buf[i] = rand()%256;
 	//	gpu_rendered_buf[i] = tpu_rendered_buf[i] ;//+ 1;
 	//}
-	    float ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
+	    ssim = SSIM(draw_w, draw_h, gpu_rendered_buf, tpu_rendered_buf);		
 #endif
 
 #if 0
@@ -924,7 +927,7 @@ main(int argc, char *argv[])
         }
 	avg_ms       = (avg_ms     * cnt + invoke_ms )     / (cnt + 1);
 	avg_blk_ms   = (avg_blk_ms * cnt + invoke_blk_ms ) / (cnt + 1);
-#if defined (USE_BGT)
+#if defined (USE_BGT) || defined (USE_BLK)
 	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
 #endif
 	cnt++;
@@ -932,7 +935,7 @@ main(int argc, char *argv[])
 #if defined (USE_BGT)
     		printf("final avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
 #elif defined (USE_BLK)
-    		printf("final avg: %f [ms], blk avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_blk_ms, 0.9487);
+    		printf("final avg: %f [ms], blk avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_blk_ms, avg_ssim);
 #else
     		printf("final avg: %f [ms]\tinput_name: %s\n", avg_ms, input_name);
 #endif
@@ -942,7 +945,7 @@ main(int argc, char *argv[])
 #if defined (USE_BGT)
 	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
 #elif defined (USE_BLK)
-	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%f [ms]\navg: %f [ms], blk ms: %f [ms]\n", interval, invoke_ms, avg_ms, invoke_blk_ms);
+	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%f [ms]\navg: %f [ms], blk ms: %f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, invoke_blk_ms, avg_ssim);
 #else
 	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
 #endif
@@ -956,7 +959,7 @@ main(int argc, char *argv[])
 #if defined (USE_BGT)
 	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\tavg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
 #elif defined (USE_BLK)
-	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms], blk ms: %f [ms]\n", interval, invoke_ms, avg_ms, invoke_blk_ms);
+	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms], blk ms: %f [ms]\tavg_ssim: %f\n", interval, invoke_ms, avg_ms, invoke_blk_ms, avg_ssim);
 #else
 	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\n", interval, invoke_ms, avg_ms);
 #endif

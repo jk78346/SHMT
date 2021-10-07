@@ -7,6 +7,8 @@
 #include "tflite_pose3d.h"
 #include "unistd.h"
 #include <float.h>
+#include "util_pmeter.h"
+#include "time.h"
 
 //#define POSENET_MODEL_PATH            "./model/human_pose_estimation_3d_0001_256x448_float.tflite"
 //#define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_float16_quant.tflite"
@@ -14,8 +16,10 @@
 //#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_weight_quant.tflite"
 #define POSENET_MODEL_PATH          "./model/toy_pose3d_full_model_float.tflite"
 #define POSENET_FULL_MODEL_PATH     "./model/toy_pose3d_full_model_float.tflite"
-//#define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_sp_model_blk_64_float.tflite"
+//#define POSENET_BLOCK_MODEL_PATH     "./model/toy_pose3d_full_model_float.tflite"
+//#define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_sp_model_blk_8_float.tflite"
 #define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_half_model_float.tflite"
+
 //#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
 #define POSENET_EDGETPU_MODEL_PATH  "./model/toy_pose3d_full_model_float.tflite"
 
@@ -92,16 +96,16 @@ int
 init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
 {
 #if defined (USE_BLK)
-    int blk_size = 64; // The blk_size must be aligned with the block_model
-    s_blk_pemeter.w_size   = 224;//blk_size;
-    s_blk_pemeter.h_size   = 256;//blk_size;
+    int blk_size = 8; // The blk_size must be aligned with the block_model
+    s_blk_pemeter.w_size   = 224;//blk_size;//224;//blk_size;
+    s_blk_pemeter.h_size   = 256;//blk_size;//256;//blk_size;
     s_blk_pemeter.blk_size = s_blk_pemeter.w_size * s_blk_pemeter.h_size;
     s_blk_pemeter.w_cnt    = (448 / s_blk_pemeter.w_size);
     s_blk_pemeter.h_cnt    = (256 / s_blk_pemeter.h_size);
     s_blk_pemeter.blk_cnt  = s_blk_pemeter.w_cnt * s_blk_pemeter.h_cnt;
 
-    s_blk_pemeter.w_size_out   = 28;//blk_size/8;
-    s_blk_pemeter.h_size_out   = 32;//blk_size/8;
+    s_blk_pemeter.w_size_out   = 28;//blk_size/8; //28;
+    s_blk_pemeter.h_size_out   = 32;//blk_size/8; // 32;
     s_blk_pemeter.blk_size_out = s_blk_pemeter.w_size_out * s_blk_pemeter.h_size_out;
     s_blk_pemeter.w_cnt_out    = (56 / s_blk_pemeter.w_size_out);
     s_blk_pemeter.h_cnt_out    = (32 / s_blk_pemeter.h_size_out);
@@ -452,7 +456,11 @@ decode_single_pose (posenet_result_t *pose_result, int device)
             }
         }
     }
-
+//    for(int i = 0 ; i < kPoseKeyNum ; i++){
+//    	printf("max_block_cnf[%2d]   : %f\t", i, max_block_cnf[i]);
+//    	printf("max_block_idx[%2d][0]: %d\t", i, max_block_idx[i][0]);
+//    	printf("max_block_idx[%2d][1]: %d\n", i, max_block_idx[i][1]);
+//    }
 #if 0
     for (int i = 0; i < kPoseKeyNum; i ++)
     {
@@ -489,6 +497,8 @@ decode_single_pose (posenet_result_t *pose_result, int device)
         pose_result->pose[0].key[i].y     = pos2d.y;
         pose_result->pose[0].key[i].score = max_block_cnf[i];
 
+//	printf("[%2d] x: %f, y: %f, score: %f\n", i, pos2d.x, pos2d.y, max_block_cnf[i]);
+
         pose_result->pose[0].key3d[i].x   = pos3d.x;
         pose_result->pose[0].key3d[i].y   = pos3d.y;
         pose_result->pose[0].key3d[i].z   = pos3d.z;
@@ -502,8 +512,8 @@ decode_single_pose (posenet_result_t *pose_result, int device)
 
 }
 
-int   max_block_idx[kPoseKeyNum][2] = {0};
-float max_block_cnf[kPoseKeyNum]    = {0};
+int   blk_max_block_idx[kPoseKeyNum][2] = {0};
+float blk_max_block_cnf[kPoseKeyNum]    = {0};
 
 #if defined (USE_BLK)
 static void
@@ -513,9 +523,9 @@ decode_single_pose_blk (posenet_result_t *pose_result, int device, int blk_id)
     get_blk_coordinates(s_blk_pemeter.w_cnt, s_blk_pemeter.h_cnt, s_blk_pemeter.w_size, blk_id, g_w_id, g_h_id); 
     if(blk_id == 0){ // first block is responsible for resetting thevalue
         for(int i = 0 ; i < kPoseKeyNum ; i++){
-            max_block_idx[i][0] = 0;
-            max_block_idx[i][1] = 0;
-	    max_block_cnf[i]    = 0;
+            blk_max_block_idx[i][0] = 0;
+            blk_max_block_idx[i][1] = 0;
+	    blk_max_block_cnf[i]    = 0;
 	}
     }
     /* find the highest heatmap block for each key */
@@ -536,7 +546,7 @@ decode_single_pose_blk (posenet_result_t *pose_result, int device, int blk_id)
     		    if (confidence > max_confidence)
                 {
                     max_confidence = confidence;
-                    max_block_cnf[i] = confidence;
+                    blk_max_block_cnf[i] = confidence;
                     /*printf("g_w_id: %d, w_size: %d, x: %d | g_h_id: %d, h_size: %d, y: %d\n", g_w_id,
 				    					  		      s_blk_pemeter.w_size,
 											      x,
@@ -544,19 +554,25 @@ decode_single_pose_blk (posenet_result_t *pose_result, int device, int blk_id)
 											      s_blk_pemeter.h_size,
 											      y);
 		    */
-		    max_block_idx[i][0] = g_w_id*s_blk_pemeter.w_size_out+x;
-		    max_block_idx[i][1] = g_h_id*s_blk_pemeter.h_size_out+y;
+		    blk_max_block_idx[i][0] = g_w_id*s_blk_pemeter.w_size_out+x;
+		    blk_max_block_idx[i][1] = g_h_id*s_blk_pemeter.h_size_out+y;
                 }
             }
         }
     }
+//    for(int i = 0 ; i < kPoseKeyNum ; i++){
+//    	printf("max_block_cnf[%2d]   : %f\t", i, blk_max_block_cnf[i]);
+//    	printf("max_block_idx[%2d][0]: %d\t", i, blk_max_block_idx[i][0]);
+//    	printf("max_block_idx[%2d][1]: %d\n", i, blk_max_block_idx[i][1]);
+//    }
+//    printf("\n");
 
     if(blk_id == s_blk_pemeter.blk_cnt - 1){ // the last block is responsible for summrize the output
     /* find the offset vector and calculate the keypoint coordinates. */
    	 for (int i = 0; i < kPoseKeyNum;i ++ )
    	 {
-       	 	int idx_x = max_block_idx[i][0];
-     	 	int idx_y = max_block_idx[i][1];
+       	 	int idx_x = blk_max_block_idx[i][0];
+     	 	int idx_y = blk_max_block_idx[i][1];
   		fvec2 pos2d;
         	fvec3 pos3d;
 
@@ -564,21 +580,30 @@ decode_single_pose_blk (posenet_result_t *pose_result, int device, int blk_id)
 
         	pose_result->pose[0].key[i].x     = pos2d.x;
         	pose_result->pose[0].key[i].y     = pos2d.y;
-        	pose_result->pose[0].key[i].score = max_block_cnf[i];
+        	pose_result->pose[0].key[i].score = blk_max_block_cnf[i];
 
-        	pose_result->pose[0].key3d[i].x   = pos3d.x;
+//		printf("[%2d] x: %f, y: %f, score: %f\n", i, pos2d.x, pos2d.y, max_block_cnf[i]);
+        	
+		pose_result->pose[0].key3d[i].x   = pos3d.x;
         	pose_result->pose[0].key3d[i].y   = pos3d.y;
         	pose_result->pose[0].key3d[i].z   = pos3d.z;
-        	pose_result->pose[0].key3d[i].score = max_block_cnf[i];
+        	pose_result->pose[0].key3d[i].score = blk_max_block_cnf[i];
    	 }
-    	pose_result->num = 1;
-    	pose_result->pose[0].pose_score = 1.0f;
+	 pose_result->num = 1;
+     	 pose_result->pose[0].pose_score = 1.0f;
     }
 }
 #endif
 /* -------------------------------------------------- *
  * Invoke TensorFlow Lite
  * -------------------------------------------------- */
+double ttime[10] = {0};
+double baseline_invoke_ms = 0;
+double blk_invoke_ms = 0;
+double baseline_invoke_avg_ms = 0;
+double blk_invoke_avg_ms = 0;
+int baseline_cnt = 0;
+int blk_cnt = 0;
 int
 invoke_pose3d (posenet_result_t *pose_result)
 {
@@ -602,10 +627,18 @@ invoke_pose3d (posenet_result_t *pose_result)
 
     pose_result->pose[0].heatmap = s_trt_tensor_heatmap.cpu_mem;
 #else
+    ttime[0] = pmeter_get_time_ms();
     if (s_interpreter.interpreter->Invoke() != kTfLiteOk)
     {
         fprintf (stderr, "ERR: %s(%d)\n", __FILE__, __LINE__);
         return -1;
+    }
+    ttime[1] = pmeter_get_time_ms();
+    baseline_invoke_ms = ttime[1] - ttime[0];
+    baseline_invoke_avg_ms = (baseline_invoke_avg_ms * baseline_cnt + baseline_invoke_ms) / (baseline_cnt + 1);
+    baseline_cnt++;
+    if(baseline_cnt >= 100){
+    	printf("baseline invoke avg ms: %f\n", baseline_invoke_avg_ms);
     }
     if (0)
         decode_multiple_poses (pose_result);
@@ -646,16 +679,25 @@ int
 invoke_pose3d_blk (posenet_result_t *pose_result)
 {
 //    printf("%s: blk_cnt: h:%d x w:%d = %d\n", __func__, s_blk_pemeter.h_cnt, s_blk_pemeter.w_cnt, s_blk_pemeter.blk_cnt);
+    blk_invoke_ms = 0;
     for(int i = 0 ; i < s_blk_pemeter.blk_cnt ; i++){
-        if (s_interpreter.blk_interpreters[i]->Invoke() != kTfLiteOk)
+    	ttime[0] = pmeter_get_time_ms();
+	if (s_interpreter.blk_interpreters[i]->Invoke() != kTfLiteOk)
         {
             fprintf (stderr, "ERR: %s(%d)\n", __FILE__, __LINE__);
             return -1;
         }
+    	ttime[1] = pmeter_get_time_ms();
+        blk_invoke_ms += ttime[1] - ttime[0];
 	if (0)
 	    decode_multiple_poses (pose_result);
 	else
 	    decode_single_pose_blk (pose_result, 1, i);
+    }
+    blk_invoke_avg_ms = (blk_invoke_avg_ms * blk_cnt + blk_invoke_ms) / (blk_cnt + 1);
+    blk_cnt++;
+    if(blk_cnt >= 100){
+    	printf("blk invoke avg ms: %f\n", blk_invoke_avg_ms);
     }
 
     pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
