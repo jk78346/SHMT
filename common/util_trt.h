@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 #include <list>
+#include "util_tflite.h"
 
 using namespace nvinfer1;
 using namespace nvuffparser;
@@ -72,6 +73,10 @@ typedef struct trt_tensor_t
     size_t      memsize;
     void        *gpu_mem;
     void        *cpu_mem;
+#if defined (USE_BLK_TRT)
+    void	**blk_gpu_mem;
+    void	**blk_cpu_mem;
+#endif
 } trt_tensor_t;
 
 
@@ -108,6 +113,7 @@ ICudaEngine *trt_load_plan_file (const std::string &plan_file_name);
 
 /* get pointer to input/output Tensor */
 int trt_get_tensor_by_name (ICudaEngine *engine, const char *name, trt_tensor_t *ptensor);
+//int trt_get_tensor_by_name_blk (ICudaEngine *engine, const char *name, trt_tensor_t *ptensor, _blk_pemeter* s_blk_pemeter);
 
 /* Tensor memory transaction */
 int trt_copy_tensor_to_gpu   (trt_tensor_t &tensor);

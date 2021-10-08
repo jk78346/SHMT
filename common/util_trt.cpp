@@ -303,7 +303,6 @@ trt_get_tensor_by_name (ICudaEngine *engine, const char *name, trt_tensor_t *pte
     int element_size  = get_element_size  (ptensor->dtype);
     int element_count = get_element_count (ptensor->dims);
     ptensor->memsize  = element_size * element_count;
-
     ptensor->gpu_mem = safeCudaMalloc(ptensor->memsize);
     ptensor->cpu_mem = malloc (ptensor->memsize);
 
@@ -318,6 +317,53 @@ trt_get_tensor_by_name (ICudaEngine *engine, const char *name, trt_tensor_t *pte
     return 0;
 }
 
+/* -------------------------------------------------- *
+ *  get pointer to input/output Tensor.
+ * -------------------------------------------------- */
+#if defined (X)
+//(USE_BLK_TRT)
+int
+trt_get_tensor_by_name_blk (ICudaEngine *engine, const char *name, trt_tensor_t *ptensor, _blk_pemeter *s_blk_pemeter)
+{
+    memset (ptensor, 0, sizeof (*ptensor));
+
+    int bind_idx = -1;
+    bind_idx = engine->getBindingIndex (name);
+    if (bind_idx < 0)
+    {
+        fprintf (stderr, "ERR: %s(%d)\n", __FILE__, __LINE__);
+        return -1;
+    }
+
+    ptensor->bind_idx = bind_idx;
+    ptensor->dtype    = engine->getBindingDataType   (bind_idx);
+    ptensor->dims     = engine->getBindingDimensions (bind_idx);
+
+    int element_size  = get_element_size  (ptensor->dtype);
+    int element_count = get_element_count (ptensor->dims);
+    ptensor->memsize  = element_size * element_count;
+    
+    int blk_cnt = s_blk_pemeter.blk_cnt;
+
+    for(int i = 0 ; i < blk_cnt ; i++){
+    	ptensor->blk_gpu_mem = (void **)malloc(blk_cnt*(void*));
+    	ptensor->blk_cpu_mem = (void **)malloc(blk_cnt*(void*));
+    }
+    for(int i = 0 ; i < blk_cnt ; i++){
+    	ptensor->blk_gpu_mem[i] = safeCudaMalloc(ptensor->memsize / blk_cnt);
+    	ptensor->blk_cpu_mem[i] = malloc (ptensor->memsize / blk_cnt);
+    }
+    fprintf (stderr, "------------------------------\n");
+    fprintf (stderr, "[%s]\n", name);
+    fprintf (stderr, " bind_idx = %d\n", ptensor->bind_idx);
+    fprintf (stderr, " data type= %s\n", get_type_str (ptensor->dtype));
+    fprintf (stderr, " dimension= "); print_dims (ptensor->dims);
+    fprintf (stderr, "\n");
+    fprintf (stderr, "------------------------------\n");
+
+    return 0;
+}
+#endif
 
 /* -------------------------------------------------- *
  *  Memory transaction

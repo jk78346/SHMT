@@ -66,7 +66,7 @@ typedef struct tflite_tensor_t
 #if defined (USE_BGT)
     void        *tpu_ptr;
 #endif
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
     void        **blk_ptrs; // an array of blocks
     int         blk_dims[4];
 #endif
@@ -75,7 +75,7 @@ typedef struct tflite_tensor_t
     int         quant_zerop;
 } tflite_tensor_t;
 
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 typedef struct _blk_pemeter
 {
     int w_cnt; // number of block counts in input's width  direction

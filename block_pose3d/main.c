@@ -24,7 +24,7 @@
 #if defined (USE_BGT)
 #include "util_quality.h"
 #endif
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 #include "util_quality.h"
 #endif
 
@@ -57,7 +57,7 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h, int enable_renderi
     float *buf_fp32 = (float *)get_pose3d_input_buf (&dst_w, &dst_h);
 #if defined (USE_BGT)
     float *tpu_buf_fp32 = (float *)get_pose3d_input_buf_tpu ();
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_TRT)
     float **blk_buf_fp32 = (float **)get_pose3d_input_buf_blk ();  // return the pointer of blk_pts array
 #endif
     unsigned char *buf_ui8 = NULL;
@@ -123,7 +123,7 @@ feed_pose3d_image(texture_2d_t *srctex, int win_w, int win_h, int enable_renderi
 	}
     }
 
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
     buf_ui8 = pui8;
     feed_blk_bufs(buf_ui8, blk_buf_fp32, dst_h, dst_w);
 #endif
@@ -690,8 +690,15 @@ char *model_name; // model name of xxx.onnx for trt
 int
 main(int argc, char *argv[])
 {
+// TODO:
+//  program argument design:
+//  ./exe 1 [full] [gpu|trt|tpu]                           -v "file name" -d -t [1000]
+//  ./exe 1 [blk]  [gpu|trt|tpu] [1x1]                     -v "file name" -d -t [1000]
+//  ./exe 2 [full] [gpu|trt|tpu] [blk] [gpu|trt|tpu] [1x1] -v "file name" -d -t [1000]
+    
     char input_name_default[] = "pakutaso_person.jpg";
     char *input_name = input_name_default;
+    char *blk_arg;
     int count;
     int win_w = 900;
     int win_h = 900;
@@ -713,7 +720,7 @@ main(int argc, char *argv[])
 #endif
     {
         int c;
-        const char *optstring = "qdv:x"; // char followed by : needs argument
+        const char *optstring = "qdv:xb:"; // char followed by : needs argument
 
         while ((c = getopt (argc, argv, optstring)) != -1)
         {
@@ -734,6 +741,9 @@ main(int argc, char *argv[])
             case 'x':
                 enable_camera = 0;
                 break;
+	    case 'b':
+		blk_arg = optarg;
+		break;
             }
         }
 
@@ -759,11 +769,14 @@ main(int argc, char *argv[])
 #if defined (USE_TRT)
     init_trt_pose3d (&s_gui_prop.pose3d_config);
 #else
-    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config);
+#if defined (USE_BLK_TRT)
+    init_trt_pose3d (&s_gui_prop.pose3d_config);
+#endif
+    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config, blk_arg);
 #endif
     setup_imgui (win_w * 2, win_h);
 
-#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT) || defined (USE_BLK)
+#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
     if(enable_rendering == 1){
         glBindFramebuffer (GL_FRAMEBUFFER, 0);
@@ -811,7 +824,7 @@ main(int argc, char *argv[])
      * --------------------------------------- */
     int cnt = 0;
     float avg_ms = 0, avg_blk_ms = 0;
-#if defined (USE_BGT) || defined (USE_BLK)
+#if defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)
     float ssim = 0, avg_ssim = 0;
     unsigned char * gpu_rendered_buf;
     unsigned char * tpu_rendered_buf;
@@ -824,7 +837,7 @@ main(int argc, char *argv[])
         posenet_result_t pose_ret = {0};
 #if defined (USE_BGT)
         posenet_result_t pose_ret_tpu = {0};
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_TRT)
         posenet_result_t pose_ret_blk = {0};
 #endif
 	char strbuf[512];
@@ -866,7 +879,7 @@ main(int argc, char *argv[])
 #if defined (USE_BGT)
         invoke_pose3d_tpu (&pose_ret_tpu);
 #endif
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
         ttime[2] = pmeter_get_time_ms ();
         invoke_pose3d_blk (&pose_ret_blk);
 	ttime[3] = pmeter_get_time_ms ();
@@ -883,7 +896,7 @@ main(int argc, char *argv[])
             draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0); // render raw video ??
             render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret);     // render skeleton ??
 
-#if defined (USE_BGT) || defined (USE_BLK)
+#if defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)
 	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, gpu_rendered_buf);
 
             glViewport (0, 0, win_w, win_h);
@@ -891,7 +904,7 @@ main(int argc, char *argv[])
             draw_2d_texture_ex (&captex, draw_x, draw_y, draw_w, draw_h, 0);
 #if defined (USE_BGT)
 	    render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_tpu);
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_TRT)
 	    render_2d_scene (draw_x, draw_y, draw_w, draw_h, &pose_ret_blk);
 #endif
 	    glReadPixels (0, 0, draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, tpu_rendered_buf);
@@ -927,14 +940,14 @@ main(int argc, char *argv[])
         }
 	avg_ms       = (avg_ms     * cnt + invoke_ms )     / (cnt + 1);
 	avg_blk_ms   = (avg_blk_ms * cnt + invoke_blk_ms ) / (cnt + 1);
-#if defined (USE_BGT) || defined (USE_BLK)
+#if defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)
 	avg_ssim = (avg_ssim * cnt + ssim) / (cnt + 1); 
 #endif
 	cnt++;
-        if(cnt >= 100){
+        if(cnt >= 1000){
 #if defined (USE_BGT)
     		printf("final avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_ssim);
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_TRT)
     		printf("final avg: %f [ms], blk avg: %f [ms], avg_ssim: %f\n", avg_ms, avg_blk_ms, avg_ssim);
 #else
     		printf("final avg: %f [ms]\tinput_name: %s\n", avg_ms, input_name);
@@ -944,7 +957,7 @@ main(int argc, char *argv[])
         if(enable_rendering == 1){
 #if defined (USE_BGT)
 	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_TRT)
 	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%f [ms]\navg: %f [ms], blk ms: %f [ms]\navg_ssim: %f\n", interval, invoke_ms, avg_ms, invoke_blk_ms, avg_ssim);
 #else
 	    sprintf (strbuf, "Interval:%5.1f [ms]\nTFLite  :%5.1f [ms]\navg: %5.1f [ms]\n", interval, invoke_ms, avg_ms);
@@ -958,7 +971,7 @@ main(int argc, char *argv[])
         }else{
 #if defined (USE_BGT)
 	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\tavg_ssim: %f\n", interval, invoke_ms, avg_ms, avg_ssim);
-#elif defined (USE_BLK)
+#elif defined (USE_BLK) || defined (USE_BLK_CNT)
 	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms], blk ms: %f [ms]\tavg_ssim: %f\n", interval, invoke_ms, avg_ms, invoke_blk_ms, avg_ssim);
 #else
 	    printf ("Interval:%f [ms]\tTFLite  :%f [ms]\tavg: %f [ms]\n", interval, invoke_ms, avg_ms);

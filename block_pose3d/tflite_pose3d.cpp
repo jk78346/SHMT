@@ -9,6 +9,7 @@
 #include <float.h>
 #include "util_pmeter.h"
 #include "time.h"
+//#include "block_config.h"
 
 //#define POSENET_MODEL_PATH            "./model/human_pose_estimation_3d_0001_256x448_float.tflite"
 //#define POSENET_MODEL_PATH          "./model/human_pose_estimation_3d_0001_256x448_float16_quant.tflite"
@@ -17,13 +18,14 @@
 #define POSENET_MODEL_PATH          "./model/toy_pose3d_full_model_float.tflite"
 #define POSENET_FULL_MODEL_PATH     "./model/toy_pose3d_full_model_float.tflite"
 //#define POSENET_BLOCK_MODEL_PATH     "./model/toy_pose3d_full_model_float.tflite"
-//#define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_sp_model_blk_8_float.tflite"
+//#define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_sp_model_blk_16_float.tflite"
 #define POSENET_BLOCK_MODEL_PATH    "./model/toy_pose3d_half_model_float.tflite"
 
 //#define POSENET_EDGETPU_MODEL_PATH  "./model/human_pose_estimation_3d_0001_256x448_full_integer_quant_edgetpu.tflite"
 #define POSENET_EDGETPU_MODEL_PATH  "./model/toy_pose3d_full_model_float.tflite"
 
-#define UFF_MODEL_PATH  "./model/toy_pose3d_full_model_float.onnx"
+#define UFF_MODEL_PATH        "./model/toy_pose3d_full_model_float.onnx"
+#define UFF_BLOCK_MODEL_PATH  "./model/toy_pose3d_full_model_float.onnx"
 #define PLAN_MODEL_PATH "./model/temp.plan"
 
 static tflite_interpreter_t s_interpreter;
@@ -36,7 +38,7 @@ static int     s_img_h = 0;
 static int     s_hmp_w = 0;
 static int     s_hmp_h = 0;
 
-#if defined (USE_TRT)
+#if defined (USE_TRT) || defined (USE_BLK_TRT)
 static IExecutionContext   *s_trt_context;
 static trt_tensor_t         s_trt_tensor_input;
 static trt_tensor_t         s_trt_tensor_heatmap;
@@ -47,11 +49,11 @@ static std::vector<void *>  s_gpu_buffers;
 #endif
 
 static _result_quality s_result_quality;
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 static _blk_pemeter    s_blk_pemeter;
 #endif
 
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 void feed_blk_bufs(unsigned char* buf_ui8, float** blk_buf_fp32, int dst_h, int dst_w){
     int w_cnt    = s_blk_pemeter.w_cnt;
     int h_cnt    = s_blk_pemeter.h_cnt;
@@ -93,10 +95,10 @@ void feed_blk_bufs(unsigned char* buf_ui8, float** blk_buf_fp32, int dst_h, int 
  *  Create TensorFlow Lite Interpreter
  * -------------------------------------------------- */
 int
-init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
+init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config, char* blk_arg)
 {
 #if defined (USE_BLK)
-    int blk_size = 8; // The blk_size must be aligned with the block_model
+    int blk_size = 16; // The blk_size must be aligned with the block_model
     s_blk_pemeter.w_size   = 224;//blk_size;//224;//blk_size;
     s_blk_pemeter.h_size   = 256;//blk_size;//256;//blk_size;
     s_blk_pemeter.blk_size = s_blk_pemeter.w_size * s_blk_pemeter.h_size;
@@ -110,6 +112,8 @@ init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
     s_blk_pemeter.w_cnt_out    = (56 / s_blk_pemeter.w_size_out);
     s_blk_pemeter.h_cnt_out    = (32 / s_blk_pemeter.h_size_out);
     s_blk_pemeter.blk_cnt_out  = s_blk_pemeter.w_cnt_out * s_blk_pemeter.h_cnt_out;
+
+    //block_config(s_blk_pemeter, blk_arg);
 
     tflite_create_interpreter_from_file (&s_interpreter, POSENET_FULL_MODEL_PATH, POSENET_BLOCK_MODEL_PATH, s_blk_pemeter.blk_cnt);
 
@@ -145,7 +149,6 @@ init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config)
     return 0;
 }
 
-#if defined (USE_TRT)
 /* -------------------------------------------------- *
  *  create cuda engine
  * -------------------------------------------------- */
@@ -167,12 +170,78 @@ convert_onnx_to_plan (const std::string &plan_file_name, const std::string &uff_
     return 0;
 }
 
+#if defined (USE_TRT) || defined (USE_BLK_TRT)
 /* -------------------------------------------------- *
  *  Create TensorRT Interpreter
  * -------------------------------------------------- */
 int
 init_trt_pose3d (pose3d_config_t *config/*, char* model_name*/)
 {
+#if defined (USE_BLK_TRT)
+    ICudaEngine *engine = NULL;
+
+    trt_initialize ();
+
+    /* Try to load Prebuilt TensorRT Engine */
+    fprintf (stderr, "loading prebuilt TensorRT engine...\n");
+    engine = trt_load_plan_file (PLAN_MODEL_PATH);
+
+    /* Build TensorRT Engine */
+    if (engine == NULL)
+    {
+        convert_onnx_to_plan (PLAN_MODEL_PATH, /*model_name*/UFF_BLOCK_MODEL_PATH);
+
+        engine = trt_load_plan_file (PLAN_MODEL_PATH);
+        if (engine == NULL)
+        {
+            fprintf (stderr, "%s(%d)\n", __FILE__, __LINE__);
+            return -1;
+        }
+    }
+
+    s_trt_context = engine->createExecutionContext();
+
+//    int blk_size = 8; // The blk_size must be aligned with the block_model
+//    s_blk_pemeter.w_size   = 224;//blk_size;
+//    s_blk_pemeter.h_size   = 256;//blk_size;
+//    s_blk_pemeter.blk_size = s_blk_pemeter.w_size * s_blk_pemeter.h_size;
+//    s_blk_pemeter.w_cnt    = (448 / s_blk_pemeter.w_size);
+//    s_blk_pemeter.h_cnt    = (256 / s_blk_pemeter.h_size);
+//    s_blk_pemeter.blk_cnt  = s_blk_pemeter.w_cnt * s_blk_pemeter.h_cnt;
+//
+//    s_blk_pemeter.w_size_out   = 28;//blk_size/8; //28;
+//    s_blk_pemeter.h_size_out   = 32;//blk_size/8; // 32;
+//    s_blk_pemeter.blk_size_out = s_blk_pemeter.w_size_out * s_blk_pemeter.h_size_out;
+//    s_blk_pemeter.w_cnt_out    = (56 / s_blk_pemeter.w_size_out);
+//    s_blk_pemeter.h_cnt_out    = (32 / s_blk_pemeter.h_size_out);
+//    s_blk_pemeter.blk_cnt_out  = s_blk_pemeter.w_cnt_out * s_blk_pemeter.h_cnt_out;
+
+    /* Allocate IO tensors */
+    trt_get_tensor_by_name/*_blk*/ (engine, "data",       &s_trt_tensor_input/*, s_blk_pemeter*/);   /* (1, 256, 448,  3) */
+    trt_get_tensor_by_name/*_blk*/ (engine, "Identity/Conv2D",   &s_trt_tensor_offsets/*, s_blk_pemeter*/); /* (1,  32,  56, 57) */
+    trt_get_tensor_by_name/*_blk*/ (engine, "Identity_1/Conv2D", &s_trt_tensor_heatmap/*, s_blk_pemeter*/); /* (1,  32,  56  19) */
+
+    int num_bindings = engine->getNbBindings();
+    s_gpu_buffers.resize (num_bindings);
+    s_gpu_buffers[s_trt_tensor_input  .bind_idx] = s_trt_tensor_input  .gpu_mem;
+    s_gpu_buffers[s_trt_tensor_heatmap.bind_idx] = s_trt_tensor_heatmap.gpu_mem;
+    s_gpu_buffers[s_trt_tensor_offsets.bind_idx] = s_trt_tensor_offsets.gpu_mem;
+
+    config->score_thresh = 0.3f;
+    config->iou_thresh   = 0.3f;
+
+    /* input image dimention */
+    s_img_w = s_trt_tensor_input.dims.d[2];
+    s_img_h = s_trt_tensor_input.dims.d[1];
+    fprintf (stderr, "input image size: (%d, %d)\n", s_img_w, s_img_h);
+
+    /* heatmap dimention */
+    s_hmp_w = s_trt_tensor_heatmap.dims.d[2];
+    s_hmp_h = s_trt_tensor_heatmap.dims.d[1];
+    fprintf (stderr, "heatmap size: (%d, %d)\n", s_hmp_w, s_hmp_h);
+
+    return 0;
+#else
     ICudaEngine *engine = NULL;
 
     trt_initialize ();
@@ -201,14 +270,12 @@ init_trt_pose3d (pose3d_config_t *config/*, char* model_name*/)
     trt_get_tensor_by_name (engine, "data",       &s_trt_tensor_input);   /* (1, 256, 448,  3) */
     trt_get_tensor_by_name (engine, "Identity/Conv2D",   &s_trt_tensor_offsets); /* (1,  32,  56, 57) */
     trt_get_tensor_by_name (engine, "Identity_1/Conv2D", &s_trt_tensor_heatmap); /* (1,  32,  56  19) */
-//    trt_get_tensor_by_name (engine, "Identity_2:0", &s_trt_tensor_pafs);    /* (1,  32,  56, 38) */
 
     int num_bindings = engine->getNbBindings();
     s_gpu_buffers.resize (num_bindings);
     s_gpu_buffers[s_trt_tensor_input  .bind_idx] = s_trt_tensor_input  .gpu_mem;
     s_gpu_buffers[s_trt_tensor_heatmap.bind_idx] = s_trt_tensor_heatmap.gpu_mem;
     s_gpu_buffers[s_trt_tensor_offsets.bind_idx] = s_trt_tensor_offsets.gpu_mem;
-//    s_gpu_buffers[s_trt_tensor_pafs   .bind_idx] = s_trt_tensor_pafs   .gpu_mem;
 
     config->score_thresh = 0.3f;
     config->iou_thresh   = 0.3f;
@@ -224,6 +291,7 @@ init_trt_pose3d (pose3d_config_t *config/*, char* model_name*/)
     fprintf (stderr, "heatmap size: (%d, %d)\n", s_hmp_w, s_hmp_h);
 
     return 0;
+#endif
 }
 #endif
 
@@ -249,7 +317,7 @@ get_pose3d_input_buf_tpu()
 }
 #endif
 
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 void **
 get_pose3d_input_buf_blk()
 {
@@ -613,7 +681,15 @@ invoke_pose3d (posenet_result_t *pose_result)
 
     /* invoke inference */
     int batchSize = 1;
+    ttime[0] = pmeter_get_time_ms();
     s_trt_context->execute (batchSize, &s_gpu_buffers[0]);
+    ttime[1] = pmeter_get_time_ms();
+    baseline_invoke_ms = ttime[1] - ttime[0];
+    baseline_invoke_avg_ms = (baseline_invoke_avg_ms * baseline_cnt + baseline_invoke_ms) / (baseline_cnt + 1);
+    baseline_cnt++;
+    if(baseline_cnt >= 100){
+    	printf("baseline invoke avg ms: %f\n", baseline_invoke_avg_ms);
+    }
 
     /* copy from CUDA buffer */
     trt_copy_tensor_from_gpu (s_trt_tensor_heatmap);
@@ -637,7 +713,7 @@ invoke_pose3d (posenet_result_t *pose_result)
     baseline_invoke_ms = ttime[1] - ttime[0];
     baseline_invoke_avg_ms = (baseline_invoke_avg_ms * baseline_cnt + baseline_invoke_ms) / (baseline_cnt + 1);
     baseline_cnt++;
-    if(baseline_cnt >= 100){
+    if(baseline_cnt >= 1000){
     	printf("baseline invoke avg ms: %f\n", baseline_invoke_avg_ms);
     }
     if (0)
@@ -674,10 +750,38 @@ invoke_pose3d_tpu (posenet_result_t *pose_result)
 }
 #endif
 
-#if defined (USE_BLK)
+#if defined (USE_BLK) || defined (USE_BLK_TRT)
 int
 invoke_pose3d_blk (posenet_result_t *pose_result)
 {
+#if defined (USE_BLK_TRT)
+    /* copy to CUDA buffer */
+    trt_copy_tensor_to_gpu (s_trt_tensor_input);
+
+    /* invoke inference */
+    int batchSize = 1;
+    ttime[0] = pmeter_get_time_ms();
+    s_trt_context->execute (batchSize, &s_gpu_buffers[0]);
+    ttime[1] = pmeter_get_time_ms();
+    blk_invoke_ms = ttime[1] - ttime[0];
+    blk_invoke_avg_ms = (blk_invoke_avg_ms * blk_cnt + blk_invoke_ms) / (blk_cnt + 1);
+    blk_cnt++;
+    if(blk_cnt >= 1000){
+    	printf("blk invoke avg ms: %f\n", blk_invoke_avg_ms);
+    }
+
+    /* copy from CUDA buffer */
+    trt_copy_tensor_from_gpu (s_trt_tensor_heatmap);
+    trt_copy_tensor_from_gpu (s_trt_tensor_offsets);
+//    trt_copy_tensor_from_gpu (s_trt_tensor_pafs);
+
+    if (0)
+        decode_multiple_poses (pose_result);
+    else
+        decode_single_pose (pose_result, 0);
+
+    pose_result->pose[0].heatmap = s_trt_tensor_heatmap.cpu_mem;
+#else
 //    printf("%s: blk_cnt: h:%d x w:%d = %d\n", __func__, s_blk_pemeter.h_cnt, s_blk_pemeter.w_cnt, s_blk_pemeter.blk_cnt);
     blk_invoke_ms = 0;
     for(int i = 0 ; i < s_blk_pemeter.blk_cnt ; i++){
@@ -696,11 +800,12 @@ invoke_pose3d_blk (posenet_result_t *pose_result)
     }
     blk_invoke_avg_ms = (blk_invoke_avg_ms * blk_cnt + blk_invoke_ms) / (blk_cnt + 1);
     blk_cnt++;
-    if(blk_cnt >= 100){
+    if(blk_cnt >= 1000){
     	printf("blk invoke avg ms: %f\n", blk_invoke_avg_ms);
     }
 
     pose_result->pose[0].heatmap = s_tensor_heatmap.ptr;
+#endif
     pose_result->pose[0].heatmap_dims[0] = s_hmp_w;
     pose_result->pose[0].heatmap_dims[1] = s_hmp_h;
     return 0;

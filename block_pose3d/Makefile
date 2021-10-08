@@ -6,6 +6,7 @@ TARGET = gl2blk_pose3d
 SRCS = 
 SRCS += main.c
 SRCS += tflite_pose3d.cpp
+#SRCS += block_config.c
 SRCS += render_pose3d.c
 SRCS += shapes.c
 SRCS += touch_event.c
