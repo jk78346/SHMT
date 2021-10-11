@@ -683,19 +683,59 @@ void save_pose_ret(posenet_result_t* pose_ret, int count, char* input_name){
   fprintf(myfile, "\n");
 }
 
+struct _CONFIG{
+	int mode; // [0:full|1:blk|2:mix|-1:off]
+	int dev;  // [0:gpu |1:trt|2:tpu]
+	int w_cnt; // block count in width  direction, the  first params from [nxn]
+	int h_cnt; // block count in height direction, the second params from [nxn]
+}CONFIG;
+
+void init_configs(struct _CONFIG* configs){
+	configs[0].mode = 0;
+	configs[0].dev  = 0;
+	configs[0].w_cnt = 1;
+	configs[0].h_cnt = 1;
+	configs[1].mode = -1; // default off
+	configs[1].dev  = 0;
+	configs[1].w_cnt = 1;
+	configs[1].h_cnt = 1;
+}
+
+void get_configs(int argc, char* argv[], struct _CONFIG* configs){
+
+}
+
+int check_configs(struct _CONFIG* configs){
+  int ret;
+}
+
+char *model_name; // model name of xxx.onnx for trt
+
 /*--------------------------------------------------------------------------- *
  *      M A I N    F U N C T I O N
  *--------------------------------------------------------------------------- */
-char *model_name; // model name of xxx.onnx for trt
 int
 main(int argc, char *argv[])
 {
 // TODO:
 //  program argument design:
-//  ./exe 1 [full] [gpu|trt|tpu]                           -v "file name" -d -t [1000]
-//  ./exe 1 [blk]  [gpu|trt|tpu] [1x1]                     -v "file name" -d -t [1000]
-//  ./exe 2 [full] [gpu|trt|tpu] [blk] [gpu|trt|tpu] [1x1] -v "file name" -d -t [1000]
-    
+//  ./exe [full] [gpu|trt|tpu] [1x1] None                      -v "file name" -d -t [1000]
+//  ./exe [blk]  [gpu|trt|tpu] [1x1] None                      -v "file name" -d -t [1000]
+//  ./exe [mix]  [gpu|trt|tpu] [1x1] None                      -v "file name" -d -t [1000]
+//  ./exe [full] [gpu|trt|tpu] [1x1] [blk] [gpu|trt|tpu] [1x1] -v "file name" -d -t [1000]
+//  ./exe [blk]  [gpu|trt|tpu] [2x2] [mix] [gpu|trt|tpu] [1x1] -v "file name" -d -t [1000]
+//
+//	1. [full] must use [1x1] , otherwise error
+//	2. Must use None to indicate no second version for this program, all non [full|blk|mix] is viewed as None
+//	3. The block size [nxn], where n must be dividable by width and height 
+    struct  _CONFIG configs[2];
+    //init configs
+    init_configs(configs); 
+    // get parmas for config
+    get_configs(argc, argv, configs);
+    // check params validity
+    check_configs(configs);
+
     char input_name_default[] = "pakutaso_person.jpg";
     char *input_name = input_name_default;
     char *blk_arg;
