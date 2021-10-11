@@ -20,6 +20,7 @@ SRCS += $(MAKETOP)/common/util_render2d.c
 SRCS += $(MAKETOP)/common/util_debugstr.c
 SRCS += $(MAKETOP)/common/util_pmeter.c
 SRCS += $(MAKETOP)/common/util_quality.c # new utility
+SRCS += $(MAKETOP)/common/util_config.c  # new utility
 SRCS += $(MAKETOP)/common/util_tflite.cpp
 SRCS += $(MAKETOP)/common/util_trt.c
 SRCS += $(MAKETOP)/common/winsys/$(WINSYS_SRC).c
