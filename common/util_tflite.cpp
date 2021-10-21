@@ -745,7 +745,7 @@ tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name
     }
 // =======================================================================
     void *blk_ptr = NULL;
-    int blk_cnt = s_blk_pemeter->blk_cnt;
+    int blk_cnt = s_blk_pemeter->in_dims.blk_cnt;
     for(int i = 0 ; i < blk_cnt ; i++){
 	    std::unique_ptr<Interpreter> &interpreter = p->blk_interpreters[i];
 	    io_idx = -1;

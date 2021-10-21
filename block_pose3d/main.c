@@ -708,7 +708,7 @@ main(int argc, char *argv[])
     struct  _CONFIG configs[2];
     //init configs
     init_configs(configs); 
-    // get parmas for config
+    // get params for config
     get_configs(argc, argv, configs);
     // check params validity
     check_configs(configs);

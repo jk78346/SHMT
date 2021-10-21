@@ -4,7 +4,7 @@
  * ------------------------------------------------ */
 #ifndef _UTIL_TFLITE_H_
 #define _UTIL_TFLITE_H_
-
+#include "util_config.h"
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model.h"
 #include "tensorflow/lite/optional_debug_tools.h"
@@ -75,25 +75,15 @@ typedef struct tflite_tensor_t
     int         quant_zerop;
 } tflite_tensor_t;
 
-#if defined (USE_BLK) || defined (USE_BLK_TRT)
-typedef struct _blk_pemeter
+typedef struct tflite_interpreter_set // universal for full, blk, mix, etc. need size initialization
 {
-    int w_cnt; // number of block counts in input's width  direction
-    int h_cnt; // number of block counts in input's height direction
-    int w_size; // per block size in input's width  direction (# of pixels)
-    int h_size; // per block size in input's height direction (# of pixels)
-    int blk_cnt;  // input's block counts in total
-    int blk_size; // input's block size in total (# of pixels)
-    
-    int w_cnt_out; // number of block counts in output's width  direction
-    int h_cnt_out; // number of block counts in output's height direction
-    int w_size_out; // per block size in output's width  direction (# of pixels)
-    int h_size_out; // per block size in output's height direction (# of pixels)
-    int blk_cnt_out;  // output's block counts in total
-    int blk_size_out; // output's block size in total (# of pixels)
+	_CONFIG					*config_ptr;	
+	std::vector<tflite_interpreter_t>	s_interpreter;
+	std::vector<tflite_tensor_t>		s_tensor_input;
+	std::vector<tflite_tensor_t>		s_tensor_heatmap;
+	std::vector<tflite_tensor_t>		s_tensor_offset;
+} tflite_interpreter_set;
 
-} blk_pemeter;
-#endif
 
 #ifdef __cplusplus
 extern "C" {

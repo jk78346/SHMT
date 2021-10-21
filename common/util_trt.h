@@ -31,6 +31,7 @@
 #include <vector>
 #include <list>
 #include "util_tflite.h"
+#include "util_config.h"
 
 using namespace nvinfer1;
 using namespace nvuffparser;
@@ -79,6 +80,15 @@ typedef struct trt_tensor_t
 #endif
 } trt_tensor_t;
 
+typedef struct trt_context_set // universal for full, blk, mix... etc. need size initialization
+{
+	_CONFIG				*config_ptr;
+	std::vector<IExecutionContext*>	s_trt_context;
+	std::vector<trt_tensor_t>	s_trt_tensor_input;
+	std::vector<trt_tensor_t>	s_trt_tensor_heatmap;
+	std::vector<trt_tensor_t>	s_trt_tensor_offsets;
+	std::vector<trt_tensor_t>	s_trt_tensor_pafs;
+} trt_context_set;
 
 typedef struct trt_uff_inputdef_t
 {
