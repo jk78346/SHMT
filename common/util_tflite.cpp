@@ -9,6 +9,18 @@
 
 using namespace tflite;
 
+void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config){
+	int size = config->s_blk_pemeter.in_dims.blk_cnt;
+	if(size < 1){
+		printf("%s %s: [ERROR] size: %d is not positive, exit\n", __FILE__, __func__, size); exit(0);	
+	}
+	p->config_ptr = config;
+	p->s_interpreter.resize(size);
+	p->s_tensor_input.resize(size);
+	p->s_tensor_heatmap.resize(size);
+	p->s_tensor_offset.resize(size);
+}
+
 #if defined (USE_EDGETPU) || defined (USE_BGT)
 edgetpu::EdgeTpuManager::DeviceEnumerationRecord enumerate_edgetpu;
 std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
@@ -279,6 +291,10 @@ std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatB
   return interpreter;
 }
 #endif
+
+int tflite_create_interpreter_from_config(tflite_interpreter_set p){
+
+}
 
 int
 #if defined (USE_BGT)

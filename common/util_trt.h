@@ -90,6 +90,7 @@ typedef struct trt_context_set // universal for full, blk, mix... etc. need size
 	std::vector<trt_tensor_t>	s_trt_tensor_pafs;
 } trt_context_set;
 
+void init_trt_context_set(trt_context_set *p, _CONFIG *config);
 typedef struct trt_uff_inputdef_t
 {
     std::string     name;

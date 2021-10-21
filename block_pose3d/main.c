@@ -706,10 +706,11 @@ int
 main(int argc, char *argv[])
 {
     struct  _CONFIG configs[2];
+    int used_config_cnt;
     //init configs
     init_configs(configs); 
     // get params for config
-    get_configs(argc, argv, configs);
+    used_config_cnt = get_configs(argc, argv, configs);
     // check params validity
     check_configs(configs);
 
@@ -779,6 +780,8 @@ main(int argc, char *argv[])
     	init_dbgstr (win_w, win_h);
     	init_cube ((float)win_w / (float)win_h);
     }
+
+    init_pose3d(&s_gui_prop.pose3d_config, configs, used_config_cnt);
 
 #if defined (USE_EDGETPU)
     use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.

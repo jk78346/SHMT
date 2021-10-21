@@ -15,6 +15,19 @@ static Logger s_Logger;
 static pthread_t s_wait_thread;
 static int       s_is_waiting = 1;
 
+void init_trt_context_set(trt_context_set *p, _CONFIG *config){
+	int size = config->s_blk_pemeter.in_dims.blk_cnt;
+	if(size < 1){
+		printf("%s %s:[ERROR] size: %d is not positive, exit\n", __FILE__, __func__, size); exit(0);
+	}
+	p->config_ptr = config;
+	p->s_trt_context.resize(size);
+	p->s_trt_tensor_input.resize(size);
+	p->s_trt_tensor_heatmap.resize(size);
+	p->s_trt_tensor_offsets.resize(size);
+	p->s_trt_tensor_pafs.resize(size);
+}
+
 static void *
 waitcounter_thread_main (void *)
 {

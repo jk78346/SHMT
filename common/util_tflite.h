@@ -84,6 +84,7 @@ typedef struct tflite_interpreter_set // universal for full, blk, mix, etc. need
 	std::vector<tflite_tensor_t>		s_tensor_offset;
 } tflite_interpreter_set;
 
+void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config);
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +96,8 @@ int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *
 #else
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
 #endif
+
+int tflite_create_interpreter_from_config(tflite_interpreter_set p);
 
 #if defined (USE_BGT) 
 int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path, const char *tpu_model_path);

@@ -10,8 +10,7 @@ struct _blk_dims{
     int blk_size; // input's block size in total (# of pixels)
 }blk_dims;
 
-struct _blk_pemeter
-{
+struct _blk_pemeter{
     struct _blk_dims in_dims;
     struct _blk_dims out_dims;
 } blk_pemeter;
@@ -22,12 +21,13 @@ struct _CONFIG{
     unsigned int w_cnt; // block count in width  direction, the  first params from [hxw]
     unsigned int h_cnt; // block count in height direction, the second params from [hxw]
     struct _blk_pemeter s_blk_pemeter;
+    char* model; //TODO: later on this could be a list of models
 }CONFIG;
 
 void init_configs(struct _CONFIG* configs);
-void get_configs(int argc, char* argv[], struct _CONFIG* configs);
+int get_configs(int argc, char* argv[], struct _CONFIG* configs);
 void check_configs(struct _CONFIG* configs);
 
-void select_model(int mode, int dev, unsigned int w_cnt, unsigned int h_cnt, char* posenet_model);
+void select_model(struct _CONFIG config);
 void configure_blk(struct _CONFIG config);
 #endif

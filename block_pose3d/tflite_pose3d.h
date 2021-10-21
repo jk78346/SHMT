@@ -5,11 +5,11 @@
 #ifndef TFLITE_POSE3D_H_
 #define TFLITE_POSE3D_H_
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#include "util_config.h"
 #define MAX_POSE_NUM  10
 
 enum pose_key_id {
@@ -94,7 +94,7 @@ typedef struct _result_quality
 int  init_tflite_pose3d (int use_quantized_tflite, pose3d_config_t *config, char* blk_arg);
 int  init_trt_pose3d (pose3d_config_t *config/*, char* model_name*/);
 
-int init_pose3d(pose3d_config_t *pose3d_config, _CONFIG *config); // an combinded function of the above two
+int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG *configs, int config_cnt); // an combinded function of the above two
 
 void *get_pose3d_input_buf (int *w, int *h);
 //void *get_pose3d_input_buf_trt (int *w, int *h);

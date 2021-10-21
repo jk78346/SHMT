@@ -46,8 +46,10 @@ static trt_tensor_t         s_trt_tensor_offsets;
 static trt_tensor_t         s_trt_tensor_pafs;
 
 /* universal set for modes, need size initialization later*/
-static tflite_interpreter_set			
-static trt_context_set
+static tflite_interpreter_set	s_tflite_interpreter_set[2];
+static trt_context_set		s_trt_context_set[2];
+int s_tflite_interpreter_set_cnt = 0;
+int s_trt_context_set_cnt = 0;
 
 static std::vector<void *>  s_gpu_buffers;
 
@@ -60,8 +62,8 @@ void feed_blk_bufs(unsigned char* buf_ui8, float** blk_buf_fp32, int dst_h, int 
     int h_cnt    = s_blk_pemeter.in_dims.h_cnt;
     int w_size   = s_blk_pemeter.in_dims.w_size;
     int h_size   = s_blk_pemeter.in_dims.h_size;
-    int blk_cnt  = s_blk_pemeter.in_dims.blk_cnt;
-    int blk_size = s_blk_pemeter.in_dims.blk_size;
+    //int blk_cnt  = s_blk_pemeter.in_dims.blk_cnt;
+    //int blk_size = s_blk_pemeter.in_dims.blk_size;
     
 //    if((dst_h != (h_cnt * w_size)) || (dst_w != (w_cnt * h_size))){
 //       fprintf(stderr, "%s line %d: dst_w: %d, dst_h: %d, w_cnt: %d, h_cnt: %d, w_size: %d, h_size: %d\n", __func__, __LINE__, dst_w, dst_h, w_cnt, h_cnt, w_size, h_size);
@@ -113,20 +115,25 @@ convert_onnx_to_plan (const std::string &plan_file_name, const std::string &uff_
 }
 
 // an combinded function to initialize
-int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG* configs){ 
-	char *first_model, *second_model;
-	
-	// there is always at least the first setting, configure it first
-	configure_blk(configs[0]); 
-	configure_blk(configs[1]); // This can be skipped if setting 2 is not used. No hurt to call  
-	
-	//TODO: later on here might be a list of models (for blocking mode, which each model has different weights)
-	select_model(configs[0].mode, configs[0].dev, configs[0].w_cnt, configs[0].h_cnt, first_model);
-	select_model(configs[1].mode, configs[1].dev, configs[1].w_cnt, configs[1].h_cnt, second_model); // if not used then it's not defined
+int init_pose3d(pose3d_config_t *pose3d_config, _CONFIG *configs, int config_cnt){ 
+// For current design, config_cnt can only be either 1 or 2
+// Here need to make sure two cnts are initialized as 0 for correctness
+	for(int i = 0 ; i < config_cnt ; i++){
+		configure_blk(configs[i]); 
+		select_model(configs[i]);
+		if(configs[i].dev == 0 || configs[i].dev == 2){ // gpu or tpu
+			init_tflite_interpreter_set(&s_tflite_interpreter_set[s_tflite_interpreter_set_cnt], &configs[i]);
+			s_tflite_interpreter_set_cnt++;
+		}else if(configs[i].dev == 1){ // trt
+			init_trt_context_set(&s_trt_context_set[s_trt_context_set_cnt], &configs[i]);
+			s_trt_context_set_cnt++;
+		}
+	}
+	for(int i = 0 ; i < s_tflite_interpreter_set_cnt ; i++){
+		tflite_create_interpreter_from_config(s_tflite_interpreter_set[i]);
+	}
 
-	if(configs[0].dev == 0 || configs[0].dev == 2){ // gpu or tpu
-    		tflite_create_interpreter_from_file (&s_interpreter, POSENET_FULL_MODEL_PATH, POSENET_BLOCK_MODEL_PATH, s_blk_pemeter.in_dims.blk_cnt);
-	}else{ // configs[0].dev == 1, trt
+		//tflite_create_interpreter_from_file (&s_interpreter, POSENET_FULL_MODEL_PATH, POSENET_BLOCK_MODEL_PATH, s_blk_pemeter.in_dims.blk_cnt);
 	    ICudaEngine *engine = NULL;
 
 	    trt_initialize ();
@@ -147,16 +154,15 @@ int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG* configs){
 
 	    s_trt_context = engine->createExecutionContext();
 	
-	}
 
 
 
 
 
 
-   		tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
-    		tflite_get_tensor_by_name (&s_interpreter, 1, "Identity/Conv2D",   &s_tensor_offsets); /* (1,  32,  56, 57) */
-    		tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1/Conv2D", &s_tensor_heatmap); /* (1,  32,  56, 19) */
+   		//tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
+    		//tflite_get_tensor_by_name (&s_interpreter, 1, "Identity/Conv2D",   &s_tensor_offsets); /* (1,  32,  56, 57) */
+    		//tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1/Conv2D", &s_tensor_heatmap); /* (1,  32,  56, 19) */
     
     		/* input image dimention */
     		s_img_w = s_tensor_input.dims[2];

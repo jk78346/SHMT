@@ -5,7 +5,7 @@
 #include "util_config.h"
 
 void init_configs(struct _CONFIG* configs){
-        configs[0].mode = 0;
+	configs[0].mode = 0;
         configs[0].dev  = 0;
         configs[0].w_cnt = 1;
         configs[0].h_cnt = 1;
@@ -15,8 +15,9 @@ void init_configs(struct _CONFIG* configs){
         configs[1].h_cnt = 1;
 }
 
-void get_configs(int argc, char* argv[], struct _CONFIG* configs){
-        if(argc <= 3){
+int get_configs(int argc, char* argv[], struct _CONFIG* configs){
+	int cnt = 1;
+	if(argc <= 3){
                 printf("argc = %d, while the usage is the following. [first version is not completed]\n", argc);
                 printf("./exe [full|blk|mix] [gpu|trt|tpu] [hxw] None                               // for running one version \n");
                 printf("./exe [full|blk|mix] [gpu|trt|tpu] [hxw] [full|blk|mix] [gpu|trt|tpu] [hxw] // for running two versions\n");
@@ -45,7 +46,7 @@ void get_configs(int argc, char* argv[], struct _CONFIG* configs){
         configs[0].h_cnt = h_cnt;
         configs[0].w_cnt = w_cnt;
         if(argc == 4 || argc == 5){ // indicate that only one version is specified.
-                return;
+                return cnt;
         }
         if(argc <= 6){
                 printf("argc = %d, while the usage is the following. [second version is not completed]\n", argc);
@@ -75,6 +76,7 @@ void get_configs(int argc, char* argv[], struct _CONFIG* configs){
         w_cnt = atoi(strtok(NULL   , "x"));
         configs[1].h_cnt = h_cnt;
         configs[1].w_cnt = w_cnt;
+	return cnt;
 }
 
 void check_configs(struct _CONFIG* configs){
@@ -103,7 +105,13 @@ unsigned int file_exists(char* filename){
 	return (stat(filename, &buf) == 0);	
 }
 
-void select_model(int mode, int dev, unsigned int w_cnt, unsigned int h_cnt, char* model){
+void select_model(struct _CONFIG config){
+	int mode = config.mode;
+	int dev = config.dev;
+	unsigned int w_cnt = config.w_cnt;
+	unsigned int h_cnt = config.h_cnt;
+	char* model = config.model;
+
 	printf("%s %s: under implementation...\n", __FILE__, __func__);
 /*dev == 0 : gpu | dev == 1 : trt | dev == 2: tpu*/
 	if(mode == -1){ return;  // implies that setting 2 is not used, simply return and do nothing	
@@ -116,8 +124,8 @@ void select_model(int mode, int dev, unsigned int w_cnt, unsigned int h_cnt, cha
 	}else if(mode == 1){ // blk mode
 		char* w_cnt_char[10]; // upto 10 digits
 		char* h_cnt_char[10];
-		sprintf(w_cnt_char, "%ld", w_cnt);
-		sprintf(h_cnt_char, "%ld", h_cnt);
+		sprintf(w_cnt_char, "%lu", w_cnt);
+		sprintf(h_cnt_char, "%lu", h_cnt);
 		model = "./model/toy_pose3d_sp_model_blk_";
 		sprintf(model, "%s%s", model, h_cnt_char);
 		sprintf(model, "x");
