@@ -28,27 +28,27 @@
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #endif
 
-#if defined (USE_EDGETPU) || defined (USE_BGT)
+//#if defined (USE_EDGETPU) || defined (USE_BGT)
 #include "edgetpu.h"
 //#include "tensorflow/lite/interpreter.h"
-#endif
+//#endif
 
 typedef struct tflite_interpreter_t
 {
     std::unique_ptr<tflite::FlatBufferModel> model;
     std::unique_ptr<tflite::Interpreter>     interpreter;
     tflite::ops::builtin::BuiltinOpResolver  resolver;
-#if defined (USE_BGT)
-    // second set of interpreter for edgeTPU besides GPU
-    std::unique_ptr<tflite::FlatBufferModel> tpu_model;
-    std::unique_ptr<tflite::Interpreter>     tpu_interpreter;
-    tflite::ops::builtin::BuiltinOpResolver  tpu_resolver;
-#endif
-#if defined (USE_BLK)
+//#if defined (USE_BGT)
+//    // second set of interpreter for edgeTPU besides GPU
+//    std::unique_ptr<tflite::FlatBufferModel> tpu_model;
+//    std::unique_ptr<tflite::Interpreter>     tpu_interpreter;
+//    tflite::ops::builtin::BuiltinOpResolver  tpu_resolver;
+//#endif
+//#if defined (USE_BLK)
     std::vector<std::unique_ptr<tflite::FlatBufferModel>> blk_models;
     std::vector<std::unique_ptr<tflite::Interpreter>>     blk_interpreters;
     std::vector<tflite::ops::builtin::BuiltinOpResolver>  blk_resolvers;
-#endif
+//#endif
 } tflite_interpreter_t;
 
 typedef struct tflite_createopt_t
@@ -77,11 +77,11 @@ typedef struct tflite_tensor_t
 
 typedef struct tflite_interpreter_set // universal for full, blk, mix, etc. need size initialization
 {
-	_CONFIG					*config_ptr;	
-	std::vector<tflite_interpreter_t>	s_interpreter;
-	std::vector<tflite_tensor_t>		s_tensor_input;
-	std::vector<tflite_tensor_t>		s_tensor_heatmap;
-	std::vector<tflite_tensor_t>		s_tensor_offset;
+	_CONFIG				*config_ptr;	
+	tflite_interpreter_t*		s_interpreter;
+	tflite_tensor_t*		s_tensor_input;
+	tflite_tensor_t*		s_tensor_heatmap;
+	tflite_tensor_t*		s_tensor_offset;
 } tflite_interpreter_set;
 
 void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config);
@@ -97,7 +97,7 @@ int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
 #endif
 
-int tflite_create_interpreter_from_config(tflite_interpreter_set p);
+int tflite_create_interpreter_from_config(tflite_interpreter_set* p);
 
 #if defined (USE_BGT) 
 int tflite_create_interpreter_from_file (tflite_interpreter_t *p, const char *model_path, const char *tpu_model_path);

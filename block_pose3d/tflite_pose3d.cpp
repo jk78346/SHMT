@@ -115,12 +115,12 @@ convert_onnx_to_plan (const std::string &plan_file_name, const std::string &uff_
 }
 
 // an combinded function to initialize
-int init_pose3d(pose3d_config_t *pose3d_config, _CONFIG *configs, int config_cnt){ 
+int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG *configs, int config_cnt){ 
 // For current design, config_cnt can only be either 1 or 2
 // Here need to make sure two cnts are initialized as 0 for correctness
 	for(int i = 0 ; i < config_cnt ; i++){
-		configure_blk(configs[i]); 
-		select_model(configs[i]);
+		configure_blk(&configs[i]); 
+		select_model(&configs[i]);
 		if(configs[i].dev == 0 || configs[i].dev == 2){ // gpu or tpu
 			init_tflite_interpreter_set(&s_tflite_interpreter_set[s_tflite_interpreter_set_cnt], &configs[i]);
 			s_tflite_interpreter_set_cnt++;
@@ -130,7 +130,7 @@ int init_pose3d(pose3d_config_t *pose3d_config, _CONFIG *configs, int config_cnt
 		}
 	}
 	for(int i = 0 ; i < s_tflite_interpreter_set_cnt ; i++){
-		tflite_create_interpreter_from_config(s_tflite_interpreter_set[i]);
+		tflite_create_interpreter_from_config(&s_tflite_interpreter_set[i]);
 	}
 
 		//tflite_create_interpreter_from_file (&s_interpreter, POSENET_FULL_MODEL_PATH, POSENET_BLOCK_MODEL_PATH, s_blk_pemeter.in_dims.blk_cnt);

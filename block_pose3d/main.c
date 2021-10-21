@@ -716,14 +716,14 @@ main(int argc, char *argv[])
 
     char input_name_default[] = "pakutaso_person.jpg";
     char *input_name = input_name_default;
-    char *blk_arg;
+    //char *blk_arg;
     int count;
     int win_w = 900;
     int win_h = 900;
     int texw, texh, draw_x, draw_y, draw_w, draw_h;
     texture_2d_t captex = {0};
     double ttime[10] = {0}, interval, invoke_ms, invoke_blk_ms;
-    int use_quantized_tflite = 0;
+    //int use_quantized_tflite = 0;
     int enable_camera = 1;
     int enable_rendering = 1;
     UNUSED (argc);
@@ -745,7 +745,7 @@ main(int argc, char *argv[])
             switch (c)
             {
             case 'q':
-                use_quantized_tflite = 1;
+                //use_quantized_tflite = 1;
                 break;
 	    case 'd':
 	  	enable_rendering = 0;
@@ -760,7 +760,7 @@ main(int argc, char *argv[])
                 enable_camera = 0;
                 break;
 	    case 'b':
-		blk_arg = optarg;
+		//blk_arg = optarg;
 		break;
             }
         }
@@ -783,17 +783,17 @@ main(int argc, char *argv[])
 
     init_pose3d(&s_gui_prop.pose3d_config, configs, used_config_cnt);
 
-#if defined (USE_EDGETPU)
-    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
-#endif
-#if defined (USE_TRT)
-    init_trt_pose3d (&s_gui_prop.pose3d_config);
-#else
-#if defined (USE_BLK_TRT)
-    init_trt_pose3d (&s_gui_prop.pose3d_config);
-#endif
-    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config, blk_arg);
-#endif
+//#if defined (USE_EDGETPU)
+//    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
+//#endif
+//#if defined (USE_TRT)
+//    init_trt_pose3d (&s_gui_prop.pose3d_config);
+//#else
+//#if defined (USE_BLK_TRT)
+//    init_trt_pose3d (&s_gui_prop.pose3d_config);
+//#endif
+//    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config, blk_arg);
+//#endif
     setup_imgui (win_w * 2, win_h);
 
 #if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)

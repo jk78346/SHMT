@@ -15,10 +15,10 @@ void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config){
 		printf("%s %s: [ERROR] size: %d is not positive, exit\n", __FILE__, __func__, size); exit(0);	
 	}
 	p->config_ptr = config;
-	p->s_interpreter.resize(size);
-	p->s_tensor_input.resize(size);
-	p->s_tensor_heatmap.resize(size);
-	p->s_tensor_offset.resize(size);
+	p->s_interpreter    = (struct tflite_interpreter_t*) malloc( size * sizeof(struct tflite_interpreter_t) );
+	p->s_tensor_input   = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
+	p->s_tensor_heatmap = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
+	p->s_tensor_offset  = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
 }
 
 #if defined (USE_EDGETPU) || defined (USE_BGT)
@@ -292,8 +292,23 @@ std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatB
 }
 #endif
 
-int tflite_create_interpreter_from_config(tflite_interpreter_set p){
-
+int tflite_create_interpreter_from_config(tflite_interpreter_set *p){
+    char* model_path = p->config_ptr->model;
+    int blk_cnt      = p->config_ptr->s_blk_pemeter.in_dims.blk_cnt;     
+    for(int i = 0 ; i < blk_cnt ; i++){
+        p->s_interpreter[i].model = FlatBufferModel::BuildFromFile (model_path);
+        if (!p->s_interpreter[i].model)
+        {
+            DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+            return -1;
+        }
+//        InterpreterBuilder(*(p->s_interpreter[i].model), p->s_interpreter[i].resolver)(&(p->s_interpreter[i]));
+//        if (!(p->s_interpreter[i]))
+//        {
+//            DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+//            return -1;
+//        }
+    }
 }
 
 int

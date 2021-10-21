@@ -82,12 +82,12 @@ typedef struct trt_tensor_t
 
 typedef struct trt_context_set // universal for full, blk, mix... etc. need size initialization
 {
-	_CONFIG				*config_ptr;
-	std::vector<IExecutionContext*>	s_trt_context;
-	std::vector<trt_tensor_t>	s_trt_tensor_input;
-	std::vector<trt_tensor_t>	s_trt_tensor_heatmap;
-	std::vector<trt_tensor_t>	s_trt_tensor_offsets;
-	std::vector<trt_tensor_t>	s_trt_tensor_pafs;
+	_CONFIG			*config_ptr;
+	IExecutionContext*	s_trt_context;
+	trt_tensor_t*		s_trt_tensor_input;
+	trt_tensor_t*		s_trt_tensor_heatmap;
+	trt_tensor_t*		s_trt_tensor_offsets;
+	trt_tensor_t*		s_trt_tensor_pafs;
 } trt_context_set;
 
 void init_trt_context_set(trt_context_set *p, _CONFIG *config);

@@ -105,12 +105,12 @@ unsigned int file_exists(char* filename){
 	return (stat(filename, &buf) == 0);	
 }
 
-void select_model(struct _CONFIG config){
-	int mode = config.mode;
-	int dev = config.dev;
-	unsigned int w_cnt = config.w_cnt;
-	unsigned int h_cnt = config.h_cnt;
-	char* model = config.model;
+void select_model(struct _CONFIG* config){
+	int mode           = config->mode;
+	int dev            = config->dev;
+	unsigned int w_cnt = config->w_cnt;
+	unsigned int h_cnt = config->h_cnt;
+	char* model        = config->model;
 
 	printf("%s %s: under implementation...\n", __FILE__, __func__);
 /*dev == 0 : gpu | dev == 1 : trt | dev == 2: tpu*/
@@ -122,41 +122,42 @@ void select_model(struct _CONFIG config){
 			}else{     	    model = "./model/toy_pose3d_full_model_edgetpu.tflite"; }
 		}else{ printf("%s %s: [ERROR] full mode is used but w_cnt = %d, h_cnt = %d\n", __FILE__, __func__, w_cnt , h_cnt); exit(0); }		
 	}else if(mode == 1){ // blk mode
-		char* w_cnt_char[10]; // upto 10 digits
-		char* h_cnt_char[10];
-		sprintf(w_cnt_char, "%lu", w_cnt);
-		sprintf(h_cnt_char, "%lu", h_cnt);
+		char w_cnt_char[10]; // upto 10 digits
+		char h_cnt_char[10];
+		char tmp[50];
+		sprintf(w_cnt_char, "%u", w_cnt);
+		sprintf(h_cnt_char, "%u", h_cnt);
 		model = "./model/toy_pose3d_sp_model_blk_";
 		sprintf(model, "%s%s", model, h_cnt_char);
 		sprintf(model, "x");
 		sprintf(model, "%s%s", model, w_cnt_char);
-		if(dev == 0){ 	    sprintf(model, "%s%s", model, "_float.tflite"); 
-		}else if(dev == 1){ sprintf(model, "%s%s", model, "_float.onnx");
-	       	}else{              sprintf(model, "%s%s", model, "_edgetpu.tflite"); }		
+		if(dev == 0){ 	    strncpy(tmp, "_float.tflite", 50);
+		}else if(dev == 1){ strncpy(tmp, "_float.onnx", 50);
+	       	}else{              strncpy(tmp, "_edgetpu.tflite", 50); }		
+	       	sprintf(model, "%s%s", model, tmp); 		
 	}else if(mode == 2){ // mix mode
 		printf("mix mode is under construction..., exit\n"); exit(0);
 	}else{
 		printf("%s %s: [ERROR] undefine mode used: %d\n", __FILE__, __func__, mode); exit(0);
 	}
 	if(!file_exists(model)){
-		printf("%d %s: [ERROR] file %s doesn't exist, exit\n", __FILE__, __func__, model); exit(0);
+		printf("%s %s: [ERROR] file %s doesn't exist, exit\n", __FILE__, __func__, model); exit(0);
 	}
 }
 
-
-void configure_blk(struct _CONFIG config){
-	config.s_blk_pemeter.in_dims.w_cnt    = config.w_cnt;
-	config.s_blk_pemeter.in_dims.h_cnt    = config.h_cnt;
-	config.s_blk_pemeter.in_dims.w_size   = (448 / config.s_blk_pemeter.in_dims.w_cnt);
-	config.s_blk_pemeter.in_dims.h_size   = (256 / config.s_blk_pemeter.in_dims.h_cnt);
-	config.s_blk_pemeter.in_dims.blk_size = config.s_blk_pemeter.in_dims.w_size * config.s_blk_pemeter.in_dims.h_size;
-	config.s_blk_pemeter.in_dims.blk_cnt  = config.s_blk_pemeter.in_dims.w_cnt  * config.s_blk_pemeter.in_dims.h_cnt;
+void configure_blk(struct _CONFIG* config){
+	config->s_blk_pemeter.in_dims.w_cnt    = config->w_cnt;
+	config->s_blk_pemeter.in_dims.h_cnt    = config->h_cnt;
+	config->s_blk_pemeter.in_dims.w_size   = (448 / config->s_blk_pemeter.in_dims.w_cnt);
+	config->s_blk_pemeter.in_dims.h_size   = (256 / config->s_blk_pemeter.in_dims.h_cnt);
+	config->s_blk_pemeter.in_dims.blk_size = config->s_blk_pemeter.in_dims.w_size * config->s_blk_pemeter.in_dims.h_size;
+	config->s_blk_pemeter.in_dims.blk_cnt  = config->s_blk_pemeter.in_dims.w_cnt  * config->s_blk_pemeter.in_dims.h_cnt;
 	
-	config.s_blk_pemeter.out_dims.w_cnt    = config.s_blk_pemeter.in_dims.w_cnt / 8;
-	config.s_blk_pemeter.out_dims.h_cnt    = config.s_blk_pemeter.in_dims.h_cnt / 8;
-	config.s_blk_pemeter.out_dims.w_size   = (56 / config.s_blk_pemeter.out_dims.w_cnt);
-	config.s_blk_pemeter.out_dims.h_size   = (32 / config.s_blk_pemeter.out_dims.h_cnt);
-	config.s_blk_pemeter.out_dims.blk_size = config.s_blk_pemeter.out_dims.w_size * config.s_blk_pemeter.out_dims.h_size;
-        config.s_blk_pemeter.out_dims.blk_cnt  = config.s_blk_pemeter.out_dims.w_cnt  * config.s_blk_pemeter.out_dims.h_cnt;	
+	config->s_blk_pemeter.out_dims.w_cnt    = config->s_blk_pemeter.in_dims.w_cnt / 8;
+	config->s_blk_pemeter.out_dims.h_cnt    = config->s_blk_pemeter.in_dims.h_cnt / 8;
+	config->s_blk_pemeter.out_dims.w_size   = (56 / config->s_blk_pemeter.out_dims.w_cnt);
+	config->s_blk_pemeter.out_dims.h_size   = (32 / config->s_blk_pemeter.out_dims.h_cnt);
+	config->s_blk_pemeter.out_dims.blk_size = config->s_blk_pemeter.out_dims.w_size * config->s_blk_pemeter.out_dims.h_size;
+        config->s_blk_pemeter.out_dims.blk_cnt  = config->s_blk_pemeter.out_dims.w_cnt  * config->s_blk_pemeter.out_dims.h_cnt;	
 }
 
