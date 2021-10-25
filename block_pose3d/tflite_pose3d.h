@@ -111,6 +111,8 @@ int invoke_pose3d_blk (posenet_result_t *pose_result);
 void feed_blk_bufs(unsigned char* buf_ui8, float** blk_buf_fp32, int dst_h, int dst_w);
 #endif
 
+void free_all_structs();
+
 
 #ifdef __cplusplus
 }

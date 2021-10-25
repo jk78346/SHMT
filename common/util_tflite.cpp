@@ -18,13 +18,12 @@ void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config){
 	p->s_interpreter    = (struct tflite_interpreter_t*) malloc( size * sizeof(struct tflite_interpreter_t) );
 	p->s_tensor_input   = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
 	p->s_tensor_heatmap = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
-	p->s_tensor_offset  = (struct tflite_tensor_t*)      malloc( size * sizeof(struct tflite_tensor_t) );
+	p->s_tensor_offsets  = (struct tflite_tensor_t*)     malloc( size * sizeof(struct tflite_tensor_t) );
 }
 
-#if defined (USE_EDGETPU) || defined (USE_BGT)
+/* edgeTPU hardware related */
 edgetpu::EdgeTpuManager::DeviceEnumerationRecord enumerate_edgetpu;
 std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
-#endif
 
 #if defined (USE_BLK)
 void get_blk_coordinates(int w_cnt, int h_cnt, int w_size, int blk_id, int& g_w_id, int& g_h_id){
@@ -272,7 +271,6 @@ modify_graph_with_delegate (tflite_interpreter_t *p, tflite_createopt_t *opt)
     return 0;
 }
 
-#if defined (USE_EDGETPU) || defined (USE_BGT) 
 std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatBufferModel& model, edgetpu::EdgeTpuContext* edgetpu_context) {
   tflite::ops::builtin::BuiltinOpResolver resolver;
   resolver.AddCustom(edgetpu::kCustomOp, edgetpu::RegisterCustomOp());
@@ -290,25 +288,95 @@ std::unique_ptr<tflite::Interpreter> BuildEdgeTpuInterpreter(const tflite::FlatB
   }
   return interpreter;
 }
-#endif
 
 int tflite_create_interpreter_from_config(tflite_interpreter_set *p){
-    char* model_path = p->config_ptr->model;
+    char* model_path = p->config_ptr->model; // TODO: later on should be a list of models
     int blk_cnt      = p->config_ptr->s_blk_pemeter.in_dims.blk_cnt;     
-    for(int i = 0 ; i < blk_cnt ; i++){
-        p->s_interpreter[i].model = FlatBufferModel::BuildFromFile (model_path);
-        if (!p->s_interpreter[i].model)
-        {
-            DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
-            return -1;
-        }
-//        InterpreterBuilder(*(p->s_interpreter[i].model), p->s_interpreter[i].resolver)(&(p->s_interpreter[i]));
-//        if (!(p->s_interpreter[i]))
-//        {
-//            DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
-//            return -1;
-//        }
+    int dev          = p->config_ptr->dev;
+    if(dev == 0){ // gpu
+	    for(int i = 0 ; i < blk_cnt ; i++){
+		p->s_interpreter[i].model = FlatBufferModel::BuildFromFile (model_path);
+		if (!p->s_interpreter[i].model)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    return -1;
+		}
+		InterpreterBuilder(*(p->s_interpreter[i].model), p->s_interpreter[i].resolver)(&(p->s_interpreter[i].interpreter));
+		if (!(p->s_interpreter[i]).interpreter)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    return -1;
+		}
+	    }
+	    int num_threads = std::thread::hardware_concurrency();
+	    char *env_tflite_num_threads = getenv ("FORCE_TFLITE_NUM_THREADS");
+	    if (env_tflite_num_threads)
+	    {
+		num_threads = atoi (env_tflite_num_threads);
+		DBG_LOGI ("@@@@@@ FORCE_TFLITE_NUM_THREADS=%d\n", num_threads);
+	    }
+	    DBG_LOG ("@@@@@@ TFLITE_NUM_THREADS=%d\n", num_threads);
+	    for(int i = 0 ; i < blk_cnt ; i++){
+		p->s_interpreter[i].interpreter->SetNumThreads(num_threads);
+		if (modify_graph_with_delegate (&p->s_interpreter[i], NULL) < 0)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    //return -1;
+		}
+		if (p->s_interpreter[i].interpreter->AllocateTensors() != kTfLiteOk)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    return -1;
+		}
+	    }
+	    DBG_LOG ("\n");
+	    DBG_LOG ("##### LOAD TFLITE FILE(skip redundant): \"%s\"\n", model_path);
+	    for(int i = 0 ; i < 1/*blk_cnt*/ ; i++){
+		tflite_print_tensor_info (p->s_interpreter[i].interpreter);
+	    }
+    }else if(dev == 1){ // trt
+	printf("%s %s :[ERROR] should not try to build trt engine here, exit\n", __FILE__, __func__);    
+	exit(0);
+    }else if(dev == 2){ // tpu
+	    printf("Open devices...\n");
+	    edgetpu_context = edgetpu::EdgeTpuManager::GetSingleton()->OpenDevice(enumerate_edgetpu.type, enumerate_edgetpu.path);
+	    for(int i = 0 ; i < blk_cnt ; i++){
+		    p->s_interpreter[i].interpreter = BuildEdgeTpuInterpreter(*(p->s_interpreter[i].model), edgetpu_context.get());
+		    if(p->s_interpreter[i].interpreter == nullptr){
+		      std::cerr << "Fail to build interpreter." << std::endl;
+		      std::abort();
+		    }else{
+		      printf("edgetpu itpr built.\n");
+		    }
+	    }
+	    int num_threads = std::thread::hardware_concurrency();
+	    char *env_tflite_num_threads = getenv ("FORCE_TFLITE_NUM_THREADS");
+	    if (env_tflite_num_threads)
+	    {
+		num_threads = atoi (env_tflite_num_threads);
+		DBG_LOGI ("@@@@@@ FORCE_TFLITE_NUM_THREADS=%d\n", num_threads);
+	    }
+	    DBG_LOG ("@@@@@@ TFLITE_NUM_THREADS=%d\n", num_threads);
+	    for(int i = 0 ; i < blk_cnt ; i++){
+		p->s_interpreter[i].interpreter->SetNumThreads(num_threads);
+		if (modify_graph_with_delegate (&p->s_interpreter[i], NULL) < 0)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    //return -1;
+		}
+		if (p->s_interpreter[i].interpreter->AllocateTensors() != kTfLiteOk)
+		{
+		    DBG_LOGE ("ERR: %s(%d)\n", __FILE__, __LINE__);
+		    return -1;
+		}
+	    }
+	    DBG_LOG ("\n");
+	    DBG_LOG ("##### LOAD TFLITE FILE(skip redundant): \"%s\"\n", model_path);
+	    for(int i = 0 ; i < 1/*blk_cnt*/ ; i++){
+		tflite_print_tensor_info (p->s_interpreter[i].interpreter);
+	    }
     }
+    return 0;
 }
 
 int

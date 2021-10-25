@@ -114,13 +114,33 @@ convert_onnx_to_plan (const std::string &plan_file_name, const std::string &uff_
     return 0;
 }
 
+void free_all_structs(){
+	for(int i = 0 ; i < s_tflite_interpreter_set_cnt ; i++){
+		free(s_tflite_interpreter_set[i].s_interpreter);
+		free(s_tflite_interpreter_set[i].s_tensor_input);
+		free(s_tflite_interpreter_set[i].s_tensor_heatmap);
+		free(s_tflite_interpreter_set[i].s_tensor_offsets);
+	}
+	for(int i = 0 ; i < s_trt_context_set_cnt ; i++){
+		free(s_trt_context_set[i].s_trt_context);
+		free(s_trt_context_set[i].s_trt_tensor_input);
+		free(s_trt_context_set[i].s_trt_tensor_heatmap);
+		free(s_trt_context_set[i].s_trt_tensor_offsets);
+		free(s_trt_context_set[i].s_trt_tensor_pafs);
+		free(s_trt_context_set[i].gpu_buffers_ptr);
+	}	
+}
+
 // an combinded function to initialize
 int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG *configs, int config_cnt){ 
 // For current design, config_cnt can only be either 1 or 2
-// Here need to make sure two cnts are initialized as 0 for correctness
+	s_tflite_interpreter_set_cnt = 0;
+	s_trt_context_set_cnt = 0;
+	/* configuration */
 	for(int i = 0 ; i < config_cnt ; i++){
-		configure_blk(&configs[i]); 
-		select_model(&configs[i]);
+		configure_blk(&configs[i]); // setup all detailed parameters
+		// TODO: our runtime should be able to partition a whole given model  (long-term next stage work)
+		select_model(&configs[i]);  // use parameters to select pre-built sub-model(s) 
 		if(configs[i].dev == 0 || configs[i].dev == 2){ // gpu or tpu
 			init_tflite_interpreter_set(&s_tflite_interpreter_set[s_tflite_interpreter_set_cnt], &configs[i]);
 			s_tflite_interpreter_set_cnt++;
@@ -129,52 +149,77 @@ int init_pose3d(pose3d_config_t *pose3d_config, struct _CONFIG *configs, int con
 			s_trt_context_set_cnt++;
 		}
 	}
+	/* build interpreters (gpu or tpu) and get tensors*/
 	for(int i = 0 ; i < s_tflite_interpreter_set_cnt ; i++){
-		tflite_create_interpreter_from_config(&s_tflite_interpreter_set[i]);
+	    tflite_create_interpreter_from_config(&s_tflite_interpreter_set[i]);
+	    int blk_cnt = s_tflite_interpreter_set[i].config_ptr->s_blk_pemeter.in_dims.blk_cnt;
+	    for(int j = 0 ; j < blk_cnt ; j++){
+		tflite_get_tensor_by_name (&s_tflite_interpreter_set[i].s_interpreter[j], 0, "data",       &s_tflite_interpreter_set[i].s_tensor_input[j]);   /* (1, 256, 448, 3) */
+    		tflite_get_tensor_by_name (&s_tflite_interpreter_set[i].s_interpreter[j], 1, "Identity/Conv2D",   &s_tflite_interpreter_set[i].s_tensor_offsets[j]); /* (1,  32,  56, 57) */
+    		tflite_get_tensor_by_name (&s_tflite_interpreter_set[i].s_interpreter[j], 1, "Identity_1/Conv2D", &s_tflite_interpreter_set[i].s_tensor_heatmap[j]); /* (1,  32,  56, 19) */
+		
+	    }
+   	    /* input image & heatamp dimention */
+	    if(i == 0){
+	    	s_img_w = 0;
+	    	s_img_h = 0;
+		s_hmp_w = 0;
+		s_hmp_h = 0;
+		for(int j = 0 ; j < blk_cnt ; j++){
+			s_img_w += s_tflite_interpreter_set[i].s_tensor_input[j].dims[2];
+			s_img_h += s_tflite_interpreter_set[i].s_tensor_input[j].dims[1];
+			s_hmp_w += s_tflite_interpreter_set[i].s_tensor_heatmap[j].dims[2];
+			s_hmp_h += s_tflite_interpreter_set[i].s_tensor_heatmap[j].dims[1];
+		}
+   		fprintf (stderr, "input image size: (%d, %d)\n", s_img_w, s_img_h);
+   		fprintf (stderr, "heatmap size: (%d, %d)\n", s_hmp_w, s_hmp_h);
+	    }
 	}
 
-		//tflite_create_interpreter_from_file (&s_interpreter, POSENET_FULL_MODEL_PATH, POSENET_BLOCK_MODEL_PATH, s_blk_pemeter.in_dims.blk_cnt);
-	    ICudaEngine *engine = NULL;
-
-	    trt_initialize ();
-
-	    /* Try to load Prebuilt TensorRT Engine */
-	    //fprintf (stderr, "loading prebuilt TensorRT engine...\n");
-	    //engine = trt_load_plan_file (PLAN_MODEL_PATH);
-
-	    /* Build TensorRT Engine */
-	    convert_onnx_to_plan (PLAN_MODEL_PATH, /*model_name*/UFF_BLOCK_MODEL_PATH);
-
-	    engine = trt_load_plan_file (PLAN_MODEL_PATH);
-	    if (engine == NULL)
-	    {
-		fprintf (stderr, "%s(%d)\n", __FILE__, __LINE__);
-		return -1;
-	    }
-
-	    s_trt_context = engine->createExecutionContext();
-	
-
-
-
-
-
-
-   		//tflite_get_tensor_by_name (&s_interpreter, 0, "data",       &s_tensor_input);   /* (1, 256, 448, 3) */
-    		//tflite_get_tensor_by_name (&s_interpreter, 1, "Identity/Conv2D",   &s_tensor_offsets); /* (1,  32,  56, 57) */
-    		//tflite_get_tensor_by_name (&s_interpreter, 1, "Identity_1/Conv2D", &s_tensor_heatmap); /* (1,  32,  56, 19) */
+	/*build engines (trt) and get tensors*/
+	for(int i = 0 ; i < s_trt_context_set_cnt ; i++){
+	    int blk_cnt = s_trt_context_set[i].config_ptr->s_blk_pemeter.in_dims.blk_cnt;
+      	    ICudaEngine *engine = NULL;
+	    trt_initialize();
+	    for(int j = 0 ; j < blk_cnt ; j++){
+	    	convert_onnx_to_plan (PLAN_MODEL_PATH, /*model_name*/s_trt_context_set[i].config_ptr->model);	    
+	    	engine = trt_load_plan_file (PLAN_MODEL_PATH);
+	    	if (engine == NULL)
+	    	{
+			fprintf (stderr, "%s(%d)\n", __FILE__, __LINE__);
+			return -1;
+	    	}
+	    	/*s_trt_context*/ 
+		s_trt_context_set[i].s_trt_context[j] = engine->createExecutionContext();
+    		
+		trt_get_tensor_by_name (engine, "data",       &s_trt_context_set[i].s_trt_tensor_input[j]);   /* (1, 256, 448,  3) */
+    		trt_get_tensor_by_name (engine, "Identity/Conv2D",   &s_trt_context_set[i].s_trt_tensor_offsets[j]); /* (1,  32,  56, 57) */
+    		trt_get_tensor_by_name (engine, "Identity_1/Conv2D", &s_trt_context_set[i].s_trt_tensor_heatmap[j]); /* (1,  32,  56  19) */	
     
-    		/* input image dimention */
-    		s_img_w = s_tensor_input.dims[2];
-    		s_img_h = s_tensor_input.dims[1];
-    		fprintf (stderr, "input image size: (%d, %d)\n", s_img_w, s_img_h);
+		int num_bindings = engine->getNbBindings();
+    		s_trt_context_set[i].gpu_buffers_ptr[j].s_gpu_buffers.resize (num_bindings);
 
-    		/* heatmap dimention */
-    		s_hmp_w = s_tensor_heatmap.dims[2];
-    		s_hmp_h = s_tensor_heatmap.dims[1];
-    		fprintf (stderr, "heatmap size: (%d, %d)\n", s_hmp_w, s_hmp_h);
-
-    		return 0;
+    		s_trt_context_set[i].gpu_buffers_ptr[j].s_gpu_buffers[s_trt_context_set[i].s_trt_tensor_input[j]  .bind_idx] = s_trt_context_set[i].s_trt_tensor_input[j]  .gpu_mem;
+    		s_trt_context_set[i].gpu_buffers_ptr[j].s_gpu_buffers[s_trt_context_set[i].s_trt_tensor_heatmap[j].bind_idx] = s_trt_context_set[i].s_trt_tensor_heatmap[j].gpu_mem;
+    		s_trt_context_set[i].gpu_buffers_ptr[j].s_gpu_buffers[s_trt_context_set[i].s_trt_tensor_offsets[j].bind_idx] = s_trt_context_set[i].s_trt_tensor_offsets[j].gpu_mem;
+	    }
+   	    /* input image & heatamp dimention */
+	    if(i == 0){
+	    	s_img_w = 0;
+	    	s_img_h = 0;
+		s_hmp_w = 0;
+		s_hmp_h = 0;
+		for(int j = 0 ; j < blk_cnt ; j++){
+			s_img_w += s_trt_context_set[i].s_trt_tensor_input[j].dims.d[2];
+			s_img_h += s_trt_context_set[i].s_trt_tensor_input[j].dims.d[1];
+			s_hmp_w += s_trt_context_set[i].s_trt_tensor_heatmap[j].dims.d[2];
+			s_hmp_h += s_trt_context_set[i].s_trt_tensor_heatmap[j].dims.d[1];
+		}
+   		fprintf (stderr, "input image size: (%d, %d)\n", s_img_w, s_img_h);
+   		fprintf (stderr, "heatmap size: (%d, %d)\n", s_hmp_w, s_hmp_h);
+	    }
+	}
+	return 0;
 }
 
 /* -------------------------------------------------- *

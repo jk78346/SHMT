@@ -28,10 +28,8 @@
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #endif
 
-//#if defined (USE_EDGETPU) || defined (USE_BGT)
 #include "edgetpu.h"
 //#include "tensorflow/lite/interpreter.h"
-//#endif
 
 typedef struct tflite_interpreter_t
 {
@@ -81,7 +79,7 @@ typedef struct tflite_interpreter_set // universal for full, blk, mix, etc. need
 	tflite_interpreter_t*		s_interpreter;
 	tflite_tensor_t*		s_tensor_input;
 	tflite_tensor_t*		s_tensor_heatmap;
-	tflite_tensor_t*		s_tensor_offset;
+	tflite_tensor_t*		s_tensor_offsets;
 } tflite_interpreter_set;
 
 void init_tflite_interpreter_set(tflite_interpreter_set *p, _CONFIG *config);
@@ -91,11 +89,8 @@ extern "C" {
 #endif
 
 int tflite_create_interpreter (tflite_interpreter_t *p, const char *model_buf, size_t model_size);
-#if defined (USE_BLK)
 int tflite_get_tensor_by_name_blk (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor, _blk_pemeter *s_blk_pemeter);
-#else
 int tflite_get_tensor_by_name (tflite_interpreter_t *p, int io, const char *name, tflite_tensor_t *ptensor);
-#endif
 
 int tflite_create_interpreter_from_config(tflite_interpreter_set* p);
 

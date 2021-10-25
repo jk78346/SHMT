@@ -781,28 +781,16 @@ main(int argc, char *argv[])
     	init_cube ((float)win_w / (float)win_h);
     }
 
+    /* universal pose3d init */
     init_pose3d(&s_gui_prop.pose3d_config, configs, used_config_cnt);
 
-//#if defined (USE_EDGETPU)
-//    use_quantized_tflite = 1; // use int8 model for edgetpu to avoid fp32 to int8 conversio non CPU internally.
-//#endif
-//#if defined (USE_TRT)
-//    init_trt_pose3d (&s_gui_prop.pose3d_config);
-//#else
-//#if defined (USE_BLK_TRT)
-//    init_trt_pose3d (&s_gui_prop.pose3d_config);
-//#endif
-//    init_tflite_pose3d (use_quantized_tflite, &s_gui_prop.pose3d_config, blk_arg);
-//#endif
     setup_imgui (win_w * 2, win_h);
 
-#if defined (USE_GL_DELEGATE) || defined (USE_GPU_DELEGATEV2) || defined (USE_BGT) || defined (USE_BLK) || defined (USE_BLK_TRT)
     /* we need to recover framebuffer because GPU Delegate changes the FBO binding */
     if(enable_rendering == 1){
         glBindFramebuffer (GL_FRAMEBUFFER, 0);
         glViewport (0, 0, win_w, win_h);
     }
-#endif
 
 #if defined (USE_INPUT_VIDEO_DECODE)
     /* initialize FFmpeg video decode */
@@ -999,7 +987,8 @@ main(int argc, char *argv[])
 	}
 	//save_pose_ret(&pose_ret, count, input_name);
     }
-
+    free(gpu_rendered_buf);
+    free(tpu_rendered_buf);
     return 0;
 }
 

@@ -80,14 +80,19 @@ typedef struct trt_tensor_t
 #endif
 } trt_tensor_t;
 
+struct gpu_buf{
+	std::vector<void *>	s_gpu_buffers;
+};
+
 typedef struct trt_context_set // universal for full, blk, mix... etc. need size initialization
 {
 	_CONFIG			*config_ptr;
-	IExecutionContext*	s_trt_context;
+	IExecutionContext**	s_trt_context;
 	trt_tensor_t*		s_trt_tensor_input;
 	trt_tensor_t*		s_trt_tensor_heatmap;
 	trt_tensor_t*		s_trt_tensor_offsets;
 	trt_tensor_t*		s_trt_tensor_pafs;
+	gpu_buf*		gpu_buffers_ptr;
 } trt_context_set;
 
 void init_trt_context_set(trt_context_set *p, _CONFIG *config);

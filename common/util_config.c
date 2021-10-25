@@ -76,6 +76,7 @@ int get_configs(int argc, char* argv[], struct _CONFIG* configs){
         w_cnt = atoi(strtok(NULL   , "x"));
         configs[1].h_cnt = h_cnt;
         configs[1].w_cnt = w_cnt;
+	cnt = 2;
 	return cnt;
 }
 

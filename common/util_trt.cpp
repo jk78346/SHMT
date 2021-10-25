@@ -21,11 +21,12 @@ void init_trt_context_set(trt_context_set *p, _CONFIG *config){
 		printf("%s %s:[ERROR] size: %d is not positive, exit\n", __FILE__, __func__, size); exit(0);
 	}
 	p->config_ptr = config;
-	p->s_trt_context        = (IExecutionContext*) malloc(size * sizeof(IExecutionContext));
-	p->s_trt_tensor_input   = (trt_tensor_t*)      malloc(size * sizeof(trt_tensor_t));
-	p->s_trt_tensor_heatmap = (trt_tensor_t*)      malloc(size * sizeof(trt_tensor_t));
-	p->s_trt_tensor_offsets = (trt_tensor_t*)      malloc(size * sizeof(trt_tensor_t));
-	p->s_trt_tensor_pafs    = (trt_tensor_t*)      malloc(size * sizeof(trt_tensor_t));
+	p->s_trt_context        = (IExecutionContext**) malloc(size * sizeof(IExecutionContext*));
+	p->s_trt_tensor_input   = (trt_tensor_t*)       malloc(size * sizeof(trt_tensor_t));
+	p->s_trt_tensor_heatmap = (trt_tensor_t*)       malloc(size * sizeof(trt_tensor_t));
+	p->s_trt_tensor_offsets = (trt_tensor_t*)       malloc(size * sizeof(trt_tensor_t));
+	p->s_trt_tensor_pafs    = (trt_tensor_t*)       malloc(size * sizeof(trt_tensor_t));
+	p->gpu_buffers_ptr	= (gpu_buf*)		malloc(size * sizeof(gpu_buf));
 }
 
 static void *
