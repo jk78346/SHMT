@@ -302,7 +302,10 @@ matrixMulCUBLAS.o:matrixMulCUBLAS.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
 matrixMulCUBLAS: matrixMulCUBLAS.o
-	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
+	# move shared library, make sure the shared library is up-to-date
+	sudo cp ~/GPTPU.internal/lib/libgptpu_arm.so /usr/local/lib/libgptpu.so
+	sudo cp ~/GPTPU.internal/src/gptpu.h /usr/local/include
+	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES) -lgptpu -ldl
 	$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 

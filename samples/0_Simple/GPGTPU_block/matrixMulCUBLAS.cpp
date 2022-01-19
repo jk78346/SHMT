@@ -115,8 +115,11 @@ matrixMulCPU(float *C, const float *A, const float *B, unsigned int hA, unsigned
 // Allocates a matrix with random float entries.
 void randomInit(float *data, int size)
 {
-    for (int i = 0; i < size; ++i)
-        data[i] = rand() / (float)RAND_MAX;
+    for (int i = 0; i < size; ++i){
+        //data[i] = rand() / (float)RAND_MAX;
+        data[i] = (float)(int)((float)rand() / (float)(RAND_MAX/256));
+	if(i < 10) printf("data[%2d]: %f\n", i, data[i]);
+    }
 }
 
 void printDiff(float *data1, float *data2, int width, int height, int iListLength, float fListTol)
@@ -231,6 +234,21 @@ float covariance(int n, float* x, float* y, float ux, float uy){
 }
 
 float SSIM(int w, int h, float* buf1, float* buf2){
+/* verbose */
+	printf("buf1: \n");
+	for(int i = 0 ; i < 1 ; i++){
+		for(int j = 0 ; j < 10 ; j++){
+			printf("%12.3f ", buf1[i*h+j]);
+		}
+		printf("\n");
+	}
+	printf("buf2: \n");
+	for(int i = 0 ; i < 1 ; i++){
+		for(int j = 0 ; j < 10 ; j++){
+			printf("%12.3f ", buf2[i*h+j]);
+		}
+		printf("\n");
+	}
 /* result */
 	float ssim = 0;
 /* components */
@@ -248,6 +266,13 @@ float SSIM(int w, int h, float* buf1, float* buf2){
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2)+c1) * (pow(vx, 2) + pow(vy, 2) +c2));
 	return ssim;
 }
+/* =============================================================================================================== */
+void matrix_mul(openctpu_buffer *matrix_a,
+		openctpu_buffer	*matrix_b,
+		openctpu_buffer	*matrix_c){
+	openctpu_invoke_operator("mm_model", matrix_a, matrix_b, matrix_c);
+}
+/* =============================================================================================================== */
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test matrix multiply using CUBLAS
@@ -361,19 +386,31 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
 
  /* ================================================================================================ */
     // run on edgeTPU
-    // float* h_A
-    // float* h_B
-    // float* h_TPU
+     //float* h_A;
+     //float* h_B;
+     //float* h_TPU;
     { // start from \"run_a_model\"
-//   	set_dev_cnt(1);
-//	open_devices();
+ 	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+	openctpu_init(1, 1);
+	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+	matrix_a_d = openctpu_alloc_dimension(2, matrix_size.uiWA, matrix_size.uiHA);
+	matrix_b_d = openctpu_alloc_dimension(2, matrix_size.uiWB, matrix_size.uiHB);
+	matrix_c_d = openctpu_alloc_dimension(2, matrix_size.uiWC, matrix_size.uiHC);
+
+	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
+	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
+	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+
+	openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
+	openctpu_sync(tensor_c); 
     }
 
     // For testing the boundary value of SSIM
     //for(int i = 0 ; i < mem_size_C ; i++){
     //	h_TPU[i] = h_CUBLAS[i];
     //}
-    printf("calculating SSIM...\n");
+    printf("calculating SSIM...(h_CUBLAS and h_TPU)\n");
     float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_CUBLAS, h_TPU);
     printf("SSIM is: %f\n", ssim);
     printf("done.\n");
