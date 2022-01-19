@@ -413,14 +413,13 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
     printf("calculating SSIM...(h_CUBLAS and h_TPU)\n");
     float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_CUBLAS, h_TPU);
     printf("SSIM is: %f\n", ssim);
-    printf("done.\n");
 /* ================================================================================================ */
 
     // compute reference solution
     printf("Computing result using host CPU...");
     float *reference = (float *)malloc(mem_size_C);
     matrixMulCPU(reference, h_A, h_B, matrix_size.uiHA, matrix_size.uiWA, matrix_size.uiWB);
-    printf("done.\n");
+    printf("CPU reference done.\n");
 
     // check result (CUBLAS)
     bool resCUBLAS = sdkCompareL2fe(reference, h_CUBLAS, size_C, 1.0e-6f);
