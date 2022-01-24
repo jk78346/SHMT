@@ -73,6 +73,10 @@ typedef std::chrono::high_resolution_clock clk;
 #define c1 6.5025 // (k1*L)*(k1*L)
 #define c2 58.5225 // (k2*L)*(k2*L)
 
+#define BLK_M 1024
+#define BLK_N 1024
+#define BLK_K 1024
+
 /* ============================================= */
 
 #ifndef min
@@ -121,7 +125,7 @@ void randomInit(float *data, int size)
     for (int i = 0; i < size; ++i){
         //data[i] = rand() / (float)RAND_MAX;
         data[i] = (float)(int)((float)rand() / (float)(RAND_MAX/256));
-	if(i < 10) printf("data[%2d]: %f\n", i, data[i]);
+	//if(i < 10) printf("data[%2d]: %f\n", i, data[i]);
     }
 }
 
@@ -279,6 +283,7 @@ void matrix_mul(openctpu_buffer *matrix_a,
 
 
 float GEMM_GPU(int nIter, cublasHandle_t handle, unsigned int m, unsigned int n, unsigned int k, const float alpha, float* B, float* A, const float beta, float* C){
+	printf("calling GEMM_GPU...\n");
         cudaEvent_t start, stop;
         // Allocate CUDA events that we'll use for timing
         checkCudaErrors(cudaEventCreate(&start));
@@ -302,11 +307,53 @@ float GEMM_GPU(int nIter, cublasHandle_t handle, unsigned int m, unsigned int n,
 	return msecTotal;
 }
 
-void GEMM_GPU_TILES(int nIter, cublasHandle_t handle, unsigned int m, unsigned int n, unsigned int k, const float alpha, float* B, float* A, const float beta, float* C){
+float GEMM_GPU_TILES(int nIter, cublasHandle_t handle, unsigned int m, unsigned int n, unsigned int k, const float alpha, float* B, float* A, const float beta, float* C){
+	printf("calling GEMM_GPU_TILES...\n");
+        cudaEvent_t start, stop;
+        // Allocate CUDA events that we'll use for timing
+        checkCudaErrors(cudaEventCreate(&start));
+        checkCudaErrors(cudaEventCreate(&stop));
+        // Record the start event
+        checkCudaErrors(cudaEventRecord(start, NULL));
+
+	int m_cnt = m/BLK_M;
+	int n_cnt = n/BLK_N;
+	int k_cnt = k/BLK_K;
+	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
+
+	// check m / blk_m is dividable
+	for (int iter = 0; iter < nIter; iter++)
+        {
+            //note cublas is column primary!
+            //need to transpose the order
+	    //
+	    for(int _i = 0 ; _i < m_cnt ; _i++){
+	    	for(int _j = 0 ; _j < n_cnt ; _j++){
+			for(int _k = 0 ; _k < k_cnt; _k++){
+				checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
+						&alpha, 
+						&B[(_j*BLK_N)*k+(_k*BLK_K)], m, 
+						&A[(_i*BLK_M)*n+(_j*BLK_N)], k, 
+						&beta, 
+						&C[(_i*BLK_M)*k+(_k*BLK_K)], m));
+			}
+		}
+	    }
+        }
+        // Record the stop event
+        checkCudaErrors(cudaEventRecord(stop, NULL));
+
+        // Wait for the stop event to complete
+        checkCudaErrors(cudaEventSynchronize(stop));
+
+	float msecTotal;
+	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
+	return msecTotal;
 }
 
 void GEMM_TPU(int nIter, openctpu_buffer* tensor_a, openctpu_buffer* tensor_b, openctpu_buffer* tensor_c){
-        for (int j = 0; j < nIter; j++)
+	printf("calling GEMM_TPU...\n");
+	for (int j = 0; j < nIter; j++)
         {
 		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
 	}
@@ -314,33 +361,9 @@ void GEMM_TPU(int nIter, openctpu_buffer* tensor_a, openctpu_buffer* tensor_b, o
 }
 
 void GEMM_concurrent(int nIter, cublasHandle_t handle, unsigned int m, unsigned int n, unsigned int k, const float alpha, float* B, float* A, const float beta, float* C, openctpu_buffer* tensor_a, openctpu_buffer* tensor_b, openctpu_buffer* tensor_c ){
-        cudaEvent_t start, stop;
-        // Allocate CUDA events that we'll use for timing
-        checkCudaErrors(cudaEventCreate(&start));
-        checkCudaErrors(cudaEventCreate(&stop));
-        // Record the start event
-        checkCudaErrors(cudaEventRecord(start, NULL));
-	openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
-        for (int j = 0; j < nIter; j++)
-        {
-            //note cublas is column primary!
-            //need to transpose the order
-            checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, B, m, A, k, &beta, C, m));
-        }
-        
-	// Record the stop event
-        checkCudaErrors(cudaEventRecord(stop, NULL));
-        
-	// Wait for the stop event to complete
-        checkCudaErrors(cudaEventSynchronize(stop));
-
-	openctpu_sync(tensor_c); 
-	//float msecTotal;
-	//checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
-	//return msecTotal;
 }
 	
-	////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test matrix multiply using CUBLAS
 ////////////////////////////////////////////////////////////////////////////////
 int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
@@ -390,17 +413,17 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
     dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
 
     // edgeTPU setup
-    openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
-    openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
-    openctpu_init(1, 1);
-    auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
-    matrix_a_d = openctpu_alloc_dimension(2, matrix_size.uiWA, matrix_size.uiHA);
-    matrix_b_d = openctpu_alloc_dimension(2, matrix_size.uiWB, matrix_size.uiHB);
-    matrix_c_d = openctpu_alloc_dimension(2, matrix_size.uiWC, matrix_size.uiHC);
+    //openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+    //openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+    //openctpu_init(1, 1);
+    //auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+    //matrix_a_d = openctpu_alloc_dimension(2, matrix_size.uiWA, matrix_size.uiHA);
+    //matrix_b_d = openctpu_alloc_dimension(2, matrix_size.uiWB, matrix_size.uiHB);
+    //matrix_c_d = openctpu_alloc_dimension(2, matrix_size.uiWC, matrix_size.uiHC);
 
-    tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
-    tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
-    tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+    //tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
+    //tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
+    //tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
 
     // create and start timer
     printf("Computing result using CUBLAS...");
@@ -410,7 +433,7 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
 
     // CUBLAS version 2.0
     timing _start, _end;
-    double GPU_us, TPU_us, concurrent_us;
+    double GPU_us, GPU_TILES_us, TPU_us, concurrent_us;
     //{
         const float alpha = 1.0f;
         const float beta  = 0.0f;
@@ -426,20 +449,14 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
 // ===============================================================================================================================
 // execution modes	
 	_start = clk::now();
-	float msecTotal = GEMM_GPU(      nIter, handle, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, alpha, d_B, d_A, beta, d_C);
+	float GPU_ms = GEMM_GPU(nIter, handle, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, alpha, d_B, d_A, beta, d_C);
 	_end = clk::now();
 	GPU_us = std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000.0;
-
-	//GEMM_GPU_TILES(nIter, handle, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, alpha, d_B, d_A, beta, d_C);
-	_start = clk::now();
-	GEMM_TPU(nIter, tensor_a, tensor_b, tensor_c);
-	_end = clk::now();
-	TPU_us = std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000.0;
 	
 	_start = clk::now();
-//        GEMM_concurrent( nIter, handle, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, alpha, d_B, d_A, beta, d_C, tensor_a, tensor_b, tensor_c );
+	float GPU_TILES_ms = GEMM_GPU_TILES(nIter, handle, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, alpha, d_B, d_A, beta, d_C);
 	_end = clk::now();
-	concurrent_us = std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000.0;
+	GPU_TILES_us = std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000.0;
 // ===============================================================================================================================
 
 /* use multiple functions to implement modes
@@ -467,9 +484,10 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
 /* ================================================================================================ */
 // timing section
 
-    printf("GPU        time: %12.3f (us) | GPU_us: %12.3f (us)\n", msecTotal * 1000.0, GPU_us);
-    printf("TPU        time: %12.3f (us)\n", TPU_us);
-    printf("concurrent time: %12.3f (us)\n", concurrent_us);
+    printf("GPU        time: %12.6f (ms) | GPU_ms:       %12.6f (ms)\n", GPU_us/1000.0,       GPU_ms);
+    printf("GPU TILES  time: %12.6f (ms) | GPU_TILES_ms: %12.6f (ms)\n", GPU_TILES_us/1000.0, GPU_TILES_ms);
+//    printf("TPU        time: %12.3f (us)\n", TPU_us);
+//    printf("concurrent time: %12.3f (us)\n", concurrent_us);
     // clean up memory
     free(h_A);
     free(h_B);
@@ -485,7 +503,7 @@ int matrixMultiply(int argc, char **argv, int devID, sMatrixSize &matrix_size)
 int main(int argc, char **argv)
 {
     if(argc != 3){
-    	printf("usage: ./exe [problem size] [nIter]\n");
+    	printf("new usage: ./exe [problem size] [nIter]\n");
         exit(0);
     }
     printf("[Matrix Multiply CUBLAS] - Starting...\n");
