@@ -247,21 +247,23 @@ float covariance(int n, float* x, float* y, float ux, float uy){
 	return sum / (float)n;
 }
 
-float SSIM(int w, int h, float* buf1, float* buf2){
+float SSIM(int w, int h, float* buf1, float* buf2, int verbose){
 /* verbose */
-	printf("buf1: \n");
-	for(int i = 0 ; i < 1 ; i++){
-		for(int j = 0 ; j < 10 ; j++){
-			printf("%12.3f ", buf1[i*h+j]);
+	if(verbose > 0){
+		printf("buf1: \n");
+		for(int i = 0 ; i < 1 ; i++){
+			for(int j = 0 ; j < 10 ; j++){
+				printf("%12.3f ", buf1[i*h+j]);
+			}
+			printf("\n");
 		}
-		printf("\n");
-	}
-	printf("buf2: \n");
-	for(int i = 0 ; i < 1 ; i++){
-		for(int j = 0 ; j < 10 ; j++){
-			printf("%12.3f ", buf2[i*h+j]);
+		printf("buf2: \n");
+		for(int i = 0 ; i < 1 ; i++){
+			for(int j = 0 ; j < 10 ; j++){
+				printf("%12.3f ", buf2[i*h+j]);
+			}
+			printf("\n");
 		}
-		printf("\n");
 	}
 /* result */
 	float ssim = 0;
@@ -441,13 +443,12 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
 float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU){
 	printf("calling GEMM_TPU...\n");
 	
-        // edgeTPU setup
-        openctpu_init(1, 1);
-	
 	int m = matrix_size.uiWB;
 	int n = matrix_size.uiHA;
 	int k = matrix_size.uiWA;
-
+	
+        // edgeTPU setup
+        openctpu_init(1, 1);
 	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
 	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
 	matrix_a_d = openctpu_alloc_dimension(2, m, n);
@@ -467,10 +468,45 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
 	}
 	openctpu_sync(tensor_c); 
 	timing _end = clk::now();	
+	
 	float TPU_ms = get_time_ms(_end, _start);
 	return TPU_ms;
 }
 
+float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU){
+	printf("calling GEMM_TPU_TILES...\n");
+	
+	int m = matrix_size.uiWB;
+	int n = matrix_size.uiHA;
+	int k = matrix_size.uiWA;
+	
+        // edgeTPU setup
+        openctpu_init(1, 1);
+	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+	matrix_a_d = openctpu_alloc_dimension(2, BLK_M, BLK_N);
+	matrix_b_d = openctpu_alloc_dimension(2, BLK_N, BLK_K);
+	matrix_c_d = openctpu_alloc_dimension(2, BLK_M, BLK_K);
+    
+	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+
+	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
+	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
+	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+
+	timing _start = clk::now();	
+	for (int j = 0; j < nIter; j++)
+        {
+		for(int i = 0 ; i < (m/BLK_M)*(n/BLK_N)*(k/BLK_K) ; i++){
+			openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
+		}
+	}
+	openctpu_sync(tensor_c); 
+	timing _end = clk::now();	
+	
+	float TPU_ms = get_time_ms(_end, _start);
+	return TPU_ms;
+}
 float run_GEMM_baseline(int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
 	float kernel_ms = 0;
 	int _mode = atoi(argv[3]);
@@ -480,6 +516,8 @@ float run_GEMM_baseline(int argc, char** argv, int nIter, sMatrixSize matrix_siz
 		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
+	}else if(_mode == 3){ // TPU tfiling algorithm mode
+        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else{
 		printf("undefined mode: %d, exit...\n", mode);
 		exit(0);
@@ -496,8 +534,10 @@ float run_GEMM_proposed(int argc, char** argv, int nIter, sMatrixSize matrix_siz
 		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
+	}else if(_mode == 3){ // TPU tfiling algorithm mode
+        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else{
-		printf("undefined mode: %d, exit...\n", mode);
+		printf("undefined mode: %d, exit...\n", _mode);
 		exit(0);
 	}
 	return kernel_ms;
@@ -553,15 +593,14 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     proposed_total_ms = get_time_ms(_end, _start);
 
     // SSIM section
-    printf("calculating SSIM...(h_baseline and h_proposed)\n");
-    float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed);
+    float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 0/*verbose*/);
     printf("SSIM is: %f\n", ssim);
 
     // timing section
-    printf("\t\tkernel time\ttotal latency time\n");
+    printf("\taverage kernel time\taverage total latency time\t(nIter = %d)\n", nIter);
     printf("==============================================================\n");
-    printf("baseline  : %12.6f (ms) |  %12.6f (ms)\n", baseline_kernel_ms, baseline_total_ms);
-    printf("proposed  : %12.6f (ms) |  %12.6f (ms)\n", proposed_kernel_ms, proposed_total_ms);
+    printf("baseline  : %12.6f (ms) |  %12.6f (ms)\n", baseline_kernel_ms/nIter, baseline_total_ms/nIter);
+    printf("proposed  : %12.6f (ms) |  %12.6f (ms)\n", proposed_kernel_ms/nIter, proposed_total_ms/nIter);
 
     // clean up memory
     free(h_A);
@@ -580,7 +619,8 @@ int main(int argc, char **argv)
 	printf("mode definition:\n");
 	printf("\t0: GPU                   mode\n");
 	printf("\t1: GPU tiling algorithm  mode\n");
-	printf("\t2: TPU tiling algorithm  mode\n");
+	printf("\t2: TPU                   mode\n");
+	printf("\t3: TPU tiling algorithm  mode\n");
         exit(0);
     }
     printf("[Matrix Multiply CUBLAS] - Starting...\n");
