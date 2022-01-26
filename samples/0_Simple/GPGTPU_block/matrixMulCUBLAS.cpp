@@ -250,16 +250,16 @@ float covariance(int n, float* x, float* y, float ux, float uy){
 float SSIM(int w, int h, float* buf1, float* buf2, int verbose){
 /* verbose */
 	if(verbose > 0){
-		printf("buf1: \n");
-		for(int i = 0 ; i < 1 ; i++){
-			for(int j = 0 ; j < 10 ; j++){
+		printf("h_baseline: \n");
+		for(int i = 0 ; i < 5 ; i++){
+			for(int j = 0 ; j < 5 ; j++){
 				printf("%12.3f ", buf1[i*h+j]);
 			}
 			printf("\n");
 		}
-		printf("buf2: \n");
-		for(int i = 0 ; i < 1 ; i++){
-			for(int j = 0 ; j < 10 ; j++){
+		printf("h_proposed: \n");
+		for(int i = 0 ; i < 5 ; i++){
+			for(int j = 0 ; j < 5 ; j++){
 				printf("%12.3f ", buf2[i*h+j]);
 			}
 			printf("\n");
@@ -356,6 +356,14 @@ float GEMM_GPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B
 
 float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C){
 	printf("calling GEMM_GPU_TILES...\n");
+	
+	int m     = matrix_size.uiWB;
+	int n     = matrix_size.uiHA;
+	int k     = matrix_size.uiWA;
+	int m_cnt = matrix_size.uiWB/BLK_M;
+	int n_cnt = matrix_size.uiHA/BLK_N;
+	int k_cnt = matrix_size.uiWA/BLK_K;
+	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
     
 	cudaDeviceProp deviceProp;
 
@@ -367,7 +375,10 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
 	
 	// allocate device memory
    	float *d_A, *d_B, *d_C;
-        unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
+	float **d_C_partial = (float**)malloc(n_cnt * sizeof(float*));
+	float **h_C_partial = (float**)malloc(n_cnt * sizeof(float*));
+	
+	unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
     	unsigned int mem_size_A = sizeof(float) * size_A;
     	unsigned int size_B = matrix_size.uiWB * matrix_size.uiHB;
     	unsigned int mem_size_B = sizeof(float) * size_B;
@@ -379,6 +390,12 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
     	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
     	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
     	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
+    
+	// allocate partial C
+	for(int i = 0 ; i < n_cnt ; i++){
+		h_C_partial[i] = (float*) malloc(mem_size_C);
+		checkCudaErrors(cudaMalloc((void **) &d_C_partial[i], mem_size_C));
+	}
 
         // setup execution parameters
         int block_size = 32;
@@ -392,41 +409,46 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
         // Record the start event
         checkCudaErrors(cudaEventRecord(start, NULL));
 
-	int m     = matrix_size.uiWB;
-	int n     = matrix_size.uiHA;
-	int k     = matrix_size.uiWA;
-	int m_cnt = matrix_size.uiWB/BLK_M;
-	int n_cnt = matrix_size.uiHA/BLK_N;
-	int k_cnt = matrix_size.uiWA/BLK_K;
-	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
-
 	// check m / blk_m is dividable
 	for (int iter = 0; iter < nIter; iter++)
         {
             //note cublas is column primary!
             //need to transpose the order
-	    //
 	    for(int _i = 0 ; _i < m_cnt ; _i++){
 	    	for(int _j = 0 ; _j < n_cnt ; _j++){
 			for(int _k = 0 ; _k < k_cnt; _k++){
 				checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
 						&alpha,
-						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], m, 
-						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], k, 
+						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], m/*lda*/, 
+						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], k/*ldb*/, 
 						&beta, 
-						&d_C[(_i*BLK_M)*k+(_k*BLK_K)], m));
+						// This causes overwritting, no partial sum accumulation
+						&d_C_partial[_j][(_i*BLK_M)*k+(_k*BLK_K)], m/*ldc*/));
 			}
 		}
 	    }
         }
-        // Record the stop event
+	
+	// Record the stop event
         checkCudaErrors(cudaEventRecord(stop, NULL));
 
         // Wait for the stop event to complete
         checkCudaErrors(cudaEventSynchronize(stop));
-        
+       
 	// copy result from device to host
-        checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
+        for(int i = 0 ; i < n_cnt ; i++){
+		checkCudaErrors(cudaMemcpy(h_C_partial[i], d_C_partial[i], mem_size_C, cudaMemcpyDeviceToHost));
+	}
+
+	// summation
+	float sum = 0.0;
+	for(int i = 0 ; i < size_C ; i++){
+		sum = 0.0;
+		for(int p = 0 ; p < n_cnt ; p++){
+			sum += h_C_partial[p][i];
+		}
+		h_C[i] = sum;
+	}
 
         // Destroy the handle
         checkCudaErrors(cublasDestroy(handle));
@@ -434,6 +456,12 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
         checkCudaErrors(cudaFree(d_A));
         checkCudaErrors(cudaFree(d_B));
         checkCudaErrors(cudaFree(d_C));
+	for(int i = 0 ; i < n_cnt ; i++){
+        	checkCudaErrors(cudaFree(d_C_partial[i]));
+		free(h_C_partial[i]);
+	}
+        free(d_C_partial);
+	free(h_C_partial);
 
 	float msecTotal;
 	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
@@ -583,7 +611,7 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	    for(int _i = 0 ; _i < m_cnt ; _i++){
 	    	for(int _j = 0 ; _j < n_cnt ; _j++){
 			for(int _k = 0 ; _k < k_cnt; _k++){
-				if(0){ // naive round-robin between GPU and TPU
+				if(idx % 2 == 0){ // naive round-robin between GPU and TPU
 					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
 						&alpha,
 						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], m, 
@@ -686,20 +714,20 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     const float beta  = 0.0f;
 
     int _mode;
-    _mode = atoi(argv[3]);
+    _mode = atoi(argv[3]); // baseline
     _start = clk::now();
     baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
-    _mode = atoi(argv[4]);
+    _mode = atoi(argv[4]); // proposed
     _start = clk::now();
     proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
     // SSIM section
-    float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 0/*verbose*/);
+    float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
     printf("SSIM is: %f\n", ssim);
 
     // timing section
@@ -727,7 +755,7 @@ int main(int argc, char **argv)
 	printf("\t1: GPU tiling algorithm  mode\n");
 	printf("\t2: TPU                   mode\n");
 	printf("\t3: TPU tiling algorithm  mode\n");
-	printf("\t4: mix tiling algorithm  mode\n");
+	printf("\t4: mix tiling algorithm  mode (round-robin)\n");
         exit(0);
     }
     printf("[Matrix Multiply CUBLAS] - Starting...\n");
