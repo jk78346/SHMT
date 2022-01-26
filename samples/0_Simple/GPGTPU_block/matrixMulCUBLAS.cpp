@@ -497,6 +497,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	timing _start = clk::now();	
 	for (int j = 0; j < nIter; j++)
         {
+		// simulate tiling algorithm in perfromance only
 		for(int i = 0 ; i < (m/BLK_M)*(n/BLK_N)*(k/BLK_K) ; i++){
 			openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
 		}
@@ -507,27 +508,127 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	float TPU_ms = get_time_ms(_end, _start);
 	return TPU_ms;
 }
-float run_GEMM_baseline(int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
-	float kernel_ms = 0;
-	int _mode = atoi(argv[3]);
-	if(_mode == 0){ // GPU mode
-		kernel_ms = GEMM_GPU(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
-	}else if(_mode == 1){ // GPU tiling algorithm mode
-		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
-	}else if(_mode == 2){ // TPU mode
-        	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
-	}else if(_mode == 3){ // TPU tfiling algorithm mode
-        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
-	}else{
-		printf("undefined mode: %d, exit...\n", mode);
-		exit(0);
+
+float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_C, const float alpha, const float beta){
+	printf("calling GEMM_MIX_TILES...\n");
+    
+	cudaDeviceProp deviceProp;
+
+        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
+
+        cublasHandle_t handle;
+
+        checkCudaErrors(cublasCreate(&handle));
+	
+	// allocate device memory
+   	float *d_A, *d_B, *d_C;
+        unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
+    	unsigned int mem_size_A = sizeof(float) * size_A;
+    	unsigned int size_B = matrix_size.uiWB * matrix_size.uiHB;
+    	unsigned int mem_size_B = sizeof(float) * size_B;
+   	unsigned int size_C = matrix_size.uiWC * matrix_size.uiHC;
+        unsigned int mem_size_C = sizeof(float) * size_C;
+
+    	checkCudaErrors(cudaMalloc((void **) &d_A, mem_size_A));
+    	checkCudaErrors(cudaMalloc((void **) &d_B, mem_size_B));
+    	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
+    	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
+    	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
+
+        // setup execution parameters
+        int block_size = 32;
+        dim3 threads(block_size, block_size);
+        dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
+    	
+	cudaEvent_t start, stop;
+        // Allocate CUDA events that we'll use for timing
+        checkCudaErrors(cudaEventCreate(&start));
+        checkCudaErrors(cudaEventCreate(&stop));
+
+	int m     = matrix_size.uiWB;
+	int n     = matrix_size.uiHA;
+	int k     = matrix_size.uiWA;
+	int m_cnt = matrix_size.uiWB/BLK_M;
+	int n_cnt = matrix_size.uiHA/BLK_N;
+	int k_cnt = matrix_size.uiWA/BLK_K;
+	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
+
+        // edgeTPU setup
+        openctpu_init(1, 1);
+	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+	matrix_a_d = openctpu_alloc_dimension(2, BLK_M, BLK_N);
+	matrix_b_d = openctpu_alloc_dimension(2, BLK_N, BLK_K);
+	matrix_c_d = openctpu_alloc_dimension(2, BLK_M, BLK_K);
+    
+	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+
+	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
+	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
+	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_C,   config, false/*b_major*/, 2/*tensor_type*/);
+
+	unsigned int edgeTPU_used = 0;
+	unsigned int idx = 0;
+
+	// check m / blk_m is dividable
+        
+	// Record the start event
+        checkCudaErrors(cudaEventRecord(start, NULL));
+	
+	for (int iter = 0; iter < nIter; iter++)
+        {
+            //note cublas is column primary!
+            //need to transpose the order
+	    //
+	    for(int _i = 0 ; _i < m_cnt ; _i++){
+	    	for(int _j = 0 ; _j < n_cnt ; _j++){
+			for(int _k = 0 ; _k < k_cnt; _k++){
+				if(0){ // naive round-robin between GPU and TPU
+					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
+						&alpha,
+						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], m, 
+						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], k, 
+						&beta, 
+						&d_C[(_i*BLK_M)*k+(_k*BLK_K)], m));
+				
+				}else{
+					// simulate tiling algorithm in perfromance only
+					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
+					edgeTPU_used++;
+				}
+				idx++;
+			}
+		}
+	    }
+        }
+	// Record the stop event
+        checkCudaErrors(cudaEventRecord(stop, NULL));
+
+        // Wait for the stop event to complete
+        checkCudaErrors(cudaEventSynchronize(stop));
+
+	// copy result from device to host
+        checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
+	
+	// wait for openctpu to complete, if ever been invoked among all iterations.
+	if(edgeTPU_used > 0){
+		openctpu_sync(tensor_c); 
 	}
-	return kernel_ms;
+
+        // Destroy the handle
+        checkCudaErrors(cublasDestroy(handle));
+
+        checkCudaErrors(cudaFree(d_A));
+        checkCudaErrors(cudaFree(d_B));
+        checkCudaErrors(cudaFree(d_C));
+
+	float msecTotal;
+	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
+	return msecTotal;
 }
 
-float run_GEMM_proposed(int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
+float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
 	float kernel_ms = 0;
-	int _mode = atoi(argv[4]);
 	if(_mode == 0){ // GPU mode
 		kernel_ms = GEMM_GPU(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 1){ // GPU tiling algorithm mode
@@ -536,6 +637,8 @@ float run_GEMM_proposed(int argc, char** argv, int nIter, sMatrixSize matrix_siz
         	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else if(_mode == 3){ // TPU tfiling algorithm mode
         	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
+	}else if(_mode == 4){ // mix tfiling algorithm mode
+        	kernel_ms = GEMM_MIX_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, alpha, beta);
 	}else{
 		printf("undefined mode: %d, exit...\n", _mode);
 		exit(0);
@@ -582,13 +685,16 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     const float alpha = 1.0f;
     const float beta  = 0.0f;
 
+    int _mode;
+    _mode = atoi(argv[3]);
     _start = clk::now();
-    baseline_kernel_ms = run_GEMM_baseline(argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline);
+    baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
+    _mode = atoi(argv[4]);
     _start = clk::now();
-    proposed_kernel_ms = run_GEMM_proposed(argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed);
+    proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
@@ -615,12 +721,13 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 int main(int argc, char **argv)
 {
     if(argc != 5){
-    	printf("new usage: ./exe [problem size] [nIter] [baseline's mode] [mode]\n");
+    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode]\n", argv[0]);
 	printf("mode definition:\n");
 	printf("\t0: GPU                   mode\n");
 	printf("\t1: GPU tiling algorithm  mode\n");
 	printf("\t2: TPU                   mode\n");
 	printf("\t3: TPU tiling algorithm  mode\n");
+	printf("\t4: mix tiling algorithm  mode\n");
         exit(0);
     }
     printf("[Matrix Multiply CUBLAS] - Starting...\n");
