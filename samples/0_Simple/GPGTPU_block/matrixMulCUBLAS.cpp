@@ -78,9 +78,10 @@ typedef std::chrono::high_resolution_clock clk;
 #define c1 6.5025 // (k1*L)*(k1*L)
 #define c2 58.5225 // (k2*L)*(k2*L)
 
-#define BLK_M 1024
-#define BLK_N 1024
-#define BLK_K 1024
+unsigned int COMMON_BLK = 1024;
+unsigned int BLK_M = COMMON_BLK;
+unsigned int BLK_N = COMMON_BLK;
+unsigned int BLK_K = COMMON_BLK;
 
 int devID = 0; // GPU devID 
 
@@ -479,6 +480,8 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
         openctpu_init(1, 1);
 	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
 	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+	
+	timing b_s = clk::now();
 	matrix_a_d = openctpu_alloc_dimension(2, m, n);
 	matrix_b_d = openctpu_alloc_dimension(2, n, k);
 	matrix_c_d = openctpu_alloc_dimension(2, m, k);
@@ -488,6 +491,9 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
 	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
 	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
 	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+	timing b_e = clk::now();
+        double bms = get_time_ms(b_e, b_s);
+	printf("binary creation time: %f (ms)\n", bms);
 
 	timing _start = clk::now();	
 	for (int j = 0; j < nIter; j++)
@@ -512,6 +518,8 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         openctpu_init(1, 1);
 	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
 	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+	
+	timing b_s = clk::now();
 	matrix_a_d = openctpu_alloc_dimension(2, BLK_M, BLK_N);
 	matrix_b_d = openctpu_alloc_dimension(2, BLK_N, BLK_K);
 	matrix_c_d = openctpu_alloc_dimension(2, BLK_M, BLK_K);
@@ -521,6 +529,9 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
 	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
 	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+	timing b_e = clk::now();
+        double bms = get_time_ms(b_e, b_s);
+	printf("binary creation time: %f (ms)\n", bms);
 
 	timing _start = clk::now();	
 	for (int j = 0; j < nIter; j++)
@@ -531,6 +542,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 		}
 	}
 	openctpu_sync(tensor_c); 
+	openctpu_clean_up();
 	timing _end = clk::now();	
 	
 	float TPU_ms = get_time_ms(_end, _start);
@@ -539,6 +551,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 
 float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_C, const float alpha, const float beta){
 	printf("calling GEMM_MIX_TILES...\n");
+	timing b_s = clk::now();
     
 	cudaDeviceProp deviceProp;
 
@@ -594,6 +607,9 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
 	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, true /*b_major*/, 1/*tensor_type*/);
 	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_C,   config, false/*b_major*/, 2/*tensor_type*/);
+	timing b_e = clk::now();
+        double bms = get_time_ms(b_e, b_s);
+	printf("binary creation time: %f (ms)\n", bms);
 
 	unsigned int edgeTPU_used = 0;
 	unsigned int idx = 0;
@@ -629,20 +645,22 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 		}
 	    }
         }
+
 	// Record the stop event
         checkCudaErrors(cudaEventRecord(stop, NULL));
 
         // Wait for the stop event to complete
         checkCudaErrors(cudaEventSynchronize(stop));
-
+	
 	// copy result from device to host
         checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
 	
 	// wait for openctpu to complete, if ever been invoked among all iterations.
 	if(edgeTPU_used > 0){
 		openctpu_sync(tensor_c); 
+		openctpu_clean_up();
 	}
-
+	
         // Destroy the handle
         checkCudaErrors(cublasDestroy(handle));
 
@@ -655,18 +673,35 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	return msecTotal;
 }
 
+void assign_blk_size(int argc, char** argv){
+    if(argc < 5){
+    	printf("block size is undefined, exit\n");
+	exit(0);
+    }
+    COMMON_BLK = atoi(argv[5]);
+    BLK_M = COMMON_BLK;
+    BLK_N = COMMON_BLK;
+    BLK_K = COMMON_BLK;
+
+}
+
 float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
 	float kernel_ms = 0;
 	if(_mode == 0){ // GPU mode
 		kernel_ms = GEMM_GPU(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 1){ // GPU tiling algorithm mode
+		assign_blk_size(argc, argv);
 		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else if(_mode == 3){ // TPU tfiling algorithm mode
+		assign_blk_size(argc, argv);
         	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else if(_mode == 4){ // mix tfiling algorithm mode
+		assign_blk_size(argc, argv);
         	kernel_ms = GEMM_MIX_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, alpha, beta);
+	}else if(_mode == -1){ // skip
+		printf("skip, no run\n");
 	}else{
 		printf("undefined mode: %d, exit...\n", _mode);
 		exit(0);
@@ -741,6 +776,7 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     free(h_B);
     free(h_C_baseline);
     free(h_C_proposed);
+	printf("done free\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -748,9 +784,10 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
 {
-    if(argc != 5){
-    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode]\n", argv[0]);
+    if(argc < 5){
+    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4]\n", argv[0]);
 	printf("mode definition:\n");
+	printf("\t-1: skip, no run\n");
 	printf("\t0: GPU                   mode\n");
 	printf("\t1: GPU tiling algorithm  mode\n");
 	printf("\t2: TPU                   mode\n");
@@ -758,6 +795,7 @@ int main(int argc, char **argv)
 	printf("\t4: mix tiling algorithm  mode (round-robin)\n");
         exit(0);
     }
+    
     printf("[Matrix Multiply CUBLAS] - Starting...\n");
 
     int sizeMult = 5;
@@ -766,6 +804,6 @@ int main(int argc, char **argv)
     initializeCUDA(argc, argv, sizeMult, matrix_size);
 
     int matrix_result = matrixMultiply(argc, argv, matrix_size);
-
+	printf("done result\n");
     return matrix_result;
 }
