@@ -63,9 +63,6 @@
 #include <chrono>
 #include "gptpu.h"
 #include "math.h"
-
-typedef std::chrono::time_point<std::chrono::high_resolution_clock> timing;
-typedef std::chrono::high_resolution_clock clk;
     
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
@@ -77,6 +74,13 @@ typedef std::chrono::high_resolution_clock clk;
 #define k2 0.03 // default
 #define c1 6.5025 // (k1*L)*(k1*L)
 #define c2 58.5225 // (k2*L)*(k2*L)
+
+#define E 0.001 // epsilon
+
+typedef std::chrono::time_point<std::chrono::high_resolution_clock> timing;
+typedef std::chrono::high_resolution_clock clk;
+
+float mix_p = 0.5; // percentage of weighted RR on GPU if mix mode is used
 
 unsigned int COMMON_BLK = 1024;
 unsigned int BLK_M = COMMON_BLK;
@@ -246,6 +250,18 @@ float covariance(int n, float* x, float* y, float ux, float uy){
 		sum += (x[i] - avg_x) * (y[i] - avg_y);
 	}
 	return sum / (float)n;
+}
+
+float RMSE(int w, int h, float* buf1, float* buf2, int verbose){
+	float MSE = 0;
+	float rate = 0;
+	float mean = 0;
+	for(int i = 0 ; i < (w*h) ; i++){
+		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
+		mean = (mean * i + buf1[i]) / (i+1);
+		rate = (rate * i + fabs(buf1[i] - buf2[i])) / (i+1); 
+	}
+	return (sqrt(MSE)/mean)*100;
 }
 
 float SSIM(int w, int h, float* buf1, float* buf2, int verbose){
@@ -548,6 +564,21 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	float TPU_ms = get_time_ms(_end, _start);
 	return TPU_ms;
 }
+bool weighted_RR_on_GPU(int idx){
+	if(fabs(mix_p - 0.0) < E){
+		return 0;
+	}else if(fabs(mix_p - 1.0) < E){
+		return 1;
+	}else if(fabs(mix_p - 0.5) < E){
+		return (idx%2);
+	}else if(fabs(mix_p - 0.25) < E){
+		return (idx%4 == 0);
+	}else if(fabs(mix_p - 0.75) < E){
+		return (idx%4!=0);
+	}
+	return idx%2; // default: fair RR
+}
+
 
 float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_C, const float alpha, const float beta){
 	printf("calling GEMM_MIX_TILES...\n");
@@ -627,7 +658,7 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	    for(int _i = 0 ; _i < m_cnt ; _i++){
 	    	for(int _j = 0 ; _j < n_cnt ; _j++){
 			for(int _k = 0 ; _k < k_cnt; _k++){
-				if(idx % 2 == 0){ // naive round-robin between GPU and TPU
+				if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
 					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
 						&alpha,
 						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], m, 
@@ -652,14 +683,14 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         // Wait for the stop event to complete
         checkCudaErrors(cudaEventSynchronize(stop));
 	
-	// copy result from device to host
-        checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
-	
 	// wait for openctpu to complete, if ever been invoked among all iterations.
 	if(edgeTPU_used > 0){
 		openctpu_sync(tensor_c); 
 		openctpu_clean_up();
 	}
+	
+	// copy result from device to host
+        checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
 	
         // Destroy the handle
         checkCudaErrors(cublasDestroy(handle));
@@ -685,6 +716,20 @@ void assign_blk_size(int argc, char** argv){
 
 }
 
+void assign_mix_p(int argc, char** argv){
+	if(argc < 6){
+		printf("p on GPU for mix mode is missing, default is set to 0.5 (fair RR)\n");
+	}else{	
+		mix_p = atof(argv[6]);
+		if(fabs(mix_p - 0.0) < E){
+			printf("fall back to edgeTPU kernel only (mode 3)\n");
+		}else if(fabs(mix_p - 1.0) < E){
+			printf("fall back to GPU kernel only (mode 1)\n");
+		}
+	}
+	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
+}
+
 float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
 	float kernel_ms = 0;
 	if(_mode == 0){ // GPU mode
@@ -699,6 +744,7 @@ float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
         	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else if(_mode == 4){ // mix tfiling algorithm mode
 		assign_blk_size(argc, argv);
+		assign_mix_p(argc, argv);
         	kernel_ms = GEMM_MIX_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, alpha, beta);
 	}else if(_mode == -1){ // skip
 		printf("skip, no run\n");
@@ -763,7 +809,10 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 
     // SSIM section
     float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    printf("SSIM is: %f\n", ssim);
+    float rmse = RMSE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+
+    printf("RMSE is: %f%%\n", rmse);
+    printf("SSIM is: %f  \n", ssim);
 
     // timing section
     printf("\taverage kernel time\taverage total latency time\t(nIter = %d)\n", nIter);
@@ -784,15 +833,15 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
 {
-    if(argc < 5){
-    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4]\n", argv[0]);
+    if(argc < 6){
+    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
 	printf("mode definition:\n");
 	printf("\t-1: skip, no run\n");
 	printf("\t0: GPU                   mode\n");
 	printf("\t1: GPU tiling algorithm  mode\n");
 	printf("\t2: TPU                   mode\n");
 	printf("\t3: TPU tiling algorithm  mode\n");
-	printf("\t4: mix tiling algorithm  mode (round-robin)\n");
+	printf("\t4: mix tiling algorithm  mode (round-robin as default)\n");
         exit(0);
     }
     
