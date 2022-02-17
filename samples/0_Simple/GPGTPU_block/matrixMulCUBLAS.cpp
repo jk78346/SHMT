@@ -226,36 +226,36 @@ void initializeCUDA(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matr
 }
 
 float average(int n, float* x){
-	long double sum = 0;
+	double sum = 0;
 	for(int i = 0 ; i < n ; i++){
 		sum += x[i];
 	}
-	return (float)(sum / (long double)n);
+	return (float)(sum / (double)n);
 }
 
 float sdev(int n, float* x, float ux){
-	long double sum = 0;
+	double sum = 0;
 	float avg = ux;
 	for(int i = 0 ; i < n ; i++){
 		sum += pow(x[i] - avg, 2);
 	}
-	return pow((float)(sum / (long double)n), 0.5);
+	return pow((float)(sum / (double)n), 0.5);
 }
 
 float covariance(int n, float* x, float* y, float ux, float uy){
-	long double sum = 0;
+	double sum = 0;
 	float avg_x = ux;
 	float avg_y = uy;
 	for(int i = 0 ; i < n ; i++){
 		sum += (x[i] - avg_x) * (y[i] - avg_y);
 	}
-	return (float)(sum / (long double)n);
+	return (float)(sum / (double)n);
 }
 
 float RMSE(int w, int h, float* buf1, float* buf2, int verbose){
-	long double  MSE = 0;
-	long double rate = 0;
-	long double mean = 0;
+	double  MSE = 0;
+	double rate = 0;
+	double mean = 0;
 	for(int i = 0 ; i < (w*h) ; i++){
 		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
 		mean = (mean * i + buf1[i]) / (i+1);
@@ -558,20 +558,20 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			tensor_a[_i*n_blk_cnt+_j] = 
-			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*m_blk_cnt)*n+(_j*n_blk_cnt)], config, false/*b_major*/, 0/*tensor_type*/);
+			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/);
 		}
 	}
 	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 			tensor_b[_j*k_blk_cnt+_k] = 
-			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*n_blk_cnt)*k+(_k*k_blk_cnt)], config, false/*b_major*/, 1/*tensor_type*/);
+			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
 		}
 	}
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 				tensor_partial_c[_j][_i*k_blk_cnt+_k] = 
-	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*m_blk_cnt)*k+(_k*k_blk_cnt)], config, false/*b_major*/, 2/*tensor_type*/);
+	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/);
 			}
 		}
 	}
@@ -596,6 +596,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	openctpu_clean_up();
 	timing _end = clk::now();	
 // summation
+// TODO: This step can be skipped later (i.e: implemented within GPTPU lib when calling sync())
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			for(int _k = 0 ; _k < k_blk_cnt ; _k++){
@@ -604,15 +605,17 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 		}
 	}
 	float sum = 0.0;
-	for(int i = 0 ; i < (m*k) ; i++){
-		sum = 0.0;
-		for(int j = 0 ; j < n_blk_cnt ; j++){
-			sum += h_partial_c[j][i];
-			if(h_partial_c[j][i] == 0){  // find bug from this prin, no value for later parts in h_partial_c
-				std::cout << "h_partial_c[" << j << "][" << i << "] is zero." << std::endl;
+	for(int _i = 0 ; _i < m ; _i++){
+		for(int _k = 0 ; _k < k ; _k++){
+			sum = 0.0;
+			for(int j = 0 ; j < n_blk_cnt ; j++){
+				sum += h_partial_c[j][_i*k+_k];
+				//if(h_partial_c[j][_i*k+_k] != 0){  // find bug from this print, no value for later parts in h_partial_c
+				//	std::cout << "h_partial_c[" << j << "][" << _i << "*" << k << "+"<< _k << "] has value" << std::endl;
+				//}
 			}
+			h_TPU[_i*k+_k] = sum;
 		}
-		h_TPU[i] = sum;
 	}
 // clean up
 	for(int i = 0 ; i < n_blk_cnt ; i++){
