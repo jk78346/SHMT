@@ -61,6 +61,8 @@
 #include <helper_cuda.h>
 /* ============================================= */
 #include <chrono>
+#include <float.h>
+#include <random>
 #include "gptpu.h"
 #include "math.h"
     
@@ -69,11 +71,11 @@
 #endif
 
 // use edgeTPU
-#define L 255.0 // 2^(# of bits) - 1
+int     L = 255.0; // 2^(# of bits) - 1
 #define k1 0.01 // default
 #define k2 0.03 // default
-#define c1 6.5025 // (k1*L)*(k1*L)
-#define c2 58.5225 // (k2*L)*(k2*L)
+float c1 = 6.5025; // (k1*L)*(k1*L)
+float c2 = 58.5225; // (k2*L)*(k2*L)
 
 #define E 0.001 // epsilon
 
@@ -134,10 +136,21 @@ matrixMulCPU(float *C, const float *A, const float *B, unsigned int hA, unsigned
 // Allocates a matrix with random float entries.
 void randomInit(float *data, int size)
 {
+    std::default_random_engine gen;
+    std::normal_distribution<float> dis(128.0, 32.0);
     for (int i = 0; i < size; ++i){
         //data[i] = rand() / (float)RAND_MAX;
-        data[i] = (float)(int)((float)rand() / (float)(RAND_MAX/256));
-	//if(i < 10) printf("data[%2d]: %f\n", i, data[i]);
+// Uniform distribution
+	if(1 || i/1024 < 5 && i%1024 < 5){
+		data[i] = (float)((float)rand() / (float)(RAND_MAX/1));
+	}else{
+//		data[i] = 0;
+	}
+// Normal distribution
+//	data[i] = dis(gen);
+	if(i < 10){
+		std::cout << __func__ << "data[" << i << "]: " << std::fixed << data[i] << std::endl;
+	}
     }
 }
 
@@ -254,30 +267,78 @@ float covariance(int n, float* x, float* y, float ux, float uy){
 
 float RMSE(int w, int h, float* buf1, float* buf2, int verbose){
 	double  MSE = 0;
-	double rate = 0;
 	double mean = 0;
 	for(int i = 0 ; i < (w*h) ; i++){
 		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
 		mean = (mean * i + buf1[i]) / (i+1);
-		rate = (rate * i + fabs(buf1[i] - buf2[i])) / (i+1); 
 	}
 	return (sqrt(MSE)/mean)*100;
 }
 
-float SSIM(int w, int h, float* buf1, float* buf2, int verbose){
+float ERROR_RATE(int w, int h, float* buf1, float* buf2, int verbose){
+	double rate = 0;
+	double mean = 0;
+	for(int i = 0 ; i < (w*h) ; i++){
+		mean = (mean * i + buf1[i]) / (i+1);
+		rate = (rate * i + fabs(buf1[i] - buf2[i])) / (i+1); 
+	}
+	return (rate/mean)*100;
+}
+
+float ERROR_PERCENTAGE(int w, int h, float* buf1, float* buf2, int verbose){
+	long int  cnt = 0;
+	for(int i = 0 ; i < (w*h) ; i++){
+		if((long int)(buf1[i]) != (long int)(buf2[i])){
+			cnt++;
+		}
+	}
+	return ((float)cnt/(float)(w*h))*100;
+}
+
+float SSIM(int w, int h, float* buf1, float* buf2, int verbose, int casted_to_int){
+	if(casted_to_int){
+		for(int i = 0 ; i < (w * h) ; i++){
+			buf1[i] = std::round(buf1[i]);
+			buf2[i] = std::round(buf2[i]);
+		}
+	}
+	float max1 = FLT_MIN;
+	float min1 = FLT_MAX;
+	float max2 = FLT_MIN;
+	float min2 = FLT_MAX;
+	for(int i = 0 ; i < (w * h) ; i++){
+		if(buf1[i] > max1){ max1 = buf1[i]; }
+		if(buf1[i] < min1){ min1 = buf1[i]; }
+		if(buf2[i] > max2){ max2 = buf2[i]; }
+		if(buf2[i] < min2){ min2 = buf2[i]; }
+	}
+	L = fabs(max1 - min1); // update dynamic range 
+        c1 = (k1*L)*(k1*L);
+        c2 = (k2*L)*(k2*L);
 /* verbose */
 	if(verbose > 0){
+		printf("output casted to int? %d\n", casted_to_int);
 		printf("h_baseline: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
-				printf("%12.3f ", buf1[i*h+j]);
+				//printf("%12.3f ", buf1[i*h+j]);
+				std::cout << std::fixed << buf1[i*h+j] << " ";
 			}
 			printf("\n");
 		}
 		printf("h_proposed: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
-				printf("%12.3f ", buf2[i*h+j]);
+				//printf("%12.3f ", buf2[i*h+j]);
+				std::cout << std::fixed << buf2[i*h+j] << " ";
+			}
+			printf("\n");
+		}
+		printf("pair-wise proposed/baseline value ratio: \n");
+		for(int i = 0 ; i < 5 ; i++){
+			for(int j = 0 ; j < 5 ; j++){
+				//printf("%12.3f ", buf2[i*h+j]);
+				std::cout << std::fixed << buf2[i*h+j]/buf1[i*h+j] << " ";
 			}
 			printf("\n");
 		}
@@ -298,6 +359,18 @@ float SSIM(int w, int h, float* buf1, float* buf2, int verbose){
 	cov = covariance(n, buf1, buf2, ux, uy);
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2)+c1) * (pow(vx, 2) + pow(vy, 2) +c2));
 	return ssim;
+}
+
+float PSNR(int w, int h, float* buf1, float* buf2, int verbose){
+	double  MSE = 0;
+	double mean = 0;
+	float  max_v = FLT_MIN;
+	for(int i = 0 ; i < (w*h) ; i++){
+		if(buf2[i] > max_v){ max_v = buf2[i]; }
+		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
+		mean = (mean * i + buf1[i]) / (i+1);
+	}
+	return 20*log10(max_v) - 10*log10(MSE/mean);
 }
 /* =============================================================================================================== */
 void matrix_mul(openctpu_buffer *matrix_a,
@@ -459,12 +532,21 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
 
 	// summation
 	float sum = 0.0;
-	for(int i = 0 ; i < size_C ; i++){
-		sum = 0.0;
-		for(int p = 0 ; p < n_cnt ; p++){
-			sum += h_C_partial[p][i];
+	int threshold = 10;
+	int count = 0;
+	for(int i = 0 ; i < m ; i++){
+		for(int j = 0 ; j < n ; j++){
+			sum = 0.0;
+			for(int p = 0 ; p < n_cnt ; p++){
+				sum += h_C_partial[p][i*n+j];
+				if(/*h_C_partial[p][i*n+j] != 0 && */ p == 0 && i < 5 && j < 5){
+					count++;
+					std::cout << h_C_partial[p][i*n+j] << " ";		
+				}
+			}
+			h_C[i*n+j] = sum;
 		}
-		h_C[i] = sum;
+		if(i < 5){std::cout << std::endl;}
 	}
 
         // Destroy the handle
@@ -530,7 +612,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	int m = matrix_size.uiWB;
 	int n = matrix_size.uiHA;
 	int k = matrix_size.uiWA;
-
+	
 	int m_blk_cnt = (m / BLK_M);// + (m % BLK_M != 0)?1:0;
 	int n_blk_cnt = (n / BLK_N);// + (n % BLK_N != 0)?1:0;
 	int k_blk_cnt = (k / BLK_K);// + (k % BLK_K != 0)?1:0;
@@ -539,14 +621,14 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         openctpu_init(1, 1);
 	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
 	openctpu_buffer    **tensor_a,  **tensor_b,  *tensor_c, ***tensor_partial_c;
-	
+
 	tensor_a            = (openctpu_buffer**)  malloc(m_blk_cnt * n_blk_cnt * sizeof(openctpu_buffer*));
 	tensor_b            = (openctpu_buffer**)  malloc(n_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
 	tensor_partial_c    = (openctpu_buffer***) malloc(n_blk_cnt * sizeof(openctpu_buffer**));
 	float** h_partial_c = (float**) malloc(n_blk_cnt * sizeof(float*));
 	for(int i = 0 ; i < n_blk_cnt ; i++){
 		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
-		h_partial_c[i] = (float*) malloc(m*k * sizeof(float)); 
+		h_partial_c[i] = (float*) malloc(m * k * sizeof(float)); 
 	}
 
 	timing b_s = clk::now();
@@ -571,7 +653,8 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
 		}
 	}
-	timing b_b_e = clk::now();
+	
+        timing b_b_e = clk::now();
 	timing b_c_s = clk::now();
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
@@ -601,16 +684,18 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	openctpu_sync(); 
 	openctpu_clean_up();
 	timing _end = clk::now();	
-// summation
-
+// summation1
 	float sum = 0.0;
+	int threshold = 10;
+	int count = 0;
 	for(int _i = 0 ; _i < m ; _i++){
 		for(int _k = 0 ; _k < k ; _k++){
 			sum = 0.0;
 			for(int j = 0 ; j < n_blk_cnt ; j++){
 				sum += h_partial_c[j][_i*k+_k];
 				//if(h_partial_c[j][_i*k+_k] != 0){  // find bug from this print, no value for later parts in h_partial_c
-				//	std::cout << "h_partial_c[" << j << "][" << _i << "*" << k << "+"<< _k << "] has value" << std::endl;
+				//	std::cout << "h_partial_c[" << j << "][" << _i << "*" << k << "+" << _k << "]: " << h_partial_c[j][_i*k+_k] << std::endl;
+				//	count++;
 				//}
 			}
 			h_TPU[_i*k+_k] = sum;
@@ -717,18 +802,23 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
 	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
 
+	timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_cnt ; _i++){
 		for(int _j = 0 ; _j < n_cnt ; _j++){
 			tensor_a[_i*n_cnt+_j] =
 			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/);
 		}
 	}
+	timing b_a_e = clk::now();
+	timing b_b_s = clk::now();
 	for(int _j = 0 ; _j < n_cnt ; _j++){
 		for(int _k = 0 ; _k < k_cnt ; _k++){
 			tensor_b[_j*k_cnt+_k] =
 			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
 		}
 	}
+	timing b_b_e = clk::now();
+	timing b_c_s = clk::now();
 	for(int _i = 0 ; _i < m_cnt ; _i++){
 		for(int _j = 0 ; _j < n_cnt ; _j++){
 			for(int _k = 0 ; _k < k_cnt ; _k++){
@@ -737,10 +827,10 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 			}
 		}
 	}
-
+	timing b_c_e = clk::now();
 	timing b_e = clk::now();
         double bms = get_time_ms(b_e, b_s);
-	printf("binary creation time: %f (ms)\n", bms);
+	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
 
 	unsigned int edgeTPU_used = 0;
 	unsigned int idx = 0;
@@ -755,9 +845,9 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
             //note cublas is column primary!
             //need to transpose the order
 	    //
-	    for(int _i = 0 ; _i < m_cnt ; _i++){
-		for(int _k = 0 ; _k < k_cnt; _k++){
-	    		for(int _j = 0 ; _j < n_cnt ; _j++){
+	  for(int _i = 0 ; _i < m_cnt ; _i++){
+	  	for(int _k = 0 ; _k < k_cnt; _k++){
+	  		for(int _j = 0 ; _j < n_cnt ; _j++){
 				if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
 					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
 						&alpha,
@@ -788,7 +878,7 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	// wait for openctpu to complete, if ever been invoked among all iterations.
 	if(edgeTPU_used > 0){
 		openctpu_sync(); 
-		openctpu_clean_up();
+//		openctpu_clean_up();
 	}
 	
 // TODO: coordinate the output summation, don't do overwritting 
@@ -798,6 +888,7 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	}
 
 //summation
+	std::cout << "summation..." << std::endl;
 	float sum = 0.0;
 	int offset = 0;
 	idx = 0;
@@ -949,15 +1040,29 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     proposed_total_ms = get_time_ms(_end, _start);
 
     // SSIM section
-    float ssim = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float rmse = RMSE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float ssim             = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
+    float ssim_int         = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
+    float rmse             = RMSE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float psnr             = PSNR(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_rate       = ERROR_RATE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_percentage = ERROR_PERCENTAGE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
 
-    printf("RMSE is: %f%%\n", rmse);
-    printf("SSIM is: %f  \n", ssim);
+    // quality section
+    printf("==============================================================\n");
+    printf("Quality result\n");
+    printf("==============================================================\n");
+    printf("error %%    is: %f%%\t|\t# of elements in difference / total # of elements\n", error_percentage);
+    printf("error rate is: %f%%\t|\tsum(abs(xi-yi))/mean(yi)\n", error_rate);
+    printf("RMSE       is: %f%%\t|\tsqrt(sum(abs(xi-yi)^2))/mean(yi)\n", rmse);
+    printf("PSNR       is: %fdB\t|\t20*log10(MAX(yi)) - 10*log10(sum(abs(xi-yi)^2)/mean(yi))\n", psnr);
+    printf("SSIM       is: %f\t\t|\tnaive version, alpha=beta=gamma=1\n", ssim);
+    printf("SSIM_int   is: %f\t\t|\tsame SSIM except elements are casted to integer beforehand\n", ssim_int);
 
     // timing section
-    printf("\taverage kernel time\taverage total latency time\t(nIter = %d)\n", nIter);
     printf("==============================================================\n");
+    printf("Latency result\n");
+    printf("==============================================================\n");
+    printf("\taverage kernel time\taverage total latency time\t(nIter = %d)\n", nIter);
     printf("baseline  : %12.6f (ms) |  %12.6f (ms)\n", baseline_kernel_ms/nIter, baseline_total_ms/nIter);
     printf("proposed  : %12.6f (ms) |  %12.6f (ms)\n", proposed_kernel_ms/nIter, proposed_total_ms/nIter);
 
