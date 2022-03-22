@@ -63,9 +63,14 @@
 #include <chrono>
 #include <float.h>
 #include <random>
+#include <fcntl.h> // for O_RDWR
+#include <unistd.h> // for open()
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "gptpu.h"
 #include "math.h"
-    
+ 
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
 #endif
@@ -134,24 +139,40 @@ matrixMulCPU(float *C, const float *A, const float *B, unsigned int hA, unsigned
 }
 
 // Allocates a matrix with random float entries.
-void randomInit(float *data, int size)
+void randomInit(float *data, int m, int n)
 {
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
-    for (int i = 0; i < size; ++i){
-        //data[i] = rand() / (float)RAND_MAX;
-// Uniform distribution
-	if(1 || i/1024 < 5 && i%1024 < 5){
-		data[i] = (float)((float)rand() / (float)(RAND_MAX/1));
-	}else{
-//		data[i] = 0;
-	}
-// Normal distribution
-//	data[i] = dis(gen);
-	if(i < 10){
-		std::cout << __func__ << "data[" << i << "]: " << std::fixed << data[i] << std::endl;
-	}
+
+    const std::string file_name = "./lena_gray_2Kx2K.bmp";
+    int fd = open(file_name.c_str(), O_RDONLY);
+    char *src;
+    struct stat st_temp;
+    fstat(fd, &st_temp);
+    if(fd < 0){
+        std::cout << __func__ << ": image file " << file_name << " opening fail." << std::endl; exit(0);
     }
+    src = static_cast<char*>(mmap(NULL, st_temp.st_size, PROT_READ, MAP_SHARED, fd, 0));
+    assert(src != MAP_FAILED);
+
+    for (int i = 0; i < m; ++i){
+        for(int j = 0 ; j < n ; ++j){
+// Uniform distribution
+            data[i*n+j] = (float)((float)rand() / (float)(RAND_MAX/1));
+// Normal distribution
+//            data[i*n+j] = dis(gen);
+// Hankel Matirx
+//            data[i*n+j] = (float)1.0/(float)(2*(m*n-i-j+1.5));
+// Read image file
+//            data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
+
+            if(i < 5 && j < 5){
+              std::cout << __func__ << "data[" << i << "*" << n << "+" << j << "]: " << std::fixed << data[i*n+j] << std::endl;
+            }
+        }
+    }
+    munmap(src, st_temp.st_size);
+    close(fd);
 }
 
 void printDiff(float *data1, float *data2, int width, int height, int iListLength, float fListTol)
@@ -238,80 +259,115 @@ void initializeCUDA(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matr
     }
 }
 
-float average(int n, float* x){
+float average(int m, int n, int ldn, float* x){
 	double sum = 0;
-	for(int i = 0 ; i < n ; i++){
-		sum += x[i];
-	}
-	return (float)(sum / (double)n);
+        for(int i = 0 ; i < m ; i++){
+	        for(int j = 0 ; j < n ; j++){
+		        sum += x[i*ldn+j];
+	        }
+        }
+	return (float)(sum / (double)(m*n));
 }
 
-float sdev(int n, float* x, float ux){
+
+float covld(float* x, int m, int n, int ldn){
+        double sum = 0;
+        double avg = 0;
+        for(int i = 0 ; i < m ; i++){
+                for(int j = 0 ; j < n ; j++){
+                        sum += x[i*ldn+j];
+                }
+        }
+        avg = sum/(double)(m*n);
+        sum = 0;
+        for(int i = 0 ; i < m ; i++){
+                for(int j = 0 ; j < n ; j++){
+                        sum += pow(x[i*ldn+j] - avg, 2);
+                }
+        }
+        return pow((float(sum / (double)(m*n))), 0.5) / avg;
+}
+
+float sdev(int m , int n, int ldn, float* x, float ux){
 	double sum = 0;
 	float avg = ux;
-	for(int i = 0 ; i < n ; i++){
-		sum += pow(x[i] - avg, 2);
-	}
-	return pow((float)(sum / (double)n), 0.5);
+        for(int i = 0 ; i < m ; i ++){
+	        for(int j = 0 ; j < n ; j++){
+	        	sum += pow(x[i*ldn+j] - avg, 2);
+        	}
+        }
+	return pow((float)(sum / (double)(m*n)), 0.5);
 }
 
-float covariance(int n, float* x, float* y, float ux, float uy){
+float covariance(int m, int n, int ldn, float* x, float* y, float ux, float uy){
 	double sum = 0;
 	float avg_x = ux;
 	float avg_y = uy;
-	for(int i = 0 ; i < n ; i++){
-		sum += (x[i] - avg_x) * (y[i] - avg_y);
-	}
-	return (float)(sum / (double)n);
+        for(int i = 0 ; i < m ; i++){
+	        for(int j = 0 ; j < n ; j++){
+		        sum += (x[i*ldn+j] - avg_x) * (y[i*ldn+j] - avg_y);
+	        }
+        }
+	return (float)(sum / (double)(m*n));
 }
 
-float RMSE(int w, int h, float* buf1, float* buf2, int verbose){
+float RMSE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double  MSE = 0;
 	double mean = 0;
-	for(int i = 0 ; i < (w*h) ; i++){
-		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
-		mean = (mean * i + buf1[i]) / (i+1);
-	}
+        for(int i = 0; i < w ; i++){
+	        for(int j = 0 ; j < h ; j++){
+		        MSE  = (MSE * i + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (i+1);
+		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+	        }
+        }
 	return (sqrt(MSE)/mean)*100;
 }
 
-float ERROR_RATE(int w, int h, float* buf1, float* buf2, int verbose){
+float ERROR_RATE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double rate = 0;
 	double mean = 0;
-	for(int i = 0 ; i < (w*h) ; i++){
-		mean = (mean * i + buf1[i]) / (i+1);
-		rate = (rate * i + fabs(buf1[i] - buf2[i])) / (i+1); 
-	}
+        for(int i = 0 ; i < w ; i++){
+	        for(int j = 0 ; j < h ; j++){
+		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+		        rate = (rate * i + fabs(buf1[i*ldn+j] - buf2[i*ldn+j])) / (i+1); 
+	        }
+        }
 	return (rate/mean)*100;
 }
 
-float ERROR_PERCENTAGE(int w, int h, float* buf1, float* buf2, int verbose){
+float ERROR_PERCENTAGE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	long int  cnt = 0;
-	for(int i = 0 ; i < (w*h) ; i++){
-		if((long int)(buf1[i]) != (long int)(buf2[i])){
-			cnt++;
-		}
-	}
+        for(int i = 0 ; i < w ; i++){
+        	for(int j = 0 ; j < h ; j++){
+        		if((long int)(buf1[i*ldn+j]) != (long int)(buf2[i*ldn+j])){
+		        	cnt++;
+	        	}
+        	}
+        }
 	return ((float)cnt/(float)(w*h))*100;
 }
 
-float SSIM(int w, int h, float* buf1, float* buf2, int verbose, int casted_to_int){
+float SSIM(int w, int h, int ldn, float* buf1, float* buf2, int verbose, int casted_to_int){
 	if(casted_to_int){
-		for(int i = 0 ; i < (w * h) ; i++){
-			buf1[i] = std::round(buf1[i]);
-			buf2[i] = std::round(buf2[i]);
+                for(int i = 0 ; i < w ; i++){
+		        for(int j = 0 ; j < h ; j++){
+			        buf1[i] = std::round(buf1[i*ldn+j]);
+		        	buf2[i] = std::round(buf2[i*ldn+j]);
+                        }
 		}
 	}
 	float max1 = FLT_MIN;
 	float min1 = FLT_MAX;
 	float max2 = FLT_MIN;
 	float min2 = FLT_MAX;
-	for(int i = 0 ; i < (w * h) ; i++){
-		if(buf1[i] > max1){ max1 = buf1[i]; }
-		if(buf1[i] < min1){ min1 = buf1[i]; }
-		if(buf2[i] > max2){ max2 = buf2[i]; }
-		if(buf2[i] < min2){ min2 = buf2[i]; }
-	}
+        for(int i = 0 ; i < w ; i++){
+	        for(int j = 0 ; j < h ; j++){
+	        	if(buf1[i*ldn+j] > max1){ max1 = buf1[i*ldn+j]; }
+	        	if(buf1[i*ldn+j] < min1){ min1 = buf1[i*ldn+j]; }
+	        	if(buf2[i*ldn+j] > max2){ max2 = buf2[i*ldn+j]; }
+		        if(buf2[i*ldn+j] < min2){ min2 = buf2[i*ldn+j]; }
+	        }
+        }
 	L = fabs(max1 - min1); // update dynamic range 
         c1 = (k1*L)*(k1*L);
         c2 = (k2*L)*(k2*L);
@@ -321,24 +377,21 @@ float SSIM(int w, int h, float* buf1, float* buf2, int verbose, int casted_to_in
 		printf("h_baseline: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
-				//printf("%12.3f ", buf1[i*h+j]);
-				std::cout << std::fixed << buf1[i*h+j] << " ";
+				std::cout << std::fixed << buf1[i*ldn+j] << " ";
 			}
 			printf("\n");
 		}
 		printf("h_proposed: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
-				//printf("%12.3f ", buf2[i*h+j]);
-				std::cout << std::fixed << buf2[i*h+j] << " ";
+				std::cout << std::fixed << buf2[i*ldn+j] << " ";
 			}
 			printf("\n");
 		}
 		printf("pair-wise proposed/baseline value ratio: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
-				//printf("%12.3f ", buf2[i*h+j]);
-				std::cout << std::fixed << buf2[i*h+j]/buf1[i*h+j] << " ";
+				std::cout << std::fixed << buf2[i*h+j]/buf1[i*ldn+j] << " ";
 			}
 			printf("\n");
 		}
@@ -352,24 +405,26 @@ float SSIM(int w, int h, float* buf1, float* buf2, int verbose, int casted_to_in
 	float vx; // standard variationof x
 	float vy; // standard variationof y
 	float cov; //covariance of x and y
-	ux = average(n, buf1);
-	uy = average(n, buf2);
-	vx = sdev(n, buf1, ux);
-	vy = sdev(n, buf2, uy);
-	cov = covariance(n, buf1, buf2, ux, uy);
+	ux = average(w, h, ldn, buf1);
+	uy = average(w, h, ldn, buf2);
+	vx = sdev(w, h, ldn, buf1, ux);
+	vy = sdev(w, h, ldn, buf2, uy);
+	cov = covariance(w, h, ldn, buf1, buf2, ux, uy);
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2)+c1) * (pow(vx, 2) + pow(vy, 2) +c2));
 	return ssim;
 }
 
-float PSNR(int w, int h, float* buf1, float* buf2, int verbose){
+float PSNR(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double  MSE = 0;
 	double mean = 0;
 	float  max_v = FLT_MIN;
-	for(int i = 0 ; i < (w*h) ; i++){
-		if(buf2[i] > max_v){ max_v = buf2[i]; }
-		MSE  = (MSE * i + pow(buf1[i] - buf2[i], 2)) / (i+1);
-		mean = (mean * i + buf1[i]) / (i+1);
-	}
+        for(int i = 0 ; i < w ; i++){
+        	for(int j = 0 ; j < h ; j++){
+        		if(buf2[i*ldn+j] > max_v){ max_v = buf2[i*ldn+j]; }
+        		MSE  = (MSE * i + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (i+1);
+		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+	        }
+        }
 	return 20*log10(max_v) - 10*log10(MSE/mean);
 }
 /* =============================================================================================================== */
@@ -638,11 +693,15 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
     
 	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
 	// These buffers need to know their shape beforehand for re-formating ( for underlying mm2conv)
+
+// checking sdev of each partitions as the same time
         timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			tensor_a[_i*n_blk_cnt+_j] = 
 			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/);
+                          float ux = average(BLK_M, BLK_N, n, &h_A[(_i*BLK_M)*n+(_j*BLK_N)]);
+                          std::cout << "tensor_a[" << _i << "*" << n_blk_cnt << "+" << _j << "]'s sdev: " << sdev(BLK_M, BLK_N, n, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], ux) << ", coefficient of variation is: " << covld(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
 		}
 	}
 	timing b_a_e = clk::now();
@@ -651,6 +710,8 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 			tensor_b[_j*k_blk_cnt+_k] = 
 			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
+                          float ux = average(BLK_N, BLK_K, k, &h_B[(_j*BLK_N)*k+(_k*BLK_K)]);
+                          std::cout << "tensor_b[" << _j << "*" << k_blk_cnt << "+" << _k << "]'s sdev: " << sdev(BLK_N, BLK_K, k, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], ux) << ", coefficient of variation is: " << covld(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
 		}
 	}
 	
@@ -1007,8 +1068,8 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     srand(2006);
 
     // initialize host memory
-    randomInit(h_A, size_A);
-    randomInit(h_B, size_B);
+    randomInit(h_A, matrix_size.uiWA, matrix_size.uiHA);
+    randomInit(h_B, matrix_size.uiWB, matrix_size.uiHB);
 
     // allocate host memory for the result
     unsigned int size_C = matrix_size.uiWC * matrix_size.uiHC;
@@ -1040,12 +1101,12 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     proposed_total_ms = get_time_ms(_end, _start);
 
     // SSIM section
-    float ssim             = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
-    float ssim_int         = SSIM(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
-    float rmse             = RMSE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float psnr             = PSNR(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_rate       = ERROR_RATE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_percentage = ERROR_PERCENTAGE(matrix_size.uiWC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float ssim             = SSIM(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
+    float ssim_int         = SSIM(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
+    float rmse             = RMSE(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float psnr             = PSNR(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_rate       = ERROR_RATE(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_percentage = ERROR_PERCENTAGE(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/);
 
     // quality section
     printf("==============================================================\n");
