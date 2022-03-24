@@ -139,7 +139,7 @@ matrixMulCPU(float *C, const float *A, const float *B, unsigned int hA, unsigned
 }
 
 // Allocates a matrix with random float entries.
-void randomInit(float *data, int m, int n)
+void randomInit(float *data, int m, int n, int _mode)
 {
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
@@ -157,18 +157,25 @@ void randomInit(float *data, int m, int n)
 
     for (int i = 0; i < m; ++i){
         for(int j = 0 ; j < n ; ++j){
-// Uniform distribution
-            data[i*n+j] = (float)((float)rand() / (float)(RAND_MAX/1));
-// Normal distribution
-//            data[i*n+j] = dis(gen);
-// Hankel Matirx
-//            data[i*n+j] = (float)1.0/(float)(2*(m*n-i-j+1.5));
-// Read image file
-//            data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
+                if(_mode == 0){  // Uniform distribution
+                        data[i*n+j] = (float)((float)rand() / (float)(RAND_MAX/1));
+ 
+                }else if(_mode == 1){  // Normal distribution
+                        data[i*n+j] = dis(gen);
 
-            if(i < 5 && j < 5){
-              std::cout << __func__ << "data[" << i << "*" << n << "+" << j << "]: " << std::fixed << data[i*n+j] << std::endl;
-            }
+                }else if(_mode == 2){  // Hankel Matirx
+                        data[i*n+j] = 1.0/(i+j+1);  // Hilbert matrix, an example of Hankel matrix
+
+                }else if(_mode == 3){  // Read image file
+                         data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
+
+                }else {
+                        printf("data Initialization mode %d undefined, exit\n", _mode);
+                        exit(0);
+                }
+                if(i < 5 && j < 5){
+                        std::cout << __func__ << ", data[" << i << "*" << n << "+" << j << "]: " << data[i*n+j] << std::endl;
+                }
         }
     }
     munmap(src, st_temp.st_size);
@@ -236,7 +243,7 @@ void initializeCUDA(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matr
 
     printf("GPU Device %d: \"%s\" with compute capability %d.%d\n\n", devID, deviceProp.name, deviceProp.major, deviceProp.minor);
 
-    int block_size = atoi(argv[1]);  // iSizeMultiple is 5
+    int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
     matrix_size.uiWA = 1 * block_size;// * iSizeMultiple;
     matrix_size.uiHA = 1 * block_size;// * iSizeMultiple;
@@ -499,7 +506,7 @@ float GEMM_GPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B
 	return msecTotal;
 }
 
-float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C){
+float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C, float** h_C_partial){
 	printf("calling GEMM_GPU_TILES...\n");
 	
 	int m     = matrix_size.uiWB;
@@ -521,7 +528,7 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
 	// allocate device memory
    	float *d_A, *d_B, *d_C;
 	float **d_C_partial = (float**)malloc(n_cnt * sizeof(float*));
-	float **h_C_partial = (float**)malloc(n_cnt * sizeof(float*));
+	//float **h_C_partial = (float**)malloc(n_cnt * sizeof(float*));
 	
 	unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
     	unsigned int mem_size_A = sizeof(float) * size_A;
@@ -538,7 +545,7 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
     
 	// allocate partial C
 	for(int i = 0 ; i < n_cnt ; i++){
-		h_C_partial[i] = (float*) malloc(mem_size_C);
+		//h_C_partial[i] = (float*) malloc(mem_size_C);
 		checkCudaErrors(cudaMalloc((void **) &d_C_partial[i], mem_size_C));
 	}
 
@@ -612,10 +619,10 @@ float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
         checkCudaErrors(cudaFree(d_C));
 	for(int i = 0 ; i < n_cnt ; i++){
         	checkCudaErrors(cudaFree(d_C_partial[i]));
-		free(h_C_partial[i]);
+		//free(h_C_partial[i]);
 	}
         free(d_C_partial);
-	free(h_C_partial);
+	//free(h_C_partial);
 
 	float msecTotal;
 	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
@@ -661,7 +668,7 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
 	return TPU_ms;
 }
 
-float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU){
+float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU, float** h_partial_c){
 	printf("calling GEMM_TPU_TILES...\n");
 	
 	int m = matrix_size.uiWB;
@@ -680,10 +687,11 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	tensor_a            = (openctpu_buffer**)  malloc(m_blk_cnt * n_blk_cnt * sizeof(openctpu_buffer*));
 	tensor_b            = (openctpu_buffer**)  malloc(n_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
 	tensor_partial_c    = (openctpu_buffer***) malloc(n_blk_cnt * sizeof(openctpu_buffer**));
-	float** h_partial_c = (float**) malloc(n_blk_cnt * sizeof(float*));
+	//float** h_partial_c = (float**) malloc(n_blk_cnt * sizeof(float*));
+
 	for(int i = 0 ; i < n_blk_cnt ; i++){
 		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
-		h_partial_c[i] = (float*) malloc(m * k * sizeof(float)); 
+		//h_partial_c[i] = (float*) malloc(m * k * sizeof(float)); 
 	}
 
 	timing b_s = clk::now();
@@ -765,10 +773,10 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 // clean up
 	for(int i = 0 ; i < n_blk_cnt ; i++){
 		free(tensor_partial_c[i]);
-		free(h_partial_c[i]); 
+		//free(h_partial_c[i]); 
 	}
 	free(tensor_partial_c);
-	free(h_partial_c); 
+	//free(h_partial_c); 
 	free(tensor_a);
 	free(tensor_b);
 
@@ -998,11 +1006,11 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 }
 
 void assign_blk_size(int argc, char** argv){
-    if(argc < 5){
+    if(argc < 6){
     	printf("block size is undefined, exit\n");
 	exit(0);
     }
-    COMMON_BLK = atoi(argv[5]);
+    COMMON_BLK = atoi(argv[6]);
     BLK_M = COMMON_BLK;
     BLK_N = COMMON_BLK;
     BLK_K = COMMON_BLK;
@@ -1010,10 +1018,10 @@ void assign_blk_size(int argc, char** argv){
 }
 
 void assign_mix_p(int argc, char** argv){
-	if(argc < 6){
+	if(argc < 7){
 		printf("p on GPU for mix mode is missing, default is set to 0.5 (fair RR)\n");
 	}else{	
-		mix_p = atof(argv[6]);
+		mix_p = atof(argv[7]);
 		if(fabs(mix_p - 0.0) < E){
 			printf("fall back to edgeTPU kernel only (mode 3)\n");
 		}else if(fabs(mix_p - 1.0) < E){
@@ -1023,20 +1031,17 @@ void assign_mix_p(int argc, char** argv){
 	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
 }
 
-float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C){
+float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C, float** h_partial_C){
 	float kernel_ms = 0;
 	if(_mode == 0){ // GPU mode
 		kernel_ms = GEMM_GPU(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
 	}else if(_mode == 1){ // GPU tiling algorithm mode
-		assign_blk_size(argc, argv);
-		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
+		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
 	}else if(_mode == 3){ // TPU tiling algorithm mode
-		assign_blk_size(argc, argv);
-        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
+        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, h_partial_C);
 	}else if(_mode == 4){ // mix tiling algorithm mode
-		assign_blk_size(argc, argv);
 		assign_mix_p(argc, argv);
         	kernel_ms = GEMM_MIX_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, alpha, beta);
 	}else if(_mode == -1){ // skip
@@ -1068,8 +1073,8 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     srand(2006);
 
     // initialize host memory
-    randomInit(h_A, matrix_size.uiWA, matrix_size.uiHA);
-    randomInit(h_B, matrix_size.uiWB, matrix_size.uiHB);
+    randomInit(h_A, matrix_size.uiWA, matrix_size.uiHA, atoi(argv[1]));
+    randomInit(h_B, matrix_size.uiWB, matrix_size.uiHB, atoi(argv[1]));
 
     // allocate host memory for the result
     unsigned int size_C = matrix_size.uiWC * matrix_size.uiHC;
@@ -1077,8 +1082,22 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     float *h_C_baseline = (float *) malloc(mem_size_C);
     float *h_C_proposed = (float *) malloc(mem_size_C);
 
+    // assign partitioning
+    assign_blk_size(argc, argv);
+	
+    int m_cnt = matrix_size.uiWB/BLK_M;
+    int n_cnt = matrix_size.uiHA/BLK_N;
+    int k_cnt = matrix_size.uiWA/BLK_K;
+
+    float** h_C_baseline_partial = (float **) malloc(n_cnt * sizeof(float*));
+    float** h_C_proposed_partial = (float **) malloc(n_cnt * sizeof(float*));
+    for(int i = 0 ; i < n_cnt ; i++){
+	h_C_baseline_partial[i] = (float*) malloc(mem_size_C);
+	h_C_proposed_partial[i] = (float*) malloc(mem_size_C);
+    }
+
     // number of iterations
-    int nIter = atoi(argv[2]);
+    int nIter = atoi(argv[3]);
 
     timing _start, _end;
     double baseline_kernel_ms, proposed_kernel_ms;
@@ -1088,17 +1107,41 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     const float beta  = 0.0f;
 
     int _mode;
-    _mode = atoi(argv[3]); // baseline
+    _mode = atoi(argv[4]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline);
+    baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
-    _mode = atoi(argv[4]); // proposed
+    _mode = atoi(argv[5]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed);
+    proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
+
+    // parital SSIM section
+    float* _ssim             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    float* _ssim_int         = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    float* _rmse             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    float* _psnr             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    float* _error_rate       = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    float* _error_percentage = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+    for(int i = 0 ; i < m_cnt ; i ++){
+        for(int j = 0 ; j < n_cnt ; j++){
+                for(int k = 0 ; k < k_cnt ; k++){
+                        int idx = i*(n_cnt*k_cnt)+j*(k_cnt)+k;
+                        int offset = (i*BLK_M)*matrix_size.uiHC+(k*BLK_K);
+          _ssim[idx]  = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/, 0/*cast to int?*/);
+       _ssim_int[idx] = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/, 1/*cast to int?*/);
+    _rmse[idx]        = RMSE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
+    _psnr[idx]        = PSNR(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
+    _error_rate[idx]  = ERROR_RATE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
+    _error_percentage[idx] = ERROR_PERCENTAGE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
+                        printf("[j:%2d, i:%2d, k:%2d]: ssim: %f, ssim_int: %f, rmse: %f%%, psnr: %f dB, error_rate: %f%%, error%%: %f%%\n",
+                                     j,     i,     k, _ssim[idx], _ssim_int[idx], _rmse[idx], _psnr[idx], _error_rate[idx], _error_percentage[idx]);
+                 }
+        }
+    }
 
     // SSIM section
     float ssim             = SSIM(matrix_size.uiWC, matrix_size.uiHC, matrix_size.uiHC, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
@@ -1132,7 +1175,19 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     free(h_B);
     free(h_C_baseline);
     free(h_C_proposed);
-	printf("done free\n");
+    
+    for(int i = 0 ; i < n_cnt ; i++){
+	free(h_C_baseline_partial[i]);
+	free(h_C_proposed_partial[i]);
+    }
+    free(h_C_baseline_partial);
+    free(h_C_proposed_partial);
+    free(_ssim);
+    free(_ssim_int);
+    free(_rmse);
+    free(_psnr);
+    free(_error_rate);
+    free(_error_percentage);   
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1140,8 +1195,8 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
 {
-    if(argc < 6){
-    	printf("new usage: %s [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
+    if(argc < 7){
+    	printf("new usage: %s [input mode] [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
 	printf("mode definition:\n");
 	printf("\t-1: skip, no run\n");
 	printf("\t0: GPU                   mode\n");
@@ -1160,6 +1215,6 @@ int main(int argc, char **argv)
     initializeCUDA(argc, argv, sizeMult, matrix_size);
 
     int matrix_result = matrixMultiply(argc, argv, matrix_size);
-	printf("done result\n");
+    
     return matrix_result;
 }
