@@ -89,7 +89,7 @@ typedef std::chrono::high_resolution_clock clk;
 
 float mix_p = 0.5; // percentage of weighted RR on GPU if mix mode is used
 
-unsigned int COMMON_BLK = 1024;
+unsigned int COMMON_BLK = 2048; // default is optimal
 unsigned int BLK_M = COMMON_BLK;
 unsigned int BLK_N = COMMON_BLK;
 unsigned int BLK_K = COMMON_BLK;
@@ -166,9 +166,14 @@ void randomInit(float *data, int m, int n, int _mode)
                 }else if(_mode == 2){  // Hankel Matirx
                         data[i*n+j] = 1.0/(i+j+1);  // Hilbert matrix, an example of Hankel matrix
 
-                }else if(_mode == 3){  // Read image file
-                         data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
+                }else if(_mode == 3){ // Frank matrix
+                        data[i*n+j] = m*n+1-((i >= j)?i:j);                
 
+                }else if(_mode == 4){  // Read image file
+                        data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
+
+                }else if(_mode == 5){ // read mtx file
+                        if(i == 0 && j == 0) openctpu_read_mmio("./dw8192.mtx", data, m, n, n);
                 }else {
                         printf("data Initialization mode %d undefined, exit\n", _mode);
                         exit(0);
@@ -274,25 +279,6 @@ float average(int m, int n, int ldn, float* x){
 	        }
         }
 	return (float)(sum / (double)(m*n));
-}
-
-
-float covld(float* x, int m, int n, int ldn){
-        double sum = 0;
-        double avg = 0;
-        for(int i = 0 ; i < m ; i++){
-                for(int j = 0 ; j < n ; j++){
-                        sum += x[i*ldn+j];
-                }
-        }
-        avg = sum/(double)(m*n);
-        sum = 0;
-        for(int i = 0 ; i < m ; i++){
-                for(int j = 0 ; j < n ; j++){
-                        sum += pow(x[i*ldn+j] - avg, 2);
-                }
-        }
-        return pow((float(sum / (double)(m*n))), 0.5) / avg;
 }
 
 float sdev(int m , int n, int ldn, float* x, float ux){
@@ -437,8 +423,8 @@ float PSNR(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 /* =============================================================================================================== */
 void matrix_mul(openctpu_buffer *matrix_a,
 		openctpu_buffer	*matrix_b,
-		openctpu_buffer	*matrix_c){
-	openctpu_invoke_operator("mm_model", matrix_a, matrix_b, matrix_c);
+		openctpu_buffer	*matrix_c, float coef){
+	openctpu_invoke_operator(coef, "mm_model", matrix_a, matrix_b, matrix_c);
 }
 /* =============================================================================================================== */
 
@@ -648,9 +634,11 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
     
 	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
 
-	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/);
-	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, false/*b_major*/, 1/*tensor_type*/);
-	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/);
+        float average, sdev;
+
+	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/, average, sdev);
+	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, false/*b_major*/, 1/*tensor_type*/, average, sdev);
+	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/, average, sdev);
 	timing b_e = clk::now();
         double bms = get_time_ms(b_e, b_s);
 	printf("binary creation time: %f (ms)\n", bms);
@@ -658,7 +646,7 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
 	timing _start = clk::now();	
 	for (int j = 0; j < nIter; j++)
         {
-		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c);
+		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c, atof(argv[4]));
 	}
 	openctpu_sync(); 
 	openctpu_clean_up();
@@ -701,15 +689,19 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
     
 	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
 	// These buffers need to know their shape beforehand for re-formating ( for underlying mm2conv)
-
-// checking sdev of each partitions as the same time
+  
+        float* tensor_a_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+        float* tensor_a_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+        float* tensor_b_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+        float* tensor_b_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+       
+// getting sdev and average of each partitions at the same time
         timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			tensor_a[_i*n_blk_cnt+_j] = 
-			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/);
-                          float ux = average(BLK_M, BLK_N, n, &h_A[(_i*BLK_M)*n+(_j*BLK_N)]);
-                          std::cout << "tensor_a[" << _i << "*" << n_blk_cnt << "+" << _j << "]'s sdev: " << sdev(BLK_M, BLK_N, n, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], ux) << ", coefficient of variation is: " << covld(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
+			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/, 
+                                                 tensor_a_average[_i*n_blk_cnt+_j], tensor_a_sdev[_i*n_blk_cnt+_j]);
 		}
 	}
 	timing b_a_e = clk::now();
@@ -717,19 +709,20 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 			tensor_b[_j*k_blk_cnt+_k] = 
-			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
-                          float ux = average(BLK_N, BLK_K, k, &h_B[(_j*BLK_N)*k+(_k*BLK_K)]);
-                          std::cout << "tensor_b[" << _j << "*" << k_blk_cnt << "+" << _k << "]'s sdev: " << sdev(BLK_N, BLK_K, k, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], ux) << ", coefficient of variation is: " << covld(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
+			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
+                                                 tensor_b_average[_j*k_blk_cnt+_k], tensor_b_sdev[_j*k_blk_cnt+_k]);
 		}
 	}
 	
         timing b_b_e = clk::now();
 	timing b_c_s = clk::now();
+        float c_tmp1, c_tmp2;
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 			for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 				tensor_partial_c[_j][_i*k_blk_cnt+_k] = 
-	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/);
+	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/,
+                                     c_tmp1, c_tmp2); // dummy stats
 			}
 		}
 	}
@@ -738,14 +731,32 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         double bms = get_time_ms(b_e, b_s);
 	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
 
-	timing _start = clk::now();	
+// show stats (average, sdev) of input tensor(s)
+	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
+		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+                        int idx = _i*n_blk_cnt+_j; 
+                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
+                                                                                            tensor_a_sdev[idx],
+                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
+                }
+        }
+	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
+                        int idx = _j*k_blk_cnt+_k;
+                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
+                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
+	        }
+        }
+
+        timing _start = clk::now();	
 	for (int iter = 0; iter < nIter; iter++){
 		for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 			for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 				for(int _k = 0 ; _k < k_blk_cnt ; _k++){
 					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i*n_blk_cnt+_j], 
-										    tensor_b[_j*k_blk_cnt+_k], 
-										    tensor_partial_c[_j][_i*k_blk_cnt+_k]);
+							       	         	    tensor_b[_j*k_blk_cnt+_k], 
+							            	            tensor_partial_c[_j][_i*k_blk_cnt+_k],
+                                                                                    atof(argv[4]));
 				}
 			}
 		}
@@ -779,6 +790,11 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	//free(h_partial_c); 
 	free(tensor_a);
 	free(tensor_b);
+
+        free(tensor_a_average);
+        free(tensor_a_sdev);
+        free(tensor_b_average);
+        free(tensor_b_sdev);
 
 	float TPU_ms = get_time_ms(_end, _start);
 	return TPU_ms;
@@ -870,12 +886,18 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	matrix_a_d = openctpu_alloc_dimension(3, BLK_M, BLK_N, n/*ldm*/);
 	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
 	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
+        
+        float* tensor_a_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+        float* tensor_a_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+        float* tensor_b_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+        float* tensor_b_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
 
 	timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_cnt ; _i++){
 		for(int _j = 0 ; _j < n_cnt ; _j++){
 			tensor_a[_i*n_cnt+_j] =
-			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/);
+			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/,
+                                                 tensor_a_average[_i*n_cnt+_j], tensor_a_sdev[_i*n_cnt+_j]);
 		}
 	}
 	timing b_a_e = clk::now();
@@ -883,16 +905,19 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	for(int _j = 0 ; _j < n_cnt ; _j++){
 		for(int _k = 0 ; _k < k_cnt ; _k++){
 			tensor_b[_j*k_cnt+_k] =
-			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/);
+			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
+                                                 tensor_b_average[_j*k_cnt+_k], tensor_b_sdev[_j*k_cnt+_k]);
 		}
 	}
 	timing b_b_e = clk::now();
+        float c_tmp1, c_tmp2;
 	timing b_c_s = clk::now();
 	for(int _i = 0 ; _i < m_cnt ; _i++){
 		for(int _j = 0 ; _j < n_cnt ; _j++){
 			for(int _k = 0 ; _k < k_cnt ; _k++){
 				tensor_partial_c[_j][_i*k_cnt+_k] =
-	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/);
+	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/, 
+                                        c_tmp1, c_tmp2); // dummy stat
 			}
 		}
 	}
@@ -901,6 +926,21 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         double bms = get_time_ms(b_e, b_s);
 	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
 
+	for(int _i = 0 ; _i < m_cnt ; _i++){
+		for(int _j = 0 ; _j < n_cnt ; _j++){
+                        int idx = _i*n_cnt+_j; 
+                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
+                                                                                            tensor_a_sdev[idx],
+                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
+                }
+        }
+	for(int _j = 0 ; _j < n_cnt ; _j++){
+		for(int _k = 0 ; _k < k_cnt ; _k++){
+                        int idx = _j*k_cnt+_k;
+                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
+                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
+	        }
+        }
 	unsigned int edgeTPU_used = 0;
 	unsigned int idx = 0;
 
@@ -928,8 +968,9 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 				}else{
 					// simulate tiling algorithm in perfromance only
 					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i * n_cnt + _j], 
-										    tensor_b[_j * k_cnt + _k], 
-										    tensor_partial_c[_j][_i * k_cnt + _k]);
+							                            tensor_b[_j * k_cnt + _k], 
+										    tensor_partial_c[_j][_i * k_cnt + _k],
+                                                                                    atof(argv[4]));
 					edgeTPU_used++;
 				}
 				idx++;
@@ -992,6 +1033,11 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	free(h_C_partial); // GPU
 	free(tensor_a);
 	free(tensor_b);
+        
+        free(tensor_a_average);
+        free(tensor_a_sdev);
+        free(tensor_b_average);
+        free(tensor_b_sdev);
 
         // Destroy the handle
         checkCudaErrors(cublasDestroy(handle));
@@ -1006,11 +1052,11 @@ float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 }
 
 void assign_blk_size(int argc, char** argv){
-    if(argc < 6){
+    if(argc < 7){
     	printf("block size is undefined, exit\n");
 	exit(0);
     }
-    COMMON_BLK = atoi(argv[6]);
+    COMMON_BLK = atoi(argv[7]);
     BLK_M = COMMON_BLK;
     BLK_N = COMMON_BLK;
     BLK_K = COMMON_BLK;
@@ -1018,10 +1064,10 @@ void assign_blk_size(int argc, char** argv){
 }
 
 void assign_mix_p(int argc, char** argv){
-	if(argc < 7){
+	if(argc < 8){
 		printf("p on GPU for mix mode is missing, default is set to 0.5 (fair RR)\n");
 	}else{	
-		mix_p = atof(argv[7]);
+		mix_p = atof(argv[8]);
 		if(fabs(mix_p - 0.0) < E){
 			printf("fall back to edgeTPU kernel only (mode 3)\n");
 		}else if(fabs(mix_p - 1.0) < E){
@@ -1107,13 +1153,13 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
     const float beta  = 0.0f;
 
     int _mode;
-    _mode = atoi(argv[4]); // baseline
+    _mode = atoi(argv[5]); // baseline
     _start = clk::now();
     baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
-    _mode = atoi(argv[5]); // proposed
+    _mode = atoi(argv[6]); // proposed
     _start = clk::now();
     proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
@@ -1131,12 +1177,18 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
                 for(int k = 0 ; k < k_cnt ; k++){
                         int idx = i*(n_cnt*k_cnt)+j*(k_cnt)+k;
                         int offset = (i*BLK_M)*matrix_size.uiHC+(k*BLK_K);
-          _ssim[idx]  = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/, 0/*cast to int?*/);
-       _ssim_int[idx] = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/, 1/*cast to int?*/);
-    _rmse[idx]        = RMSE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
-    _psnr[idx]        = PSNR(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
-    _error_rate[idx]  = ERROR_RATE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
-    _error_percentage[idx] = ERROR_PERCENTAGE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], &h_C_proposed_partial[j][offset], 0/*verbose*/);
+                        _ssim[idx]     = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/, 0/*cast to int?*/);
+                        _ssim_int[idx] = SSIM(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/, 1/*cast to int?*/);
+                        _rmse[idx]     = RMSE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/);
+                        _psnr[idx]     = PSNR(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/);
+                        _error_rate[idx]       = ERROR_RATE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                                            &h_C_proposed_partial[j][offset], 0/*verbose*/);
+                        _error_percentage[idx] = ERROR_PERCENTAGE(BLK_M, BLK_K, matrix_size.uiHC, &h_C_baseline_partial[j][offset], 
+                                                                                                  &h_C_proposed_partial[j][offset], 0/*verbose*/);
                         printf("[j:%2d, i:%2d, k:%2d]: ssim: %f, ssim_int: %f, rmse: %f%%, psnr: %f dB, error_rate: %f%%, error%%: %f%%\n",
                                      j,     i,     k, _ssim[idx], _ssim_int[idx], _rmse[idx], _psnr[idx], _error_rate[idx], _error_percentage[idx]);
                  }
@@ -1196,7 +1248,7 @@ int matrixMultiply(int argc, char **argv, sMatrixSize &matrix_size)
 int main(int argc, char **argv)
 {
     if(argc < 7){
-    	printf("new usage: %s [input mode] [problem size] [nIter] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
+    	printf("new usage: %s [input mode] [problem size] [nIter] [scale] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
 	printf("mode definition:\n");
 	printf("\t-1: skip, no run\n");
 	printf("\t0: GPU                   mode\n");
