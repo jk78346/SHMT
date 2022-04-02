@@ -144,7 +144,7 @@ void randomInit(float *data, int m, int n, int _mode)
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
-    const std::string file_name = "./lena_gray_2Kx2K.bmp";
+    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
     int fd = open(file_name.c_str(), O_RDONLY);
     char *src;
     struct stat st_temp;
@@ -171,9 +171,15 @@ void randomInit(float *data, int m, int n, int _mode)
 
                 }else if(_mode == 4){  // Read image file
                         data[i*n+j] = src[i*n+j+1080]; // header size of bmp is 1080
-
+                        if(i == 0 && j == 0){
+                                printf("read image file: %s\n", file_name.c_str());
+                        }
                 }else if(_mode == 5){ // read mtx file
-                        if(i == 0 && j == 0) openctpu_read_mmio("./dw8192.mtx", data, m, n, n);
+                        if(i == 0 && j == 0){
+                                const std::string mtx_file = "./data/beause.mtx";
+                                printf("read mtx filer: %s\n", mtx_file.c_str());
+                                openctpu_read_mmio(mtx_file.c_str(), data, m, n, n);
+                        }
                 }else {
                         printf("data Initialization mode %d undefined, exit\n", _mode);
                         exit(0);
@@ -656,6 +662,52 @@ float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
 	return TPU_ms;
 }
 
+void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
+        const float qmin = 0;
+        const float qmax = 255;
+        scale = (max - min)/(qmax - qmin);
+        const double initial_zero_point = qmin - min / scale;
+        std::uint8_t nudged_zero_point = 0;
+        if(initial_zero_point < qmin){
+                nudged_zero_point = qmin;
+        }else if(initial_zero_point > qmax){
+                nudged_zero_point = qmax;
+        }else{
+                nudged_zero_point = static_cast<std::uint8_t>(std::round(initial_zero_point));
+        }
+        mean = (int)nudged_zero_point;
+}
+
+float get_dist_similarity(float* in, int m, int n, int ldn){
+        float max = FLT_MIN;
+        float min = FLT_MAX;
+        double _scale;
+        int _mean;
+        for(int i = 0 ; i < m ; i++){
+                for(int j = 0 ; j < n ; j++){
+                        if(in[i*(ldn)+j] > max){ max = in[i*(ldn)+j]; }
+                        if(in[i*(ldn)+j] < min){ min = in[i*(ldn)+j]; }
+                }
+        }
+        ChooseQuantizationParams(max, min, _scale, _mean);
+        float* dist = (float*) calloc(256, sizeof(float));
+        for(int i = 0 ; i < m ; i++){
+                for(int j = 0 ; j < n ; j++){
+                        dist[(unsigned char)lrint(_mean + in[i*(ldn)+j] / _scale)]++;
+                }
+        }
+        float entropy = 0.0;
+        float p;
+        for(int i = 0 ; i < 256 ; i++){
+                p = dist[i] / (m*n);
+                if(p > 0){
+                        entropy += p*log(p);
+                }
+        }
+        free(dist);
+        return entropy*(-1);
+}
+
 float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU, float** h_partial_c){
 	printf("calling GEMM_TPU_TILES...\n");
 	
@@ -699,6 +751,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+                        std::cout << "tensor_a[" << _i << ", " << _j << "] entropy: " << get_dist_similarity(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
 			tensor_a[_i*n_blk_cnt+_j] = 
 			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/, 
                                                  tensor_a_average[_i*n_blk_cnt+_j], tensor_a_sdev[_i*n_blk_cnt+_j]);
@@ -708,6 +761,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	timing b_b_s = clk::now();
 	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
+                        std::cout << "tensor_b[" << _j << ", " << _k << "] entropy: " << get_dist_similarity(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
 			tensor_b[_j*k_blk_cnt+_k] = 
 			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
                                                  tensor_b_average[_j*k_blk_cnt+_k], tensor_b_sdev[_j*k_blk_cnt+_k]);
