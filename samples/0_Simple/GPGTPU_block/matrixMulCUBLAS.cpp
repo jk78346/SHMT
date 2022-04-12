@@ -70,6 +70,13 @@
 #include <sys/stat.h>
 #include "gptpu.h"
 #include "math.h"
+#include "omp.h"
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <unordered_map>
  
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
@@ -95,6 +102,8 @@ unsigned int BLK_N = COMMON_BLK;
 unsigned int BLK_K = COMMON_BLK;
 
 int devID = 0; // GPU devID 
+
+using namespace std;
 
 /* ============================================= */
 
@@ -138,9 +147,138 @@ matrixMulCPU(float *C, const float *A, const float *B, unsigned int hA, unsigned
         }
 }
 
+vector<string> split (string s, string delimiter) {
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    string token;
+    vector<string> res;
+    while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+        token = s.substr (pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        res.push_back (token);
+    }
+    res.push_back (s.substr (pos_start));
+    return res;
+}
+
+int findIndex(vector<string> &arr, string item){
+        for(auto i = 0 ; i < arr.size() ; ++i){
+                if(arr[i] == item){
+                        return i;
+                }
+        }
+        return -1;
+}
+
+void Init_markov_text_generator(float* data, int m , int n){
+        ifstream myfile("./data/corpus.txt");
+        string line;
+        string START = "[START]";
+        string END   = "[END]";
+        string delimiter = " ";
+        unordered_map<string, int> word_freq;
+        if(!myfile.is_open()){ cout << "cannot open file" << endl; exit(1); }
+        int gram = 1;
+// default zero
+        for(int i = 0 ; i < m ; i++){
+                for(int j = 0 ; j < n ; j++){
+                        data[i*n+j] = 0.0;
+                }
+        }
+// build word frequncy 
+        while( ! myfile.eof() ){
+                getline(myfile, line);
+                if(line.size() == 0){ // empty line
+                        continue;
+                }
+                line = line + " " + END;
+                for(int i = 0 ; i < gram ; i++){
+                        line = START + " " + line;
+                }
+                vector<string> v = split(line, delimiter);
+                for (int i = 0 ; i < v.size()-gram ; i++){
+                        string tmp = v[i];
+                        for(int j = 0 ; j < gram ; j++){
+                                tmp = tmp + " " + v[i+j+1];
+                        }
+                        if( word_freq.find(tmp) == word_freq.end()){
+                                word_freq.insert({tmp, 1});
+                        }else{
+                                word_freq[tmp] += 1;
+                        }
+                }
+        }
+        string ending = END;
+        for(int i = 0 ; i < gram ; i++){
+                ending = ending + " " + END;
+        }
+        word_freq.insert({ending, 1});
+        myfile.close();
+// give serial number for words for mapping to transition matrix
+        vector<string> serial_num;
+        for( auto item : word_freq){
+//                cout << item.first << ", " << item.second << endl;
+                vector<string> v = split(item.first, delimiter);
+                assert(v.size() == (gram+1));
+                string gramN_item = v[0];
+                for(int i = 0 ; i < gram-1 ; i++){
+                        gramN_item = gramN_item + " " + v[i+1];
+                }
+                if(find(serial_num.begin(), serial_num.end(), gramN_item) == serial_num.end()){
+                        serial_num.push_back(gramN_item);
+                }
+        }  
+        cout << "# of unique words: " << serial_num.size() << endl;
+        if(serial_num.size() > m || serial_num.size() > n){
+                cout << "[WARNING] Input corpus has words " << serial_num.size() << " more than desired matrix size " << m << "x" << n << endl;
+        }
+// fill frequency into transition matrix
+        for(auto item : word_freq){
+                vector<string> v = split(item.first, delimiter);
+                assert(v.size() == (gram+1));
+                string row = v[0];
+                string col = v[1];
+                for(int i = 0 ; i < gram-1 ; i++){
+                        row = row + " " + v[i+1];
+                        col = col + " " + v[i+2];
+                }
+                int row_idx = findIndex(serial_num, row);
+                int col_idx = findIndex(serial_num, col);
+                if(row_idx == -1 || col_idx == -1){ 
+                        cout << row << "'s serial num: " << row_idx << ", " << col << "'s serial num: " << col_idx << endl;
+                        exit(1);
+                }
+                data[(row_idx)*(n)+(col_idx)] = item.second;                
+        }
+// convert frequency into probability in transition matrix
+        for(int i = 0 ; i < m ; i++){
+                float sum = 0;
+                for(int j = 0 ; j < n ; j++){
+                        sum += data[i*n+j];
+                }
+                if(sum > 0){ // for non-zero row
+                        for(int j = 0 ; j < n ; j++){
+                                data[i*n+j] = data[i*n+j] / sum;
+                        }
+                }
+        }
+// verbose
+        for(int i = 0 ; i < 20 ; i++){
+                for(int j = 0 ; j < 20 ; j++){
+                        cout << data[i*n+j] << " ";
+                }
+                cout << endl;
+        }
+        return;
+}
+
 // Allocates a matrix with random float entries.
 void randomInit(float *data, int m, int n, int _mode)
 {
+    if(_mode == 6){ // Markov text generator
+        Init_markov_text_generator(data, m, n);
+        return;
+    }
+
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
@@ -176,7 +314,7 @@ void randomInit(float *data, int m, int n, int _mode)
                         }
                 }else if(_mode == 5){ // read mtx file
                         if(i == 0 && j == 0){
-                                const std::string mtx_file = "./data/beause.mtx";
+                                const std::string mtx_file = "./data/dw8192.mtx"; //"./data/gemat12.mtx";//"./data/dw8192.mtx"; //"./data/beause.mtx";
                                 printf("read mtx filer: %s\n", mtx_file.c_str());
                                 openctpu_read_mmio(mtx_file.c_str(), data, m, n, n);
                         }
@@ -683,6 +821,7 @@ float get_dist_similarity(float* in, int m, int n, int ldn){
         float min = FLT_MAX;
         double _scale;
         int _mean;
+#pragma omp parallel for num_threads(4)
         for(int i = 0 ; i < m ; i++){
                 for(int j = 0 ; j < n ; j++){
                         if(in[i*(ldn)+j] > max){ max = in[i*(ldn)+j]; }
@@ -698,6 +837,7 @@ float get_dist_similarity(float* in, int m, int n, int ldn){
         }
         float entropy = 0.0;
         float p;
+#pragma omp parallel for num_threads(4)
         for(int i = 0 ; i < 256 ; i++){
                 p = dist[i] / (m*n);
                 if(p > 0){
@@ -751,7 +891,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
         timing b_a_s = clk::now();
 	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-                        std::cout << "tensor_a[" << _i << ", " << _j << "] entropy: " << get_dist_similarity(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
+//                        std::cout << "tensor_a[" << _i << ", " << _j << "] entropy: " << get_dist_similarity(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
 			tensor_a[_i*n_blk_cnt+_j] = 
 			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/, 
                                                  tensor_a_average[_i*n_blk_cnt+_j], tensor_a_sdev[_i*n_blk_cnt+_j]);
@@ -761,7 +901,7 @@ float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
 	timing b_b_s = clk::now();
 	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
-                        std::cout << "tensor_b[" << _j << ", " << _k << "] entropy: " << get_dist_similarity(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
+//                        std::cout << "tensor_b[" << _j << ", " << _k << "] entropy: " << get_dist_similarity(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
 			tensor_b[_j*k_blk_cnt+_k] = 
 			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
                                                  tensor_b_average[_j*k_blk_cnt+_k], tensor_b_sdev[_j*k_blk_cnt+_k]);
