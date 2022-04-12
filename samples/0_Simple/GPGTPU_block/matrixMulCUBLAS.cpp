@@ -247,7 +247,9 @@ void Init_markov_text_generator(float* data, int m , int n){
                         cout << row << "'s serial num: " << row_idx << ", " << col << "'s serial num: " << col_idx << endl;
                         exit(1);
                 }
-                data[(row_idx)*(n)+(col_idx)] = item.second;                
+                if(row_idx < m && col_idx < n){ // make sure a valid array access
+                        data[(row_idx)*(n)+(col_idx)] = item.second;                
+                }
         }
 // convert frequency into probability in transition matrix
         for(int i = 0 ; i < m ; i++){
@@ -262,8 +264,8 @@ void Init_markov_text_generator(float* data, int m , int n){
                 }
         }
 // verbose
-        for(int i = 0 ; i < 20 ; i++){
-                for(int j = 0 ; j < 20 ; j++){
+        for(int i = 0 ; i < 5 ; i++){
+                for(int j = 0 ; j < 5 ; j++){
                         cout << data[i*n+j] << " ";
                 }
                 cout << endl;
