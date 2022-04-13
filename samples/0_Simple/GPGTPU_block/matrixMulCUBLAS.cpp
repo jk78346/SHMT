@@ -184,7 +184,7 @@ void Init_markov_text_generator(float* data, int m , int n){
                         data[i*n+j] = 0.0;
                 }
         }
-// build word frequncy 
+// build word frequency 
         while( ! myfile.eof() ){
                 getline(myfile, line);
                 if(line.size() == 0){ // empty line
@@ -197,6 +197,9 @@ void Init_markov_text_generator(float* data, int m , int n){
                 vector<string> v = split(line, delimiter);
                 for (int i = 0 ; i < v.size()-gram ; i++){
                         string tmp = v[i];
+                        if(v[i][0] == '\t' || v[i][0] == ' '){ // empty word
+                                continue;
+                        }
                         for(int j = 0 ; j < gram ; j++){
                                 tmp = tmp + " " + v[i+j+1];
                         }
@@ -215,8 +218,13 @@ void Init_markov_text_generator(float* data, int m , int n){
         myfile.close();
 // give serial number for words for mapping to transition matrix
         vector<string> serial_num;
+        cout << "word_freq: " << endl;
+        int idx = 0;
         for( auto item : word_freq){
-//                cout << item.first << ", " << item.second << endl;
+                if(idx < 20){
+                        cout << "\"" << item.first << "\", \"" << item.second << "\"" << endl;
+                        idx+=1;
+                }
                 vector<string> v = split(item.first, delimiter);
                 assert(v.size() == (gram+1));
                 string gramN_item = v[0];
@@ -244,8 +252,9 @@ void Init_markov_text_generator(float* data, int m , int n){
                 int row_idx = findIndex(serial_num, row);
                 int col_idx = findIndex(serial_num, col);
                 if(row_idx == -1 || col_idx == -1){ 
-                        cout << row << "'s serial num: " << row_idx << ", " << col << "'s serial num: " << col_idx << endl;
-                        exit(1);
+                        continue;
+                        //cout << row << "'s serial num: " << row_idx << ", " << col << "'s serial num: " << col_idx << endl;
+                        //exit(1);
                 }
                 if(row_idx < m && col_idx < n){ // make sure a valid array access
                         data[(row_idx)*(n)+(col_idx)] = item.second;                
