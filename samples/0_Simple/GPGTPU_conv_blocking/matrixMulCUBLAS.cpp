@@ -84,6 +84,7 @@
 using namespace cv;
 
 Mat* crops;
+Mat* out_pars;
 
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
@@ -307,8 +308,8 @@ void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &mat
 
     int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
-    matrix_size.IN_W = 2048;
-    matrix_size.IN_H = 2048;
+    matrix_size.IN_W = 4096;
+    matrix_size.IN_H = 4096;
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
@@ -516,9 +517,9 @@ void Mat2array(Mat& img, float* data){
     }
 }
 
-int cnt = 0;
+//int cnt = 0;
 
-float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, float* h_C){
+float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, Mat& out_img, float* h_C){
 	printf("calling conv_CPU...\n");
    
     Mat grad_x, grad_y;
@@ -530,42 +531,47 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
     convertScaleAbs(grad_x, abs_grad_x);
     convertScaleAbs(grad_y, abs_grad_y);
 
-    Mat grad;
-    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 
-    printf("grad size: %d, %d\n", grad.size().width, grad.size().height);
-    Mat2array(grad, h_C);
+    //printf("grad size: %d, %d\n", grad.size().width, grad.size().height);
+    Mat2array(out_img, h_C);
 
-    imwrite("sobel_"+std::to_string(cnt)+".jpg", grad);
-    cnt+=1;
+    //imwrite("sobel_"+std::to_string(cnt)+".jpg", grad);
+    //cnt+=1;
 
     return 0;
 }
 
-void reverse_crop(sMatrixSize matrix_size, float* h_C, float** h_C_partial){
+void reverse_crop(sMatrixSize matrix_size, Mat& out_img, float* h_C, float** h_C_partial){
+//    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+//        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+//            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
+//            for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
+//                for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
+//                    int offset = w*(matrix_size.OUT_BLK_H)+h;
+//                    h_C[(i*matrix_size.OUT_BLK_W+w) * matrix_size.OUT_H + (j*matrix_size.OUT_BLK_H+h)] = h_C_partial[idx][offset];
+//                }
+//            }
+//        }
+//    }
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
-            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
-            for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
-                for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
-                    int offset = w*(matrix_size.OUT_BLK_H)+h;
-                    h_C[(i*matrix_size.OUT_BLK_W+w) * matrix_size.OUT_H + (j*matrix_size.OUT_BLK_H+h)] = h_C_partial[idx][offset];
-                }
-            }
+            out_pars[i*matrix_size.OUT_H_BLK_CNT+j].copyTo(out_img(Rect(i*matrix_size.OUT_BLK_W, j*matrix_size.OUT_BLK_H, matrix_size.OUT_BLK_W, matrix_size.OUT_BLK_H)));
         }
-    }
+    }    
 }
 
-float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float** h_partial_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
+float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float** h_partial_in, float* h_filter, const float beta, Mat& out_img, float* h_C, float** h_C_partial){
 	printf("calling conv_CPU_TILES...\n");
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
-            conv_CPU(nIter, matrix_size, alpha, crops[idx], h_partial_in[idx], h_filter, beta, h_C_partial[idx]);
+            conv_CPU(nIter, matrix_size, alpha, crops[idx], h_partial_in[idx], h_filter, beta, out_pars[idx], h_C_partial[idx]);
         }
     }
     // combine partial to one
-    reverse_crop(matrix_size, h_C, h_C_partial);
+    reverse_crop(matrix_size, out_img, h_C, h_C_partial);
+    Mat2array(out_img, h_C);
     return 0;
 }
 
@@ -580,7 +586,7 @@ float conv_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
         in[i] = h_in[i];
     }
     std::string model_path = "conv_IN_2K_2K_1_F_3_3_1_S_1_1_SAME_Sobel_edgetpu.tflite";
-    run_a_model(model_path, nIter, in , in_size, out, out_size, 255);
+    //run_a_model(model_path, nIter, in , in_size, out, out_size, 255);
     
     for(int i = 0 ; i < out_size ; i++){
         h_TPU[i] = out[i];
@@ -1090,12 +1096,12 @@ void get_partitions(sMatrixSize matrix_size, int i, int j, Mat& img, Mat& crop){
     img(roi).copyTo(crop);
 }
 
-float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, Mat& img, float* h_in, float** h_partial_in, float* h_filter, float* h_C, float** h_partial_C){
+float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, Mat& img, float* h_in, float** h_partial_in, float* h_filter, Mat& out_img, float* h_C, float** h_partial_C){
 	float kernel_ms = 0;
     if(_mode == 0){ // CPU mode
-		kernel_ms = conv_CPU(nIter, matrix_size, alpha, img, h_in, h_filter, beta, h_C);
+		kernel_ms = conv_CPU(nIter, matrix_size, alpha, img, h_in, h_filter, beta, out_img, h_C);
     }else if(_mode == 1){ // CPU tiling algorithm mode
-		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_partial_in, h_filter, beta, h_C, h_partial_C);
+		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_partial_in, h_filter, beta, out_img, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size, h_in, h_filter, h_C);
 	}else if(_mode == 3){ // TPU tiling algorithm mode
@@ -1152,7 +1158,7 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
     
-    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
+    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
 
     //randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
     randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Gx Sobel filter*/);
@@ -1207,11 +1213,13 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     print_matrix(matrix_size);
     // Using opencv to partition input image and populate to h_in and h_partial_in
     Mat img;
+    Mat out_img;
     read_img(file_name, matrix_size, img);
     Mat2array(img, h_in);
     
     //crops = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
     crops = new Mat[matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT];
+    out_pars = new Mat[matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT];
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             int idx = i*matrix_size.OUT_H_BLK_CNT+j;
@@ -1222,13 +1230,13 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     int _mode;
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, h_C_baseline, h_C_baseline_partial);
+    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, out_img, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
     _mode = atoi(argv[6]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, h_C_proposed, h_C_proposed_partial);
+    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, out_img, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
