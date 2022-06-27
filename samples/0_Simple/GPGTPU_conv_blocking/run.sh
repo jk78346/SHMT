@@ -7,7 +7,7 @@ input_data_mode=4 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read i
 scale=261000
 
 
-for size in 4096
+for size in 2048
 do
   for blk_size in 2048 #$ 1024 512
   do
@@ -19,9 +19,9 @@ do
     then
       scale=142000 #193000 #142000
     fi
-    if [ ${size} -gt ${blk_size} ]
+    if [ ${size} -gt ${blk_size} ] || [ ${size} -eq ${blk_size} ]
     then
-      for mode in 1
+      for mode in 2
       do
         ./conv ${input_data_mode} ${size} ${iter} ${scale} ${baseline_mode} ${mode} ${blk_size} ${p} 2>&1 | tee -a ./log/conv_run_record_${input_data_mode}_${size}_${iter}_${scale}_${baseline_mode}_${mode}_${blk_size}_${p}.txt
       done

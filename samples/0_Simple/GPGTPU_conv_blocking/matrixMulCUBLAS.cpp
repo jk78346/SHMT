@@ -306,10 +306,10 @@ void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &mat
 {
     // By default, we use device 0, otherwise we override the device ID based on what is provided at the command line
 
-    int block_size = atoi(argv[2]);  // iSizeMultiple is 5
+    int problem_size = atoi(argv[2]); 
 
-    matrix_size.IN_W = 4096;
-    matrix_size.IN_H = 4096;
+    matrix_size.IN_W = problem_size;
+    matrix_size.IN_H = problem_size;
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
@@ -519,14 +519,22 @@ void Mat2array(Mat& img, float* data){
 
 //int cnt = 0;
 
+int ddepth_mode = 0;
+
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, Mat& out_img, float* h_C){
 	printf("calling conv_CPU...\n");
    
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
-    Sobel(img, grad_x, CV_16S/*ddepth*/, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
-    Sobel(img, grad_y, CV_16S/*ddepth*/, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+    int ddepth = CV_32F; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
+    if(ddepth_mode == 0){
+        ddepth_mode = 1;
+    }else{
+        ddepth = CV_8U;
+    }
+    Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+    Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
 
     convertScaleAbs(grad_x, abs_grad_x);
     convertScaleAbs(grad_y, abs_grad_y);
@@ -585,12 +593,15 @@ float conv_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float*
     for(int i = 0 ; i < in_size ; i++){
         in[i] = h_in[i];
     }
-    std::string model_path = "conv_IN_2K_2K_1_F_3_3_1_S_1_1_SAME_Sobel_edgetpu.tflite";
-    //run_a_model(model_path, nIter, in , in_size, out, out_size, 255);
-    
+    //std::string model_path = "conv_IN_2K_2K_1_F_3_3_1_S_1_1_SAME_Sobel_edgetpu.tflite";
+    std::string model_path = "Sobel_2Kx2Kx1_3x3x1x1_SAME_edgetpu.tflite";
+    printf("conv_TPU: in_size: %d, out_size: %d\n", in_size, out_size);
+    run_a_model(model_path, nIter, in, in_size, out, out_size, 1);
+ 
     for(int i = 0 ; i < out_size ; i++){
-        h_TPU[i] = out[i];
+        h_TPU[i] = (float)out[i];
     }
+    printf("end of conv_TPU\n");
 }
 
 void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
@@ -1076,6 +1087,9 @@ void read_img(const std::string file_name, sMatrixSize matrix_size, Mat& img){
     Mat raw = imread(file_name);
     assert(!raw.empty());
     cvtColor(raw, img, COLOR_BGR2GRAY);
+
+    resize(img, img, Size(matrix_size.IN_W, matrix_size.IN_H), 0, 0, INTER_AREA);
+
     std::cout << "img rows    : " << img.rows          << std::endl;
     std::cout << "img cols    : " << img.cols          << std::endl;
     std::cout << "img width   : " << img.size().width  << std::endl;
