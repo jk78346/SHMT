@@ -210,7 +210,7 @@ void randomInit(float *data, int m, int n, int _mode)
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
-    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
+    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
     int fd = open(file_name.c_str(), O_RDONLY);
     char *src;
     struct stat st_temp;
@@ -221,6 +221,7 @@ void randomInit(float *data, int m, int n, int _mode)
     src = static_cast<char*>(mmap(NULL, st_temp.st_size, PROT_READ, MAP_SHARED, fd, 0));
     assert(src != MAP_FAILED);
 
+    printf("data generating mode: %d\n", _mode);
     for (int i = 0; i < m; ++i){
         for(int j = 0 ; j < n ; ++j){
                 if(_mode == 0){  // Uniform distribution
@@ -250,9 +251,9 @@ void randomInit(float *data, int m, int n, int _mode)
                         printf("data Initialization mode %d undefined, exit\n", _mode);
                         exit(0);
                 }
-                if(i < 5 && j < 5){
-                        std::cout << __func__ << ", data[" << i << "*" << n << "+" << j << "]: " << data[i*n+j] << std::endl;
-                }
+                //if(i < 5 && j < 5){
+                //        std::cout << __func__ << ", data[" << i << "*" << n << "+" << j << "]: " << data[i*n+j] << std::endl;
+                //}
         }
     }
     munmap(src, st_temp.st_size);
@@ -298,8 +299,8 @@ void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &mat
 
     int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
-    matrix_size.IN_W = 4096;
-    matrix_size.IN_H = 4096;
+    matrix_size.IN_W = 2048;
+    matrix_size.IN_H = 2048;
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
@@ -363,7 +364,13 @@ float ERROR_RATE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double mean = 0;
         for(int i = 0 ; i < w ; i++){
 	        for(int j = 0 ; j < h ; j++){
-		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+		        if(verbose > 0){
+//                    if(fabs(buf1[i*ldn+j] - buf2[i*ldn+j]) > 1e-5){
+//                        std::cout << "buf1[" << i << ", " << j << "] = " << buf1[i*ldn+j] << ", buf2[" << i << ", " << j << "] = " << buf2[i*ldn+j] << std::endl;
+//                        exit(0);
+//                    }
+                }
+                mean = (mean * i + buf1[i*ldn+j]) / (i+1);
 		        rate = (rate * i + fabs(buf1[i*ldn+j] - buf2[i*ldn+j])) / (i+1); 
 	        }
         }
@@ -498,20 +505,20 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_i
 
 float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, int IN_W_i, int IN_H_j, float* h_filter, const float beta, float* h_C, float** h_C_partial){
 	printf("\tcalling conv_CPU_blocking(%d, %d)...\n", IN_W_i, IN_H_j);
-    for(int i = 0 ; i < BLK_W/*matrix_size.IN_W*/ ; i++){
-        for(int j = 0 ; j < BLK_H/*matrix_size.IN_H*/ ; j++){
-            int c_i = IN_W_i * BLK_W + i;
-            int c_j = IN_H_j * BLK_H + j;
+    for(int i = 0 ; i < matrix_size.OUT_BLK_W ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_BLK_H ; j++){
+            int c_i = IN_W_i * matrix_size.OUT_BLK_W + i;
+            int c_j = IN_H_j * matrix_size.OUT_BLK_H + j;
             if(i >= BLK_W || j >= BLK_H){
                 continue;
             }
-            h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(BLK_H)+j] = 0;
+            h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] = 0.0;
             for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
                 for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
                     if((c_i+fi) >= matrix_size.IN_W || (c_j+fj) >= matrix_size.IN_H){
                         continue;
                     }
-                    h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(BLK_H)+j] += 
+                    h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] += 
                         h_in[(c_i+fi)*matrix_size.IN_H+(c_j+fj)] *
                         h_filter[fi*(matrix_size.F_H)*fj];
                 }    
@@ -1084,27 +1091,24 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
 	return kernel_ms;
 }
 
-void img2file(sMatrixSize matrix_size, float* h_c, const std::string file_name){
-    int fd = open(file_name.c_str(), O_WRONLY|O_CREAT, 0777);
-    char *dest;
-    struct stat st_temp;
-    fstat(fd, &st_temp);
-    if(fd < 0){
-        std::cout << __func__ << ": output image file " << file_name << " opening fail(" << fd << ")." << std::endl; exit(0);
+void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
+    unsigned int file_size = matrix_size.OUT_W * matrix_size.OUT_H;
+    FILE *f = fopen(file_name.c_str(), "wb");
+    fprintf(f, "P6\n%i %i 255\n", matrix_size.OUT_W, matrix_size.OUT_H);
+    for(int i = 0 ; i < matrix_size.OUT_H ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_W ; j++){
+            fputc((char)h_c[j*(matrix_size.OUT_W)+i], f);
+            fputc(255, f);
+            fputc(255, f);
+        }
     }
-    dest = static_cast<char*>(mmap(NULL, st_temp.st_size, PROT_WRITE, MAP_SHARED, fd, 0));
-    assert(dest != MAP_FAILED);
-    for(int i = 0 ; i < (matrix_size.OUT_W * matrix_size.OUT_H) ; i++){
-        dest[i] = h_c[i];
-    }
-    munmap(dest, st_temp.st_size);
-    close(fd);
+    fclose(f);
+    return;
 }
 
 void output_img_to_file(sMatrixSize matrix_size, float* h_c_baseline, float* h_c_proposed){
-    img2file(matrix_size, h_c_baseline, "./data/lena_gray_4Kx4K_output_baseline.bmp");
-    img2file(matrix_size, h_c_proposed, "./data/lena_gray_4Kx4K_output_proposed.bmp");
-
+    img2ppm(matrix_size, h_c_baseline, "./data/lena_4Kx4K_gray_output_baseline.ppm");
+    img2ppm(matrix_size, h_c_proposed, "./data/lena_4Kx4K_gray_output_proposed.ppm");
 }
 ////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test matrix multiply using CUBLAS
@@ -1117,19 +1121,16 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     // allocate host memory for input A and filter B
     unsigned int size_A = matrix_size.IN_W * matrix_size.IN_H * matrix_size.IN_C;
     unsigned int mem_size_A = sizeof(float) * size_A;
-    float *h_A = (float *)malloc(mem_size_A);
+    float *h_in = (float *)malloc(mem_size_A);
     unsigned int size_B = matrix_size.F_W * matrix_size.F_H * matrix_size.OUT_C;
     unsigned int mem_size_B = sizeof(float) * size_B;
-    float *h_B = (float *)malloc(mem_size_B);
-
-    // set seed for rand()
-    srand(2006);
+    float *h_filter = (float *)malloc(mem_size_B);
 
     // initialize host memory
     assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
-    randomInit(h_A, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
-    randomInit(h_B, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
+    randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
+    randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
 
     // allocate host memory for the result
     // no padding is assumed here.
@@ -1176,47 +1177,17 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     int _mode;
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline, h_C_baseline_partial);
+    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_in, h_filter, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
     _mode = atoi(argv[6]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed, h_C_proposed_partial);
+    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_in, h_filter, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
     output_img_to_file(matrix_size, h_C_baseline, h_C_proposed);
-
-    // parital SSIM section
-//    float* _ssim             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    float* _ssim_int         = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    float* _rmse             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    float* _psnr             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    float* _error_rate       = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    float* _error_percentage = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-//    for(int i = 0 ; i < m_cnt ; i ++){
-//        for(int j = 0 ; j < n_cnt ; j++){
-//                for(int k = 0 ; k < k_cnt ; k++){
-//                        int idx = i*(n_cnt*k_cnt)+j*(k_cnt)+k;
-//                        int offset = (i*BLK_M)*matrix_size.uiWC+(k*BLK_K);
-//                        _ssim[idx]     = SSIM(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/, 0/*cast to int?*/);
-//                        _ssim_int[idx] = SSIM(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/, 1/*cast to int?*/);
-//                        _rmse[idx]     = RMSE(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/);
-//                        _psnr[idx]     = PSNR(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                              &h_C_proposed_partial[j][offset], 0/*verbose*/);
-//                        _error_rate[idx]       = ERROR_RATE(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                                            &h_C_proposed_partial[j][offset], 0/*verbose*/);
-//                        _error_percentage[idx] = ERROR_PERCENTAGE(BLK_M, BLK_K, matrix_size.uiWC, &h_C_baseline_partial[j][offset], 
-//                                                                                                  &h_C_proposed_partial[j][offset], 0/*verbose*/);
-//                        printf("[j:%2d, i:%2d, k:%2d]: ssim: %f, ssim_int: %f, rmse: %f%%, psnr: %f dB, error_rate: %f%%, error%%: %f%%\n",
-//                                     j,     i,     k, _ssim[idx], _ssim_int[idx], _rmse[idx], _psnr[idx], _error_rate[idx], _error_percentage[idx]);
-//                 }
-//        }
-//    }
 
     // SSIM section
     float ssim             = SSIM(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
@@ -1245,24 +1216,6 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     printf("baseline  : %12.6f (ms) |  %12.6f (ms)\n", baseline_kernel_ms/nIter, baseline_total_ms/nIter);
     printf("proposed  : %12.6f (ms) |  %12.6f (ms)\n", proposed_kernel_ms/nIter, proposed_total_ms/nIter);
 
-    // clean up memory
-//    free(h_A);
-//    free(h_B);
-//    free(h_C_baseline);
-//    free(h_C_proposed);
-//    
-//    for(int i = 0 ; i < n_cnt ; i++){
-//	free(h_C_baseline_partial[i]);
-//	free(h_C_proposed_partial[i]);
-//    }
-//    free(h_C_baseline_partial);
-//    free(h_C_proposed_partial);
-//    free(_ssim);
-//    free(_ssim_int);
-//    free(_rmse);
-//    free(_psnr);
-//    free(_error_rate);
-//    free(_error_percentage);   
 }
 
 ////////////////////////////////////////////////////////////////////////////////
