@@ -50,15 +50,15 @@
 
 // Utilities and system includes
 #include <assert.h>
-#include <helper_string.h>  // helper for shared functions common to CUDA Samples
+//#include <helper_string.h>  // helper for shared functions common to CUDA Samples
 
 // CUDA runtime
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
+//#include <cuda_runtime.h>
+//#include <cublas_v2.h>
 
 // CUDA and CUBLAS functions
-#include <helper_functions.h>
-#include <helper_cuda.h>
+//#include <helper_functions.h>
+//#include <helper_cuda.h>
 /* ============================================= */
 #include <chrono>
 #include <float.h>
@@ -77,7 +77,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
- 
+#include <assert.h>
+
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
 #endif
@@ -115,7 +116,20 @@ using namespace std;
 
 typedef struct _matrixSize      // Optional Command-line multiplier for matrix sizes
 {
-    unsigned int IN_W, IN_H, IN_C, F_W, F_H, S_W, S_H, OUT_C, OUT_W, OUT_H;
+    unsigned int IN_W, 
+                 IN_H, 
+                 IN_C, 
+                 F_W, 
+                 F_H, 
+                 S_W, 
+                 S_H, 
+                 OUT_C, 
+                 OUT_W, 
+                 OUT_H, 
+                 OUT_BLK_W, 
+                 OUT_BLK_H, 
+                 OUT_W_BLK_CNT, 
+                 OUT_H_BLK_CNT;
 } sMatrixSize;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -177,190 +191,26 @@ int findIndex(vector<string> &arr, string item){
         return -1;
 }
 
-void Init_markov_text_generator(float* data, int m , int n){
-        ifstream myfile("./data/corpus.txt");
-        string line;
-        string START = "[START]";
-        string END   = "[END]";
-        string delimiter = " ";
-        unordered_map<string, int> word_freq;
-        if(!myfile.is_open()){ cout << "cannot open file" << endl; exit(1); }
-        int gram = 1;
-// default zero
-        for(int i = 0 ; i < m ; i++){
-                for(int j = 0 ; j < n ; j++){
-                        data[i*n+j] = 0.0;
-                }
-        }
-// build word frequency 
-        while( ! myfile.eof() ){
-                getline(myfile, line);
-                if(line.size() == 0){ // empty line
-                        continue;
-                }
-                line = line + " " + END;
-                for(int i = 0 ; i < gram ; i++){
-                        line = START + " " + line;
-                }
-                vector<string> v = split(line, delimiter);
-                for (int i = 0 ; i < v.size()-gram ; i++){
-                        string tmp = v[i];
-                        if(v[i][0] == '\t' || v[i][0] == ' '){ // empty word
-                                continue;
-                        }
-                        if(v[i] == START){ // avoid extreme case
-                                continue;
-                        }
-                        for(int j = 0 ; j < gram ; j++){
-                                tmp = tmp + " " + v[i+j+1];
-                        }
-                        if( word_freq.find(tmp) == word_freq.end()){
-                                word_freq.insert({tmp, 1});
-                        }else{
-                                word_freq[tmp] += 1;
-                        }
-                }
-        }
-        string ending = END;
-        for(int i = 0 ; i < gram ; i++){
-                ending = ending + " " + END;
-        }
-        word_freq.insert({ending, 1});
-        myfile.close();
-// give serial number for words for mapping to transition matrix
-        vector<string> serial_num;
-        cout << "word_freq.size(): " << word_freq.size() << endl;
-        int idx = 0;
-        vector<pair<int, int>> out_degree;
-        for( auto item : word_freq){
-                if(idx < 20){
-                        cout << "\"" << item.first << "\", \"" << item.second << "\"" << endl;
-                }
-                vector<string> v = split(item.first, delimiter);
-                assert(v.size() == (gram+1));
-                string row = v[0];
-                string col = v[1];
-                for(int i = 0 ; i < gram-1 ; i++){
-                        row = row + " " + v[i+1];
-                        col = col + " " + v[i+2];
-                }
-                auto it = find(serial_num.begin(), serial_num.end(), row);
-                if(it == serial_num.end()){
-                        serial_num.push_back(row);
-                        out_degree.push_back(make_pair(idx, item.second));
-                        idx++;
-                }else{
-                        int index = it - serial_num.begin();
-                        int old_out_degree = out_degree[index].second;
-                        out_degree[index] = make_pair(index, old_out_degree + item.second);
-                }
-        }  
-        cout << "# of unique words: " << serial_num.size() << endl;
-        if(serial_num.size() > m || serial_num.size() > n){
-                cout << "[WARNING] Input corpus has words " << serial_num.size() << " more than desired matrix size " << m << "x" << n << endl;
-        }
-// sort out_degree
-        sort(out_degree.begin(), out_degree.end(),
-                 [](pair<int, int> &x, pair<int, int> &y) { return x.second < y.second; });
-        int latest_256_idx = 0; // the largest sorted serial number of a word that has out_degree not larger than CHAR_MAX
-        for(int i = 0 ; i < out_degree.size() ; i++){
-                if(out_degree[i].second < CHAR_MAX){
-                        cout << out_degree[i].first << ", " << out_degree[i].second << endl;
-                        latest_256_idx = i;
-                }
-        }
-        cout << "latest_256_idx: " << latest_256_idx << endl;
-// fill frequency into transition matrix
-        for(auto item : word_freq){
-                vector<string> v = split(item.first, delimiter);
-                assert(v.size() == (gram+1));
-                string prev = v[0];
-                string next = v[1];
-                for(int i = 0 ; i < gram-1 ; i++){
-                        prev = prev + " " + v[i+1];
-                        next = next + " " + v[i+2];
-                }
-                int prev_idx = findIndex(serial_num, prev);
-                int next_idx = findIndex(serial_num, next);
-                if(prev_idx < 0 || next_idx < 0){ continue; }
-                
-                int prev_sorted_idx = findSortedIndex(out_degree, prev_idx);        
-                int next_sorted_idx = findSortedIndex(out_degree, next_idx);        
-                if(prev_sorted_idx < 0 || next_sorted_idx < 0){ continue; }
-
-                if(latest_256_idx < m && latest_256_idx < n){
-                        data[(prev_sorted_idx)*n+(next_sorted_idx)] = item.second;
-                        //cout << "[A](" << prev_sorted_idx << ", " << next_sorted_idx << ") has freq: " << item.second << endl;
-                }else{
-                        int offset = max(max(0, latest_256_idx - m), latest_256_idx - n); 
-                        int shifted_prev_sorted_idx = prev_sorted_idx - offset;
-                        int shifted_next_sorted_idx = next_sorted_idx - offset;
-                        if(shifted_prev_sorted_idx >= 0 && shifted_prev_sorted_idx < m &&
-                           shifted_next_sorted_idx >= 0 && shifted_next_sorted_idx < n){
-                                data[(shifted_prev_sorted_idx)*n+(shifted_next_sorted_idx)] = item.second;
-                                //cout << "[B](" << shifted_prev_sorted_idx << ", " << shifted_next_sorted_idx << ") has freq: " << item.second << endl;
-                        }
-                }
-        }
-// convert frequency into probability in transition matrix
-        int max_sum = 0;
-        int sum_cnt = 0;
-        cout << "serial_num[0]: " << serial_num[0] << endl;
-        for(int i = 0 ; i < m ; i++){
-                float sum = 0;
-                for(int j = 0 ; j < n ; j++){
-                        if(i == 0 && data[i*n+j] != 0){
-                                cout << "(" << i << ", " << j << "): " << data[i*n+j] << endl;
-                        }
-                        sum += data[i*n+j];
-                }
-                if(sum > 0){ // for non-zero row
-                        if(sum > 14){
-                                sum_cnt ++;
-                                cout << "sum: " << sum << ",i: " << i << ", sum_cnt: " << sum_cnt << endl; 
-                        }
-                        if(sum > max_sum){
-                                max_sum = sum;
-                                cout << "max_sum: " << max_sum << " ,i: " << i << ", serial_num:" << serial_num[i] << endl;
-                        }
-                        for(int j = 0 ; j < n ; j++){
-                                data[i*n+j] = data[i*n+j] / sum;
-                        }
-                }
-        }
-// verbose
-        float max_p = 0.0;
-        for(int i = 0 ; i < m ; i++){
-                for(int j = 0 ; j < n ; j++){
-                        if(data[i*n+j] > max_p){
-                                max_p = data[i*n+j];
-                        }
-                }
-        }
-        int count = 0;
-        for(int i = 0 ; i < m ; i++){
-                for(int j = 0 ; j < n ; j++){
-                        if(data[i*n+j] != 0){
-                                count++;
-                                cout << "(" << i << ", " << j << "): " << data[i*n+j] << ", qunatized: " << (data[i*n+j]/max_p)*255 << ", count ratio: " << ((float)count)/(float)(m*n) << endl;
-                        }        
-                }
-        }
-        return;
-}
-
 // Allocates a matrix with random float entries.
 void randomInit(float *data, int m, int n, int _mode)
 {
-    if(_mode == 6){ // Markov text generator
-        Init_markov_text_generator(data, m, n);
+    if(_mode == 6){ // Sobel filter weights
+        data[0] =  1;
+        data[1] =  0;
+        data[2] = -1;
+        data[3] =  2;
+        data[4] =  0;
+        data[5] = -2;
+        data[6] =  1;
+        data[7] =  0;
+        data[8] = -1;
         return;
     }
 
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
-    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
+    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
     int fd = open(file_name.c_str(), O_RDONLY);
     char *src;
     struct stat st_temp;
@@ -442,33 +292,9 @@ void printDiff(float *data1, float *data2, int width, int height, int iListLengt
     printf(" \n  Total Errors = %d\n", error_count);
 }
 
-void initializeCUDA(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matrix_size)
+void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matrix_size)
 {
     // By default, we use device 0, otherwise we override the device ID based on what is provided at the command line
-    cudaError_t error;
-    devID = 0;
-
-    devID = findCudaDevice(argc, (const char **)argv);
-
-    if (checkCmdLineFlag(argc, (const char **)argv, "sizemult"))
-    {
-        iSizeMultiple = getCmdLineArgumentInt(argc, (const char **)argv, "sizemult");
-    }
-
-    iSizeMultiple = min(iSizeMultiple, 10);
-    iSizeMultiple = max(iSizeMultiple, 1);
-
-    cudaDeviceProp deviceProp;
-
-    error = cudaGetDeviceProperties(&deviceProp, devID);
-
-    if (error != cudaSuccess)
-    {
-        printf("cudaGetDeviceProperties returned error code %d, line(%d)\n", error, __LINE__);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("GPU Device %d: \"%s\" with compute capability %d.%d\n\n", devID, deviceProp.name, deviceProp.major, deviceProp.minor);
 
     int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
@@ -477,8 +303,8 @@ void initializeCUDA(int argc, char **argv, int &iSizeMultiple, sMatrixSize &matr
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
-    matrix_size.S_W = 3;
-    matrix_size.S_H = 3;
+    matrix_size.S_W = 1;
+    matrix_size.S_H = 1;
     matrix_size.OUT_C = 1;
 
     printf("input(IN_W: %u, IN_H: %u, IN_C: %u), filter(F_W: %u, F_H: %u, S_W: %u, S_H: %u, OUT_C: %u)\n",
@@ -646,11 +472,6 @@ void matrix_mul(openctpu_buffer *matrix_a,
 
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C){
 	printf("calling conv_CPU...\n");
-    
-    // assumption:
-    // IN_C == 1 and OUT_C == 1
-    // S_W == 1 and S_H == 1
-    // no padding
 
     for(int i = 0 ; i < matrix_size.IN_W ; i++){
         for(int j = 0 ; j < matrix_size.IN_H ; j++){
@@ -659,16 +480,15 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_i
             if(c_i >= matrix_size.OUT_W || c_j >= matrix_size.OUT_H){
                 continue;
             }
-            h_c[c_i*(matrix_size.OUT_H)+c_j] = 0;
+            h_C[c_i*(matrix_size.OUT_H)+c_j] = 0;
             for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
                 for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
-                        if((i+fi) >= matrix_size.IN_W || (j+fj) >= matrix_size.IN_H){
-                            continue;
-                        }
-                        h_C[c_i*(matrix_size.OUT_H)+c_j] += 
-                            h_in[(i+fi)*matrix_size.IN_H+(j+fj)] *
-                            h_filter[fi*(matrix_size.F_H)*fj];
+                    if((i+fi) >= matrix_size.IN_W || (j+fj) >= matrix_size.IN_H){
+                        continue;
                     }
+                    h_C[c_i*(matrix_size.OUT_H)+c_j] += 
+                        h_in[(i+fi)*matrix_size.IN_H+(j+fj)] *
+                        h_filter[fi*(matrix_size.F_H)*fj];
                 }    
             }
         }
@@ -676,172 +496,100 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_i
 	return 0;
 }
 
-float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C, float** h_C_partial){
-	printf("calling GEMM_GPU_TILES...\n");
-	
-	int m     = matrix_size.uiHA;
-	int n     = matrix_size.uiHB;
-	int k     = matrix_size.uiWC;
-	int m_cnt = matrix_size.uiHA/BLK_M;
- 	int n_cnt = matrix_size.uiHB/BLK_N;
-	int k_cnt = matrix_size.uiWC/BLK_K;
-	
-        printf("m: %d, n: %d, k:%d\n", m , n , k);
-        printf("A:(%dx%d), B:(%dx%d), C:(%dx%d)\n", matrix_size.uiHA, matrix_size.uiWA, matrix_size.uiHB, matrix_size.uiWB, 
-                                                    matrix_size.uiHC, matrix_size.uiWC);
-        printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
-    
-	cudaDeviceProp deviceProp;
-
-        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
-
-        cublasHandle_t handle;
-
-        checkCudaErrors(cublasCreate(&handle));
-	
-	// allocate device memory
-   	float *d_A, *d_B, *d_C;
-	float **d_C_partial = (float**)malloc(n_cnt * sizeof(float*));
-	//float **h_C_partial = (float**)malloc(n_cnt * sizeof(float*));
-	
-	unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
-    	unsigned int mem_size_A = sizeof(float) * size_A;
-    	unsigned int size_B = matrix_size.uiWB * matrix_size.uiHB;
-    	unsigned int mem_size_B = sizeof(float) * size_B;
-   	unsigned int size_C = matrix_size.uiWC * matrix_size.uiHC;
-        unsigned int mem_size_C = sizeof(float) * size_C;
-
-    	checkCudaErrors(cudaMalloc((void **) &d_A, mem_size_A));
-    	checkCudaErrors(cudaMalloc((void **) &d_B, mem_size_B));
-    	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
-    
-	// allocate partial C
-	for(int i = 0 ; i < n_cnt ; i++){
-		//h_C_partial[i] = (float*) malloc(mem_size_C);
-		checkCudaErrors(cudaMalloc((void **) &d_C_partial[i], mem_size_C));
-	}
-
-        // setup execution parameters
-        int block_size = 32;
-        dim3 threads(block_size, block_size);
-        dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
-    	
-	cudaEvent_t start, stop;
-        // Allocate CUDA events that we'll use for timing
-        checkCudaErrors(cudaEventCreate(&start));
-        checkCudaErrors(cudaEventCreate(&stop));
-        // Record the start event
-        checkCudaErrors(cudaEventRecord(start, NULL));
-
-	// check m / blk_m is dividable
-	for (int iter = 0; iter < nIter; iter++)
-        {
-            //note cublas is column primary!
-            //need to transpose the order
-	    for(int _i = 0 ; _i < m_cnt ; _i++){
-	    	for(int _j = 0 ; _j < n_cnt ; _j++){
-			for(int _k = 0 ; _k < k_cnt; _k++){
-        			checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
-						&alpha,
-						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], k/*lda*/, 
-						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], n/*ldb*/, 
-						&beta, 
-						// This causes overwritting, no partial sum accumulation
-						&d_C_partial[_j][(_i*BLK_M)*k+(_k*BLK_K)], k/*ldc*/));
-			}
-		}
-	    }
+float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, int IN_W_i, int IN_H_j, float* h_filter, const float beta, float* h_C, float** h_C_partial){
+	printf("\tcalling conv_CPU_blocking(%d, %d)...\n", IN_W_i, IN_H_j);
+    for(int i = 0 ; i < BLK_W/*matrix_size.IN_W*/ ; i++){
+        for(int j = 0 ; j < BLK_H/*matrix_size.IN_H*/ ; j++){
+            int c_i = IN_W_i * BLK_W + i;
+            int c_j = IN_H_j * BLK_H + j;
+            if(i >= BLK_W || j >= BLK_H){
+                continue;
+            }
+            h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(BLK_H)+j] = 0;
+            for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
+                for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
+                    if((c_i+fi) >= matrix_size.IN_W || (c_j+fj) >= matrix_size.IN_H){
+                        continue;
+                    }
+                    h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(BLK_H)+j] += 
+                        h_in[(c_i+fi)*matrix_size.IN_H+(c_j+fj)] *
+                        h_filter[fi*(matrix_size.F_H)*fj];
+                }    
+            }
         }
-	
-	// Record the stop event
-        checkCudaErrors(cudaEventRecord(stop, NULL));
-
-        // Wait for the stop event to complete
-        checkCudaErrors(cudaEventSynchronize(stop));
-       
-	// copy result from device to host
-        for(int i = 0 ; i < n_cnt ; i++){
-		checkCudaErrors(cudaMemcpy(h_C_partial[i], d_C_partial[i], mem_size_C, cudaMemcpyDeviceToHost));
-	}
-
-	// summation
-	float sum = 0.0;
-	int threshold = 10;
-	int count = 0;
-	for(int i = 0 ; i < m ; i++){
-		for(int j = 0 ; j < n ; j++){
-			sum = 0.0;
-			for(int p = 0 ; p < n_cnt ; p++){
-				sum += h_C_partial[p][i*n+j];
-				if(/*h_C_partial[p][i*n+j] != 0 && */ p == 0 && i < 5 && j < 5){
-					count++;
-					std::cout << h_C_partial[p][i*n+j] << " ";		
-				}
-			}
-			h_C[i*n+j] = sum;
-		}
-		if(i < 5){std::cout << std::endl;}
-	}
-
-        // Destroy the handle
-        checkCudaErrors(cublasDestroy(handle));
-
-        checkCudaErrors(cudaFree(d_A));
-        checkCudaErrors(cudaFree(d_B));
-        checkCudaErrors(cudaFree(d_C));
-	for(int i = 0 ; i < n_cnt ; i++){
-        	checkCudaErrors(cudaFree(d_C_partial[i]));
-		//free(h_C_partial[i]);
-	}
-        free(d_C_partial);
-	//free(h_C_partial);
-
-	float msecTotal;
-	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
-	return msecTotal;
+    } 
+    return 0;
 }
 
-float GEMM_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU){
-	printf("calling GEMM_TPU...\n");
-	
-	int m = matrix_size.uiWB;
-	int n = matrix_size.uiHA;
-	int k = matrix_size.uiWA;
-	
-        // edgeTPU setup
-        openctpu_init(1, 1);
-	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
-	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
-	
-	timing b_s = clk::now();
-	matrix_a_d = openctpu_alloc_dimension(3, m, n, n);
-	matrix_b_d = openctpu_alloc_dimension(3, n, k, k);
-	matrix_c_d = openctpu_alloc_dimension(3, m, k, k);
-    
-	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_partial){
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
+                for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
+                    int ii = i*(matrix_size.OUT_BLK_W)+w;
+                    int jj = j*(matrix_size.OUT_BLK_H)+h;
+                    if(ii >= matrix_size.OUT_W || jj >= matrix_size.OUT_H){
+                        continue;
+                    }
+                    h_C[ii*(matrix_size.OUT_H)+jj] = 
+                        h_c_partial[i*matrix_size.OUT_H_BLK_CNT+j][w*matrix_size.OUT_BLK_H+h];
+                }
+            }
+        }
+    }
+}
 
-        float average, sdev;
+float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
+	printf("calling conv_CPU_TILES...\n");
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            conv_CPU_blocking(nIter, matrix_size, alpha, h_in, i, j, h_filter, beta, h_C, h_C_partial);
+        }
+    }
+    conv_output_summation(matrix_size, h_C, h_C_partial);
 
-	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/, average, sdev);
-	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, false/*b_major*/, 1/*tensor_type*/, average, sdev);
-	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/, average, sdev);
-	timing b_e = clk::now();
-        double bms = get_time_ms(b_e, b_s);
-	printf("binary creation time: %f (ms)\n", bms);
+    return 0;
+}
 
-	timing _start = clk::now();	
-	for (int j = 0; j < nIter; j++)
-        {
-		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c, atof(argv[4]));
-	}
-	openctpu_sync(); 
-	openctpu_clean_up();
-	timing _end = clk::now();	
+float conv_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_TPU){
+	printf("calling conv_TPU...\n");
 	
-	float TPU_ms = get_time_ms(_end, _start);
-	return TPU_ms;
+//	int m = matrix_size.uiWB;
+//	int n = matrix_size.uiHA;
+//	int k = matrix_size.uiWA;
+//	
+//        // edgeTPU setup
+//        openctpu_init(1, 1);
+//	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+//	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
+//	
+//	timing b_s = clk::now();
+//	matrix_a_d = openctpu_alloc_dimension(3, m, n, n);
+//	matrix_b_d = openctpu_alloc_dimension(3, n, k, k);
+//	matrix_c_d = openctpu_alloc_dimension(3, m, k, k);
+//    
+//	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+//
+//        float average, sdev;
+//
+//	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/, average, sdev);
+//	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, false/*b_major*/, 1/*tensor_type*/, average, sdev);
+//	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/, average, sdev);
+//	timing b_e = clk::now();
+//        double bms = get_time_ms(b_e, b_s);
+//	printf("binary creation time: %f (ms)\n", bms);
+//
+//	timing _start = clk::now();	
+//	for (int j = 0; j < nIter; j++)
+//        {
+//		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c, atof(argv[4]));
+//	}
+//	openctpu_sync(); 
+//	openctpu_clean_up();
+//	timing _end = clk::now();	
+//	
+//	float TPU_ms = get_time_ms(_end, _start);
+//	return TPU_ms;
 }
 
 void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
@@ -892,150 +640,150 @@ float get_dist_similarity(float* in, int m, int n, int ldn){
         return entropy*(-1);
 }
 
-float GEMM_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_TPU, float** h_partial_c){
+float conv_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_TPU, float** h_partial_c){
 	printf("calling GEMM_TPU_TILES...\n");
 	
-	int m     = matrix_size.uiHA;
-	int n     = matrix_size.uiHB;
-	int k     = matrix_size.uiWC;
-	
-	int m_blk_cnt = (m / BLK_M);// + (m % BLK_M != 0)?1:0;
-	int n_blk_cnt = (n / BLK_N);// + (n % BLK_N != 0)?1:0;
-	int k_blk_cnt = (k / BLK_K);// + (k % BLK_K != 0)?1:0;
-
-        // edgeTPU setup
-        openctpu_init(1, 1);
-	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
-	openctpu_buffer    **tensor_a,  **tensor_b,  *tensor_c, ***tensor_partial_c;
-
-	tensor_a            = (openctpu_buffer**)  malloc(m_blk_cnt * n_blk_cnt * sizeof(openctpu_buffer*));
-	tensor_b            = (openctpu_buffer**)  malloc(n_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
-	tensor_partial_c    = (openctpu_buffer***) malloc(n_blk_cnt * sizeof(openctpu_buffer**));
-	//float** h_partial_c = (float**) malloc(n_blk_cnt * sizeof(float*));
-
-	for(int i = 0 ; i < n_blk_cnt ; i++){
-		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
-		//h_partial_c[i] = (float*) malloc(m * k * sizeof(float)); 
-	}
-
-	timing b_s = clk::now();
-	matrix_a_d = openctpu_alloc_dimension(3, BLK_M, BLK_N, n/*ldm*/);
-	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
-	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
-    
-	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
-	// These buffers need to know their shape beforehand for re-formating ( for underlying mm2conv)
-  
-        float* tensor_a_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
-        float* tensor_a_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
-        float* tensor_b_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
-        float* tensor_b_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
-       
-// getting sdev and average of each partitions at the same time
-        timing b_a_s = clk::now();
-	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
-		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-//                        std::cout << "tensor_a[" << _i << ", " << _j << "] entropy: " << get_dist_similarity(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
-			tensor_a[_i*n_blk_cnt+_j] = 
-			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/, 
-                                                 tensor_a_average[_i*n_blk_cnt+_j], tensor_a_sdev[_i*n_blk_cnt+_j]);
-		}
-	}
-	timing b_a_e = clk::now();
-	timing b_b_s = clk::now();
-	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
-//                        std::cout << "tensor_b[" << _j << ", " << _k << "] entropy: " << get_dist_similarity(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
-			tensor_b[_j*k_blk_cnt+_k] = 
-			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
-                                                 tensor_b_average[_j*k_blk_cnt+_k], tensor_b_sdev[_j*k_blk_cnt+_k]);
-		}
-	}
-	
-        timing b_b_e = clk::now();
-	timing b_c_s = clk::now();
-        float c_tmp1, c_tmp2;
-	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
-		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-			for(int _k = 0 ; _k < k_blk_cnt ; _k++){
-				tensor_partial_c[_j][_i*k_blk_cnt+_k] = 
-	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/,
-                                     c_tmp1, c_tmp2); // dummy stats
-			}
-		}
-	}
-	timing b_c_e = clk::now();
-	timing b_e = clk::now();
-        double bms = get_time_ms(b_e, b_s);
-	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
-
-// show stats (average, sdev) of input tensor(s)
+//	int m     = matrix_size.uiHA;
+//	int n     = matrix_size.uiHB;
+//	int k     = matrix_size.uiWC;
+//	
+//	int m_blk_cnt = (m / BLK_M);// + (m % BLK_M != 0)?1:0;
+//	int n_blk_cnt = (n / BLK_N);// + (n % BLK_N != 0)?1:0;
+//	int k_blk_cnt = (k / BLK_K);// + (k % BLK_K != 0)?1:0;
+//
+//        // edgeTPU setup
+//        openctpu_init(1, 1);
+//	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+//	openctpu_buffer    **tensor_a,  **tensor_b,  *tensor_c, ***tensor_partial_c;
+//
+//	tensor_a            = (openctpu_buffer**)  malloc(m_blk_cnt * n_blk_cnt * sizeof(openctpu_buffer*));
+//	tensor_b            = (openctpu_buffer**)  malloc(n_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
+//	tensor_partial_c    = (openctpu_buffer***) malloc(n_blk_cnt * sizeof(openctpu_buffer**));
+//	//float** h_partial_c = (float**) malloc(n_blk_cnt * sizeof(float*));
+//
+//	for(int i = 0 ; i < n_blk_cnt ; i++){
+//		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_blk_cnt * k_blk_cnt * sizeof(openctpu_buffer*));
+//		//h_partial_c[i] = (float*) malloc(m * k * sizeof(float)); 
+//	}
+//
+//	timing b_s = clk::now();
+//	matrix_a_d = openctpu_alloc_dimension(3, BLK_M, BLK_N, n/*ldm*/);
+//	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
+//	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
+//    
+//	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+//	// These buffers need to know their shape beforehand for re-formating ( for underlying mm2conv)
+//  
+//        float* tensor_a_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+//        float* tensor_a_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+//        float* tensor_b_average = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+//        float* tensor_b_sdev    = (float*) malloc(m_blk_cnt * n_blk_cnt * sizeof(float));
+//       
+//// getting sdev and average of each partitions at the same time
+//        timing b_a_s = clk::now();
 //	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
 //		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-//                        int idx = _i*n_blk_cnt+_j; 
-//                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
-//                                                                                            tensor_a_sdev[idx],
-//                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
-//                }
-//        }
+////                        std::cout << "tensor_a[" << _i << ", " << _j << "] entropy: " << get_dist_similarity(&h_A[(_i*BLK_M)*n+(_j*BLK_N)], BLK_M, BLK_N, n) << std::endl;
+//			tensor_a[_i*n_blk_cnt+_j] = 
+//			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/, 
+//                                                 tensor_a_average[_i*n_blk_cnt+_j], tensor_a_sdev[_i*n_blk_cnt+_j]);
+//		}
+//	}
+//	timing b_a_e = clk::now();
+//	timing b_b_s = clk::now();
 //	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
 //		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
-//                        int idx = _j*k_blk_cnt+_k;
-//                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
-//                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
-//	        }
-//        }
-
-        timing _start = clk::now();	
-	for (int iter = 0; iter < nIter; iter++){
-		for(int _i = 0 ; _i < m_blk_cnt ; _i++){
-			for(int _j = 0 ; _j < n_blk_cnt ; _j++){
-				for(int _k = 0 ; _k < k_blk_cnt ; _k++){
-					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i*n_blk_cnt+_j], 
-							       	         	    tensor_b[_j*k_blk_cnt+_k], 
-							            	            tensor_partial_c[_j][_i*k_blk_cnt+_k],
-                                                                                    atof(argv[4]));
-				}
-			}
-		}
-	}
-	openctpu_sync(); 
-	openctpu_clean_up();
-	timing _end = clk::now();	
-// summation1
-	float sum = 0.0;
-	int threshold = 10;
-	int count = 0;
-	for(int _i = 0 ; _i < m ; _i++){
-		for(int _k = 0 ; _k < k ; _k++){
-			sum = 0.0;
-			for(int j = 0 ; j < n_blk_cnt ; j++){
-				sum += h_partial_c[j][_i*k+_k];
-				//if(h_partial_c[j][_i*k+_k] != 0){  // find bug from this print, no value for later parts in h_partial_c
-				//	std::cout << "h_partial_c[" << j << "][" << _i << "*" << k << "+" << _k << "]: " << h_partial_c[j][_i*k+_k] << std::endl;
-				//	count++;
-				//}
-			}
-			h_TPU[_i*k+_k] = sum;
-		}
-	}
-// clean up
-	for(int i = 0 ; i < n_blk_cnt ; i++){
-		free(tensor_partial_c[i]);
-		//free(h_partial_c[i]); 
-	}
-	free(tensor_partial_c);
-	//free(h_partial_c); 
-	free(tensor_a);
-	free(tensor_b);
-
-        free(tensor_a_average);
-        free(tensor_a_sdev);
-        free(tensor_b_average);
-        free(tensor_b_sdev);
-
-	float TPU_ms = get_time_ms(_end, _start);
-	return TPU_ms;
+////                        std::cout << "tensor_b[" << _j << ", " << _k << "] entropy: " << get_dist_similarity(&h_B[(_j*BLK_N)*k+(_k*BLK_K)], BLK_N, BLK_K, k) << std::endl;
+//			tensor_b[_j*k_blk_cnt+_k] = 
+//			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
+//                                                 tensor_b_average[_j*k_blk_cnt+_k], tensor_b_sdev[_j*k_blk_cnt+_k]);
+//		}
+//	}
+//	
+//        timing b_b_e = clk::now();
+//	timing b_c_s = clk::now();
+//        float c_tmp1, c_tmp2;
+//	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
+//		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+//			for(int _k = 0 ; _k < k_blk_cnt ; _k++){
+//				tensor_partial_c[_j][_i*k_blk_cnt+_k] = 
+//	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/,
+//                                     c_tmp1, c_tmp2); // dummy stats
+//			}
+//		}
+//	}
+//	timing b_c_e = clk::now();
+//	timing b_e = clk::now();
+//        double bms = get_time_ms(b_e, b_s);
+//	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
+//
+//// show stats (average, sdev) of input tensor(s)
+////	for(int _i = 0 ; _i < m_blk_cnt ; _i++){
+////		for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+////                        int idx = _i*n_blk_cnt+_j; 
+////                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
+////                                                                                            tensor_a_sdev[idx],
+////                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
+////                }
+////        }
+////	for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+////		for(int _k = 0 ; _k < k_blk_cnt ; _k++){
+////                        int idx = _j*k_blk_cnt+_k;
+////                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
+////                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
+////	        }
+////        }
+//
+//        timing _start = clk::now();	
+//	for (int iter = 0; iter < nIter; iter++){
+//		for(int _i = 0 ; _i < m_blk_cnt ; _i++){
+//			for(int _j = 0 ; _j < n_blk_cnt ; _j++){
+//				for(int _k = 0 ; _k < k_blk_cnt ; _k++){
+//					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i*n_blk_cnt+_j], 
+//							       	         	    tensor_b[_j*k_blk_cnt+_k], 
+//							            	            tensor_partial_c[_j][_i*k_blk_cnt+_k],
+//                                                                                    atof(argv[4]));
+//				}
+//			}
+//		}
+//	}
+//	openctpu_sync(); 
+//	openctpu_clean_up();
+//	timing _end = clk::now();	
+//// summation1
+//	float sum = 0.0;
+//	int threshold = 10;
+//	int count = 0;
+//	for(int _i = 0 ; _i < m ; _i++){
+//		for(int _k = 0 ; _k < k ; _k++){
+//			sum = 0.0;
+//			for(int j = 0 ; j < n_blk_cnt ; j++){
+//				sum += h_partial_c[j][_i*k+_k];
+//				//if(h_partial_c[j][_i*k+_k] != 0){  // find bug from this print, no value for later parts in h_partial_c
+//				//	std::cout << "h_partial_c[" << j << "][" << _i << "*" << k << "+" << _k << "]: " << h_partial_c[j][_i*k+_k] << std::endl;
+//				//	count++;
+//				//}
+//			}
+//			h_TPU[_i*k+_k] = sum;
+//		}
+//	}
+//// clean up
+//	for(int i = 0 ; i < n_blk_cnt ; i++){
+//		free(tensor_partial_c[i]);
+//		//free(h_partial_c[i]); 
+//	}
+//	free(tensor_partial_c);
+//	//free(h_partial_c); 
+//	free(tensor_a);
+//	free(tensor_b);
+//
+//        free(tensor_a_average);
+//        free(tensor_a_sdev);
+//        free(tensor_b_average);
+//        free(tensor_b_sdev);
+//
+//	float TPU_ms = get_time_ms(_end, _start);
+//	return TPU_ms;
 }
 
 bool weighted_RR_on_GPU(int idx){
@@ -1053,240 +801,240 @@ bool weighted_RR_on_GPU(int idx){
 	return idx%2; // default: fair RR
 }
 
-float GEMM_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_A, float* h_B, float* h_C, const float alpha, const float beta){
-	printf("calling GEMM_MIX_TILES...\n");
-	timing b_s = clk::now();
-    
-	cudaDeviceProp deviceProp;
-
-        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
-
-        cublasHandle_t handle;
-
-        checkCudaErrors(cublasCreate(&handle));
-	
-	int m     = matrix_size.uiHA;
-	int n     = matrix_size.uiHB;
-	int k     = matrix_size.uiWC;
-	int m_cnt = matrix_size.uiHA/BLK_M;
- 	int n_cnt = matrix_size.uiHB/BLK_N;
-	int k_cnt = matrix_size.uiWC/BLK_K;
-	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
-	
-	// allocate device memory
-   	float *d_A, *d_B, *d_C;
-	float **d_C_partial = (float**) malloc(n_cnt * sizeof(float*));
-	float **h_C_partial = (float**) malloc(n_cnt * sizeof(float*));
-	
-	unsigned int size_A = m * n;  // matrix_size.uiWA * matrix_size.uiHA;
-    	unsigned int mem_size_A = sizeof(float) * size_A;
-    	unsigned int size_B = n * k ; // matrix_size.uiWB * matrix_size.uiHB;
-    	unsigned int mem_size_B = sizeof(float) * size_B;
-   	unsigned int size_C = m * k ; //matrix_size.uiWC * matrix_size.uiHC;
-        unsigned int mem_size_C = sizeof(float) * size_C;
-
-    	checkCudaErrors(cudaMalloc((void **) &d_A, mem_size_A));
-    	checkCudaErrors(cudaMalloc((void **) &d_B, mem_size_B));
-    	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
-
-        // setup execution parameters
-        int block_size = 32;
-        dim3 threads(block_size, block_size);
-        dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
-    	
-	cudaEvent_t start, stop;
-        // Allocate CUDA events that we'll use for timing
-        checkCudaErrors(cudaEventCreate(&start));
-        checkCudaErrors(cudaEventCreate(&stop));
-
-        // edgeTPU setup
-        openctpu_init(1, 1);
-	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
-	openctpu_buffer    **tensor_a,   **tensor_b,   *tensor_c, ***tensor_partial_c;
-    
-	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
-	
-	tensor_a         = (openctpu_buffer**)  malloc(m_cnt * n_cnt * sizeof(openctpu_buffer*));
-	tensor_b         = (openctpu_buffer**)  malloc(n_cnt * k_cnt * sizeof(openctpu_buffer*));
-	tensor_partial_c = (openctpu_buffer***) malloc(n_cnt * sizeof(openctpu_buffer**));
-	float** h_partial_c = (float**) malloc(n_cnt * sizeof(float*));
-	for(int i = 0 ; i < n_cnt ; i++){
-		// TPU part
-		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_cnt * k_cnt * sizeof(openctpu_buffer*));
-		h_partial_c[i]      = (float*)            malloc(m * k * sizeof(float));
-		// GPU part
-		h_C_partial[i] = (float*) malloc(mem_size_C);
-		checkCudaErrors(cudaMalloc((void **) &d_C_partial[i], mem_size_C));
-	}
-
-	matrix_a_d = openctpu_alloc_dimension(3, BLK_M, BLK_N, n/*ldm*/);
-	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
-	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
-        
-        float* tensor_a_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
-        float* tensor_a_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
-        float* tensor_b_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
-        float* tensor_b_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
-
-	timing b_a_s = clk::now();
-	for(int _i = 0 ; _i < m_cnt ; _i++){
-		for(int _j = 0 ; _j < n_cnt ; _j++){
-			tensor_a[_i*n_cnt+_j] =
-			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/,
-                                                 tensor_a_average[_i*n_cnt+_j], tensor_a_sdev[_i*n_cnt+_j]);
-		}
-	}
-	timing b_a_e = clk::now();
-	timing b_b_s = clk::now();
-	for(int _j = 0 ; _j < n_cnt ; _j++){
-		for(int _k = 0 ; _k < k_cnt ; _k++){
-			tensor_b[_j*k_cnt+_k] =
-			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
-                                                 tensor_b_average[_j*k_cnt+_k], tensor_b_sdev[_j*k_cnt+_k]);
-		}
-	}
-	timing b_b_e = clk::now();
-        float c_tmp1, c_tmp2;
-	timing b_c_s = clk::now();
-	for(int _i = 0 ; _i < m_cnt ; _i++){
-		for(int _j = 0 ; _j < n_cnt ; _j++){
-			for(int _k = 0 ; _k < k_cnt ; _k++){
-				tensor_partial_c[_j][_i*k_cnt+_k] =
-	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/, 
-                                        c_tmp1, c_tmp2); // dummy stat
-			}
-		}
-	}
-	timing b_c_e = clk::now();
-	timing b_e = clk::now();
-        double bms = get_time_ms(b_e, b_s);
-	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
-
+float conv_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_C, const float alpha, const float beta){
+	printf("calling conv_MIX_TILES...\n");
+//	timing b_s = clk::now();
+//    
+//	cudaDeviceProp deviceProp;
+//
+//        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
+//
+//        cublasHandle_t handle;
+//
+//        checkCudaErrors(cublasCreate(&handle));
+//	
+//	int m     = matrix_size.uiHA;
+//	int n     = matrix_size.uiHB;
+//	int k     = matrix_size.uiWC;
+//	int m_cnt = matrix_size.uiHA/BLK_M;
+// 	int n_cnt = matrix_size.uiHB/BLK_N;
+//	int k_cnt = matrix_size.uiWC/BLK_K;
+//	printf("blk cnts: (%d, %d, %d) for tiling algorithm.\n", m_cnt, n_cnt, k_cnt);
+//	
+//	// allocate device memory
+//   	float *d_A, *d_B, *d_C;
+//	float **d_C_partial = (float**) malloc(n_cnt * sizeof(float*));
+//	float **h_C_partial = (float**) malloc(n_cnt * sizeof(float*));
+//	
+//	unsigned int size_A = m * n;  // matrix_size.uiWA * matrix_size.uiHA;
+//    	unsigned int mem_size_A = sizeof(float) * size_A;
+//    	unsigned int size_B = n * k ; // matrix_size.uiWB * matrix_size.uiHB;
+//    	unsigned int mem_size_B = sizeof(float) * size_B;
+//   	unsigned int size_C = m * k ; //matrix_size.uiWC * matrix_size.uiHC;
+//        unsigned int mem_size_C = sizeof(float) * size_C;
+//
+//    	checkCudaErrors(cudaMalloc((void **) &d_A, mem_size_A));
+//    	checkCudaErrors(cudaMalloc((void **) &d_B, mem_size_B));
+//    	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
+//    	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
+//    	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
+//
+//        // setup execution parameters
+//        int block_size = 32;
+//        dim3 threads(block_size, block_size);
+//        dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
+//    	
+//	cudaEvent_t start, stop;
+//        // Allocate CUDA events that we'll use for timing
+//        checkCudaErrors(cudaEventCreate(&start));
+//        checkCudaErrors(cudaEventCreate(&stop));
+//
+//        // edgeTPU setup
+//        openctpu_init(1, 1);
+//	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
+//	openctpu_buffer    **tensor_a,   **tensor_b,   *tensor_c, ***tensor_partial_c;
+//    
+//	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
+//	
+//	tensor_a         = (openctpu_buffer**)  malloc(m_cnt * n_cnt * sizeof(openctpu_buffer*));
+//	tensor_b         = (openctpu_buffer**)  malloc(n_cnt * k_cnt * sizeof(openctpu_buffer*));
+//	tensor_partial_c = (openctpu_buffer***) malloc(n_cnt * sizeof(openctpu_buffer**));
+//	float** h_partial_c = (float**) malloc(n_cnt * sizeof(float*));
+//	for(int i = 0 ; i < n_cnt ; i++){
+//		// TPU part
+//		tensor_partial_c[i] = (openctpu_buffer**) malloc(m_cnt * k_cnt * sizeof(openctpu_buffer*));
+//		h_partial_c[i]      = (float*)            malloc(m * k * sizeof(float));
+//		// GPU part
+//		h_C_partial[i] = (float*) malloc(mem_size_C);
+//		checkCudaErrors(cudaMalloc((void **) &d_C_partial[i], mem_size_C));
+//	}
+//
+//	matrix_a_d = openctpu_alloc_dimension(3, BLK_M, BLK_N, n/*ldm*/);
+//	matrix_b_d = openctpu_alloc_dimension(3, BLK_N, BLK_K, k/*ldm*/);
+//	matrix_c_d = openctpu_alloc_dimension(3, BLK_M, BLK_K, k/*ldm*/);
+//        
+//        float* tensor_a_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+//        float* tensor_a_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+//        float* tensor_b_average = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+//        float* tensor_b_sdev    = (float*) malloc(m_cnt * n_cnt * sizeof(float));
+//
+//	timing b_a_s = clk::now();
 //	for(int _i = 0 ; _i < m_cnt ; _i++){
 //		for(int _j = 0 ; _j < n_cnt ; _j++){
-//                        int idx = _i*n_cnt+_j; 
-//                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
-//                                                                                            tensor_a_sdev[idx],
-//                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
-//                }
-//        }
+//			tensor_a[_i*n_cnt+_j] =
+//			  openctpu_create_buffer(argc, argv, matrix_a_d, &h_A[(_i*BLK_M)*n+(_j*BLK_N)], config, false/*b_major*/, 0/*tensor_type*/,
+//                                                 tensor_a_average[_i*n_cnt+_j], tensor_a_sdev[_i*n_cnt+_j]);
+//		}
+//	}
+//	timing b_a_e = clk::now();
+//	timing b_b_s = clk::now();
 //	for(int _j = 0 ; _j < n_cnt ; _j++){
 //		for(int _k = 0 ; _k < k_cnt ; _k++){
-//                        int idx = _j*k_cnt+_k;
-//                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
-//                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
-//	        }
+//			tensor_b[_j*k_cnt+_k] =
+//			  openctpu_create_buffer(argc, argv, matrix_b_d, &h_B[(_j*BLK_N)*k+(_k*BLK_K)], config, false/*b_major*/, 1/*tensor_type*/,
+//                                                 tensor_b_average[_j*k_cnt+_k], tensor_b_sdev[_j*k_cnt+_k]);
+//		}
+//	}
+//	timing b_b_e = clk::now();
+//        float c_tmp1, c_tmp2;
+//	timing b_c_s = clk::now();
+//	for(int _i = 0 ; _i < m_cnt ; _i++){
+//		for(int _j = 0 ; _j < n_cnt ; _j++){
+//			for(int _k = 0 ; _k < k_cnt ; _k++){
+//				tensor_partial_c[_j][_i*k_cnt+_k] =
+//	      openctpu_create_buffer(argc, argv, matrix_c_d, &h_partial_c[_j][(_i*BLK_M)*k+(_k*BLK_K)], config, false/*b_major*/, 2/*tensor_type*/, 
+//                                        c_tmp1, c_tmp2); // dummy stat
+//			}
+//		}
+//	}
+//	timing b_c_e = clk::now();
+//	timing b_e = clk::now();
+//        double bms = get_time_ms(b_e, b_s);
+//	printf("binary creation time: %f (ms), a: %f, b: %f, c: %f\n", bms, get_time_ms(b_a_e, b_a_s), get_time_ms(b_b_e, b_b_s), get_time_ms(b_c_e, b_c_s));
+//
+////	for(int _i = 0 ; _i < m_cnt ; _i++){
+////		for(int _j = 0 ; _j < n_cnt ; _j++){
+////                        int idx = _i*n_cnt+_j; 
+////                        printf("tensor_a[%d, %d] average: %f, sdev: %f, cov: %f\n", _i, _j, tensor_a_average[idx], 
+////                                                                                            tensor_a_sdev[idx],
+////                                                                                            (float)(tensor_a_sdev[idx] / tensor_a_average[idx]));
+////                }
+////        }
+////	for(int _j = 0 ; _j < n_cnt ; _j++){
+////		for(int _k = 0 ; _k < k_cnt ; _k++){
+////                        int idx = _j*k_cnt+_k;
+////                        printf("tensor_b[%d, %d] average: %f, sdev: %f, cov: %f\n", _j, _k, tensor_b_average[idx], tensor_b_sdev[idx],
+////                                                                                            (float)(tensor_b_sdev[idx] / tensor_b_average[idx]));
+////	        }
+////        }
+//	unsigned int edgeTPU_used = 0;
+//	unsigned int idx = 0;
+//
+//	// check m / blk_m is dividable
+//        
+//	// Record the start event
+//        checkCudaErrors(cudaEventRecord(start, NULL));
+//	
+//	for (int iter = 0; iter < nIter; iter++)
+//        {
+//            //note cublas is column primary!
+//            //need to transpose the order
+//	    //
+//	  for(int _i = 0 ; _i < m_cnt ; _i++){
+//	  	for(int _k = 0 ; _k < k_cnt; _k++){
+//	  		for(int _j = 0 ; _j < n_cnt ; _j++){
+//				if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
+//					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
+//						&alpha,
+//						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], k, 
+//						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], n, 
+//						&beta, 
+//						&d_C_partial[_j][(_i*BLK_M)*k+(_k*BLK_K)], k));
+//				
+//				}else{
+//					// simulate tiling algorithm in perfromance only
+//					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i * n_cnt + _j], 
+//							                            tensor_b[_j * k_cnt + _k], 
+//										    tensor_partial_c[_j][_i * k_cnt + _k],
+//                                                                                    atof(argv[4]));
+//					edgeTPU_used++;
+//				}
+//				idx++;
+//			}
+//		}
+//	    }
 //        }
-	unsigned int edgeTPU_used = 0;
-	unsigned int idx = 0;
-
-	// check m / blk_m is dividable
-        
-	// Record the start event
-        checkCudaErrors(cudaEventRecord(start, NULL));
-	
-	for (int iter = 0; iter < nIter; iter++)
-        {
-            //note cublas is column primary!
-            //need to transpose the order
-	    //
-	  for(int _i = 0 ; _i < m_cnt ; _i++){
-	  	for(int _k = 0 ; _k < k_cnt; _k++){
-	  		for(int _j = 0 ; _j < n_cnt ; _j++){
-				if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
-					checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, BLK_M, BLK_N, BLK_K, 
-						&alpha,
-						&d_B[(_j*BLK_N)*k+(_k*BLK_K)], k, 
-						&d_A[(_i*BLK_M)*n+(_j*BLK_N)], n, 
-						&beta, 
-						&d_C_partial[_j][(_i*BLK_M)*k+(_k*BLK_K)], k));
-				
-				}else{
-					// simulate tiling algorithm in perfromance only
-					openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a[_i * n_cnt + _j], 
-							                            tensor_b[_j * k_cnt + _k], 
-										    tensor_partial_c[_j][_i * k_cnt + _k],
-                                                                                    atof(argv[4]));
-					edgeTPU_used++;
-				}
-				idx++;
-			}
-		}
-	    }
-        }
-
-	// Record the stop event
-        checkCudaErrors(cudaEventRecord(stop, NULL));
-
-        // Wait for the stop event to complete
-        checkCudaErrors(cudaEventSynchronize(stop));
-	
-	// wait for openctpu to complete, if ever been invoked among all iterations.
-	if(edgeTPU_used > 0){
-		openctpu_sync(); 
-//		openctpu_clean_up();
-	}
-	
-// TODO: coordinate the output summation, don't do overwritting 
-	// copy result from device to host
-	for(int i = 0 ; i < n_cnt ; i++){
-		checkCudaErrors(cudaMemcpy(h_C_partial[i], d_C_partial[i], mem_size_C, cudaMemcpyDeviceToHost));
-	}
-
-//summation
-	std::cout << "summation..." << std::endl;
-	float sum = 0.0;
-	int offset = 0;
-	idx = 0;
-	for(int _i = 0 ; _i < m_cnt ; _i++){
-		for(int _k = 0 ; _k < k_cnt ; _k++){
-			for(int bi = 0 ; bi < BLK_M ; bi++){
-				for(int bk = 0 ; bk < BLK_K ; bk++){
-					sum = 0.0;
-					offset = (_i*BLK_M+bi)*k+(_k*BLK_K+bk);
-					for(int _j = 0 ; _j < n_cnt ; _j++){
-						idx = _i*(n_cnt*k_cnt)+_k*(n_cnt)+_j;
-						if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
-							sum += h_C_partial[_j][offset];
-						}else{
-							sum += h_partial_c[_j][offset];
-						}
-					}
-					h_C[offset] = sum;
-				}
-			}
-		}
-	}
-
-// clean up
-	for(int i = 0 ; i < n_cnt ; i++){
-		free(tensor_partial_c[i]);
-		free(h_partial_c[i]); 
-		free(h_C_partial[i]);
-	}
-	free(tensor_partial_c);
-	free(h_partial_c); // TPU
-	free(h_C_partial); // GPU
-	free(tensor_a);
-	free(tensor_b);
-        
-        free(tensor_a_average);
-        free(tensor_a_sdev);
-        free(tensor_b_average);
-        free(tensor_b_sdev);
-
-        // Destroy the handle
-        checkCudaErrors(cublasDestroy(handle));
-
-        checkCudaErrors(cudaFree(d_A));
-        checkCudaErrors(cudaFree(d_B));
-        checkCudaErrors(cudaFree(d_C));
-
-	float msecTotal;
-	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
-	return msecTotal;
+//
+//	// Record the stop event
+//        checkCudaErrors(cudaEventRecord(stop, NULL));
+//
+//        // Wait for the stop event to complete
+//        checkCudaErrors(cudaEventSynchronize(stop));
+//	
+//	// wait for openctpu to complete, if ever been invoked among all iterations.
+//	if(edgeTPU_used > 0){
+//		openctpu_sync(); 
+////		openctpu_clean_up();
+//	}
+//	
+//// TODO: coordinate the output summation, don't do overwritting 
+//	// copy result from device to host
+//	for(int i = 0 ; i < n_cnt ; i++){
+//		checkCudaErrors(cudaMemcpy(h_C_partial[i], d_C_partial[i], mem_size_C, cudaMemcpyDeviceToHost));
+//	}
+//
+////summation
+//	std::cout << "summation..." << std::endl;
+//	float sum = 0.0;
+//	int offset = 0;
+//	idx = 0;
+//	for(int _i = 0 ; _i < m_cnt ; _i++){
+//		for(int _k = 0 ; _k < k_cnt ; _k++){
+//			for(int bi = 0 ; bi < BLK_M ; bi++){
+//				for(int bk = 0 ; bk < BLK_K ; bk++){
+//					sum = 0.0;
+//					offset = (_i*BLK_M+bi)*k+(_k*BLK_K+bk);
+//					for(int _j = 0 ; _j < n_cnt ; _j++){
+//						idx = _i*(n_cnt*k_cnt)+_k*(n_cnt)+_j;
+//						if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
+//							sum += h_C_partial[_j][offset];
+//						}else{
+//							sum += h_partial_c[_j][offset];
+//						}
+//					}
+//					h_C[offset] = sum;
+//				}
+//			}
+//		}
+//	}
+//
+//// clean up
+//	for(int i = 0 ; i < n_cnt ; i++){
+//		free(tensor_partial_c[i]);
+//		free(h_partial_c[i]); 
+//		free(h_C_partial[i]);
+//	}
+//	free(tensor_partial_c);
+//	free(h_partial_c); // TPU
+//	free(h_C_partial); // GPU
+//	free(tensor_a);
+//	free(tensor_b);
+//        
+//        free(tensor_a_average);
+//        free(tensor_a_sdev);
+//        free(tensor_b_average);
+//        free(tensor_b_sdev);
+//
+//        // Destroy the handle
+//        checkCudaErrors(cublasDestroy(handle));
+//
+//        checkCudaErrors(cudaFree(d_A));
+//        checkCudaErrors(cudaFree(d_B));
+//        checkCudaErrors(cudaFree(d_C));
+//
+//	float msecTotal;
+//	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
+//	return msecTotal;
 }
 
 void assign_blk_size(int argc, char** argv){
@@ -1319,14 +1067,14 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
 	if(_mode == 0){ // CPU mode
 		kernel_ms = conv_CPU(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C);
 	}else if(_mode == 1){ // GPU tiling algorithm mode
-		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C, h_partial_C);
+		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
-        	kernel_ms = GEMM_TPU(nIter, argc, argv, matrix_size, h_A, h_B, h_C);
+        	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size, h_in, h_filter, h_C);
 	}else if(_mode == 3){ // TPU tiling algorithm mode
-        	kernel_ms = GEMM_TPU_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, h_partial_C);
+        	kernel_ms = conv_TPU_TILES(nIter, argc, argv, matrix_size, h_in, h_filter, h_C, h_partial_C);
 	}else if(_mode == 4){ // mix tiling algorithm mode
 		assign_mix_p(argc, argv);
-        	kernel_ms = GEMM_MIX_TILES(nIter, argc, argv, matrix_size, h_A, h_B, h_C, alpha, beta);
+        	kernel_ms = conv_MIX_TILES(nIter, argc, argv, matrix_size, h_in, h_filter, h_C, alpha, beta);
 	}else if(_mode == -1){ // skip
 		printf("skip, no run\n");
 	}else{
@@ -1336,6 +1084,28 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
 	return kernel_ms;
 }
 
+void img2file(sMatrixSize matrix_size, float* h_c, const std::string file_name){
+    int fd = open(file_name.c_str(), O_WRONLY|O_CREAT, 0777);
+    char *dest;
+    struct stat st_temp;
+    fstat(fd, &st_temp);
+    if(fd < 0){
+        std::cout << __func__ << ": output image file " << file_name << " opening fail(" << fd << ")." << std::endl; exit(0);
+    }
+    dest = static_cast<char*>(mmap(NULL, st_temp.st_size, PROT_WRITE, MAP_SHARED, fd, 0));
+    assert(dest != MAP_FAILED);
+    for(int i = 0 ; i < (matrix_size.OUT_W * matrix_size.OUT_H) ; i++){
+        dest[i] = h_c[i];
+    }
+    munmap(dest, st_temp.st_size);
+    close(fd);
+}
+
+void output_img_to_file(sMatrixSize matrix_size, float* h_c_baseline, float* h_c_proposed){
+    img2file(matrix_size, h_c_baseline, "./data/lena_gray_4Kx4K_output_baseline.bmp");
+    img2file(matrix_size, h_c_proposed, "./data/lena_gray_4Kx4K_output_proposed.bmp");
+
+}
 ////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test matrix multiply using CUBLAS
 ////////////////////////////////////////////////////////////////////////////////
@@ -1356,33 +1126,41 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     srand(2006);
 
     // initialize host memory
-    // assume IN_C is 1
+    assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
+    assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
     randomInit(h_A, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
-    // assuem OUT_C is 1
-    randomInit(h_B, matrix_size.F_W, matrix_size.F_H, 0/*atoi(argv[1])*/);
+    randomInit(h_B, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
 
     // allocate host memory for the result
     // no padding is assumed here.
     unsigned int size_C_W = ceil((matrix_size.IN_W - matrix_size.F_W) / matrix_size.S_W) + 1;
     unsigned int size_C_H = ceil((matrix_size.IN_H - matrix_size.F_H) / matrix_size.S_H) + 1;
-    matrix_size.OUT_W = size_c_W;
-    matrix_size.OUT_H = size_c_H;
-    unsigned int size_c = size_c_W * size_c_H;
-    unsigned int mem_size_C = sizeof(float) * size_C;
+    matrix_size.OUT_W = size_C_W;
+    matrix_size.OUT_H = size_C_H;
+    unsigned int size_c = size_C_W * size_C_H;
+    unsigned int mem_size_C = sizeof(float) * size_c;
     float *h_C_baseline = (float *) malloc(mem_size_C);
     float *h_C_proposed = (float *) malloc(mem_size_C);
 
     // assign partitioning
     assign_blk_size(argc, argv);
 
-    int w_cnt = size_c_W / BLK_W;
-    int h_cnt = size_c_H / BLK_H;
+    assert(matrix_size.IN_W % BLK_W == 0);
+    assert(matrix_size.IN_H % BLK_H == 0);
+    int w_cnt = matrix_size.IN_W / BLK_W;
+    int h_cnt = matrix_size.IN_H / BLK_H;
+    matrix_size.OUT_W_BLK_CNT = w_cnt;
+    matrix_size.OUT_H_BLK_CNT = h_cnt;
+    assert(size_C_W % w_cnt == 0);
+    assert(size_C_H % h_cnt == 0);
+    matrix_size.OUT_BLK_W = size_C_W / w_cnt;
+    matrix_size.OUT_BLK_H = size_C_H / h_cnt;
 
     float** h_C_baseline_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
     float** h_C_proposed_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
     for(int i = 0 ; i < (w_cnt * h_cnt) ; i++){
-	    h_C_baseline_partial[i] = (float*) malloc(BLK_W * BLK_H);
-	    h_C_proposed_partial[i] = (float*) malloc(BLK_W * BLK_H);
+	    h_C_baseline_partial[i] = (float*) malloc(matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H);
+	    h_C_proposed_partial[i] = (float*) malloc(matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H);
     }
 
     // number of iterations
@@ -1408,13 +1186,15 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
+    output_img_to_file(matrix_size, h_C_baseline, h_C_proposed);
+
     // parital SSIM section
-    float* _ssim             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-    float* _ssim_int         = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-    float* _rmse             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-    float* _psnr             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-    float* _error_rate       = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
-    float* _error_percentage = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _ssim             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _ssim_int         = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _rmse             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _psnr             = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _error_rate       = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
+//    float* _error_percentage = (float*) malloc(m_cnt * n_cnt * k_cnt *sizeof(float));   
 //    for(int i = 0 ; i < m_cnt ; i ++){
 //        for(int j = 0 ; j < n_cnt ; j++){
 //                for(int k = 0 ; k < k_cnt ; k++){
@@ -1439,12 +1219,12 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
 //    }
 
     // SSIM section
-    float ssim             = SSIM(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
-    float ssim_int         = SSIM(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
-    float rmse             = RMSE(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float psnr             = PSNR(size_c_W, size_C_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_rate       = ERROR_RATE(      size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_percentage = ERROR_PERCENTAGE(size_c_W, size_c_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float ssim             = SSIM(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
+    float ssim_int         = SSIM(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
+    float rmse             = RMSE(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float psnr             = PSNR(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_rate       = ERROR_RATE(      size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_percentage = ERROR_PERCENTAGE(size_C_W, size_C_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
 
     // quality section
     printf("==============================================================\n");
@@ -1494,20 +1274,20 @@ int main(int argc, char **argv)
     	printf("new usage: %s [input mode] [problem size] [nIter] [scale] [baseline's mode] [mode] [block_size, needed for 1, 3, 4] [p for mix mode: p on GPU]\n", argv[0]);
 	printf("mode definition:\n");
 	printf("\t-1: skip, no run\n");
-	printf("\t0: GPU                   mode\n");
-	printf("\t1: GPU tiling algorithm  mode\n");
+	printf("\t0: CPU                   mode\n");
+	printf("\t1: CPU tiling algorithm  mode\n");
 	printf("\t2: TPU                   mode\n");
 	printf("\t3: TPU tiling algorithm  mode\n");
 	printf("\t4: mix tiling algorithm  mode (round-robin as default)\n");
         exit(0);
     }
     
-    printf("[Matrix Multiply CUBLAS] - Starting...\n");
+    printf("[conv2D] - Starting...\n");
 
     int sizeMult = 5;
     sMatrixSize matrix_size;
 
-    initializeCUDA(argc, argv, sizeMult, matrix_size);
+    initializeSHAPE(argc, argv, sizeMult, matrix_size);
 
     int matrix_result = conv(argc, argv, matrix_size);
             

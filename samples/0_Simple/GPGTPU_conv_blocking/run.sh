@@ -3,7 +3,7 @@
 iter=1
 p=0.5
 baseline_mode=0
-input_data_mode=0 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read image 5: read mtx file 6: markov text generation
+input_data_mode=4 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read image 5: read mtx file 6: markov text generation
 scale=261000
 
 
@@ -21,9 +21,9 @@ do
     fi
     if [ ${size} -gt ${blk_size} ]
     then
-      for mode in 3
+      for mode in 1
       do
-        ./matrixMulCUBLAS ${input_data_mode} ${size} ${iter} ${scale} ${baseline_mode} ${mode} ${blk_size} ${p} 2>&1 | tee -a ./log/gemm_run_record_${input_data_mode}_${size}_${iter}_${scale}_${baseline_mode}_${mode}_${blk_size}_${p}.txt
+        ./conv ${input_data_mode} ${size} ${iter} ${scale} ${baseline_mode} ${mode} ${blk_size} ${p} 2>&1 | tee -a ./log/conv_run_record_${input_data_mode}_${size}_${iter}_${scale}_${baseline_mode}_${mode}_${blk_size}_${p}.txt
       done
     fi
   done

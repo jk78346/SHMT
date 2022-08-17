@@ -307,15 +307,16 @@ matrixMulCUBLAS: matrixMulCUBLAS.o
 	#sudo cp ~/GPTPU.internal/include/gptpu.h /usr/local/include
 	#sudo cp ~/GPTPU.internal/lib/libdense_arm.so /usr/local/lib/libdense.so
 	#sudo cp ~/GPTPU.internal/include/dense.h /usr/local/include
-	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES) -lgptpu -ldl
-	$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
-	$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+	#$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES) -lgptpu -ldl
+	g++ --std=c++11 matrixMulCUBLAS.cpp -lgptpu -ldl -o conv
+	#$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+	#$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 
 run: build
 	$(EXEC) ./matrixMulCUBLAS
 
 clean:
-	rm -f matrixMulCUBLAS matrixMulCUBLAS.o
+	rm -f conv conv.o
 	rm -rf ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/matrixMulCUBLAS
 
 clobber: clean
