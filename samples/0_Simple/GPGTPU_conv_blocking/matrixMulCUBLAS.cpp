@@ -97,9 +97,8 @@ typedef std::chrono::high_resolution_clock clk;
 float mix_p = 0.5; // percentage of weighted RR on GPU if mix mode is used
 
 unsigned int COMMON_BLK = 2048; // default is optimal
-unsigned int BLK_M = COMMON_BLK;
-unsigned int BLK_N = COMMON_BLK;
-unsigned int BLK_K = COMMON_BLK;
+unsigned int BLK_H = COMMON_BLK;
+unsigned int BLK_W = COMMON_BLK;
 
 int devID = 0; // GPU devID 
 
@@ -116,7 +115,7 @@ using namespace std;
 
 typedef struct _matrixSize      // Optional Command-line multiplier for matrix sizes
 {
-    unsigned int IN_W, IN_H, IN_C, F_W, F_H, S_W, S_H, OUT_C;
+    unsigned int IN_W, IN_H, IN_C, F_W, F_H, S_W, S_H, OUT_C, OUT_W, OUT_H;
 } sMatrixSize;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -645,68 +644,36 @@ void matrix_mul(openctpu_buffer *matrix_a,
 }
 /* =============================================================================================================== */
 
-float GEMM_GPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C){
-	printf("calling GEMM_GPU...\n");
+float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C){
+	printf("calling conv_CPU...\n");
     
-	cudaDeviceProp deviceProp;
+    // assumption:
+    // IN_C == 1 and OUT_C == 1
+    // S_W == 1 and S_H == 1
+    // no padding
 
-        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
-        
-	cublasHandle_t handle;
-
-        checkCudaErrors(cublasCreate(&handle));
-	
-	// allocate device memory
-   	float *d_A, *d_B, *d_C;
-        unsigned int size_A = matrix_size.uiWA * matrix_size.uiHA;
-    	unsigned int mem_size_A = sizeof(float) * size_A;
-    	unsigned int size_B = matrix_size.uiWB * matrix_size.uiHB;
-    	unsigned int mem_size_B = sizeof(float) * size_B;
-   	unsigned int size_C = matrix_size.uiWC * matrix_size.uiHC;
-        unsigned int mem_size_C = sizeof(float) * size_C;
-
-    	checkCudaErrors(cudaMalloc((void **) &d_A, mem_size_A));
-    	checkCudaErrors(cudaMalloc((void **) &d_B, mem_size_B));
-    	checkCudaErrors(cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
-    	checkCudaErrors(cudaMalloc((void **) &d_C, mem_size_C));
-        
-        // setup execution parameters
-        int block_size = 32;
-        dim3 threads(block_size, block_size);
-        dim3 grid(matrix_size.uiWC / threads.x, matrix_size.uiHC / threads.y);
-	
-	cudaEvent_t start, stop;
-        // Allocate CUDA events that we'll use for timing
-        checkCudaErrors(cudaEventCreate(&start));
-        checkCudaErrors(cudaEventCreate(&stop));
-        // Record the start event
-        checkCudaErrors(cudaEventRecord(start, NULL));
-        for (int j = 0; j < nIter; j++)
-        {
-            //note cublas is column primary!
-            //need to transpose the order
-            checkCudaErrors(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, matrix_size.uiWB, matrix_size.uiHA, matrix_size.uiWA, &alpha, d_B, matrix_size.uiWB, d_A, matrix_size.uiWA, &beta, d_C, matrix_size.uiWB));
+    for(int i = 0 ; i < matrix_size.IN_W ; i++){
+        for(int j = 0 ; j < matrix_size.IN_H ; j++){
+            int c_i = i;
+            int c_j = j;
+            if(c_i >= matrix_size.OUT_W || c_j >= matrix_size.OUT_H){
+                continue;
+            }
+            h_c[c_i*(matrix_size.OUT_H)+c_j] = 0;
+            for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
+                for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
+                        if((i+fi) >= matrix_size.IN_W || (j+fj) >= matrix_size.IN_H){
+                            continue;
+                        }
+                        h_C[c_i*(matrix_size.OUT_H)+c_j] += 
+                            h_in[(i+fi)*matrix_size.IN_H+(j+fj)] *
+                            h_filter[fi*(matrix_size.F_H)*fj];
+                    }
+                }    
+            }
         }
-        // Record the stop event
-        checkCudaErrors(cudaEventRecord(stop, NULL));
-
-        // Wait for the stop event to complete
-        checkCudaErrors(cudaEventSynchronize(stop));
-	
-	// copy result from device to host
-        checkCudaErrors(cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
-
-        // Destroy the handle
-        checkCudaErrors(cublasDestroy(handle));
-        
-	checkCudaErrors(cudaFree(d_A));
-        checkCudaErrors(cudaFree(d_B));
-        checkCudaErrors(cudaFree(d_C));
-
-	float msecTotal;
-	checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
-	return msecTotal;
+    } 
+	return 0;
 }
 
 float GEMM_GPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_B, float* h_A, const float beta, float* h_C, float** h_C_partial){
@@ -1328,10 +1295,9 @@ void assign_blk_size(int argc, char** argv){
 	exit(0);
     }
     COMMON_BLK = atoi(argv[7]);
-    BLK_M = COMMON_BLK;
-    BLK_N = COMMON_BLK;
-    BLK_K = COMMON_BLK;
-    printf("BLK_M: %d, BLK_N: %d, BLK_K: %d\n", BLK_M, BLK_N, BLK_K);
+    BLK_W = COMMON_BLK;
+    BLK_H = COMMON_BLK;
+    printf("BLK_W: %d, BLK_H: %d\n", BLK_W, BLK_H);
 }
 
 void assign_mix_p(int argc, char** argv){
@@ -1348,10 +1314,10 @@ void assign_mix_p(int argc, char** argv){
 	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
 }
 
-float run_GEMM(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_A, float* h_B, float* h_C, float** h_partial_C){
+float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_in, float* h_filter, float* h_C, float** h_partial_C){
 	float kernel_ms = 0;
-	if(_mode == 0){ // GPU mode
-		kernel_ms = GEMM_GPU(nIter, matrix_size, alpha, h_B, h_A, beta, h_C);
+	if(_mode == 0){ // CPU mode
+		kernel_ms = conv_CPU(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C);
 	}else if(_mode == 1){ // GPU tiling algorithm mode
 		kernel_ms = GEMM_GPU_TILES(nIter, matrix_size, alpha, h_B, h_A, beta, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
@@ -1396,23 +1362,27 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     randomInit(h_B, matrix_size.F_W, matrix_size.F_H, 0/*atoi(argv[1])*/);
 
     // allocate host memory for the result
-    unsigned int size_C = matrix_size.IN_W * matrix_size.uiHC;
+    // no padding is assumed here.
+    unsigned int size_C_W = ceil((matrix_size.IN_W - matrix_size.F_W) / matrix_size.S_W) + 1;
+    unsigned int size_C_H = ceil((matrix_size.IN_H - matrix_size.F_H) / matrix_size.S_H) + 1;
+    matrix_size.OUT_W = size_c_W;
+    matrix_size.OUT_H = size_c_H;
+    unsigned int size_c = size_c_W * size_c_H;
     unsigned int mem_size_C = sizeof(float) * size_C;
     float *h_C_baseline = (float *) malloc(mem_size_C);
     float *h_C_proposed = (float *) malloc(mem_size_C);
 
     // assign partitioning
     assign_blk_size(argc, argv);
-	
-    int m_cnt = matrix_size.uiWB/BLK_M;
-    int n_cnt = matrix_size.uiHA/BLK_N;
-    int k_cnt = matrix_size.uiWA/BLK_K;
 
-    float** h_C_baseline_partial = (float **) malloc(n_cnt * sizeof(float*));
-    float** h_C_proposed_partial = (float **) malloc(n_cnt * sizeof(float*));
-    for(int i = 0 ; i < n_cnt ; i++){
-	h_C_baseline_partial[i] = (float*) malloc(mem_size_C);
-	h_C_proposed_partial[i] = (float*) malloc(mem_size_C);
+    int w_cnt = size_c_W / BLK_W;
+    int h_cnt = size_c_H / BLK_H;
+
+    float** h_C_baseline_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
+    float** h_C_proposed_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
+    for(int i = 0 ; i < (w_cnt * h_cnt) ; i++){
+	    h_C_baseline_partial[i] = (float*) malloc(BLK_W * BLK_H);
+	    h_C_proposed_partial[i] = (float*) malloc(BLK_W * BLK_H);
     }
 
     // number of iterations
@@ -1428,13 +1398,13 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     int _mode;
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline, h_C_baseline_partial);
+    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
     _mode = atoi(argv[6]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_GEMM(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed, h_C_proposed_partial);
+    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_A, h_B, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
@@ -1469,12 +1439,12 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
 //    }
 
     // SSIM section
-    float ssim             = SSIM(matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
-    float ssim_int         = SSIM(matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
-    float rmse             = RMSE(matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float psnr             = PSNR(matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_rate       = ERROR_RATE(      matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/);
-    float error_percentage = ERROR_PERCENTAGE(matrix_size.uiHC, matrix_size.uiWC, matrix_size.uiWC, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float ssim             = SSIM(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 0/*cast to int?*/);
+    float ssim_int         = SSIM(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/, 1/*cast to int?*/);
+    float rmse             = RMSE(size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float psnr             = PSNR(size_c_W, size_C_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_rate       = ERROR_RATE(      size_c_W, size_c_H, size_c_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
+    float error_percentage = ERROR_PERCENTAGE(size_c_W, size_c_H, size_C_H, h_C_baseline, h_C_proposed, 1/*verbose*/);
 
     // quality section
     printf("==============================================================\n");
