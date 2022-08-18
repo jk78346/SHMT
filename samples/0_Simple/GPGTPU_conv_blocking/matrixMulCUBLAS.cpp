@@ -118,6 +118,8 @@ typedef struct _matrixSize      // Optional Command-line multiplier for matrix s
 {
     unsigned int IN_W, 
                  IN_H, 
+                 IN_BLK_W,
+                 IN_BLK_H,
                  IN_C, 
                  F_W, 
                  F_H, 
@@ -507,9 +509,11 @@ float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, f
 	printf("\tcalling conv_CPU_blocking(%d, %d)...\n", IN_W_i, IN_H_j);
     for(int i = 0 ; i < matrix_size.OUT_BLK_W ; i++){
         for(int j = 0 ; j < matrix_size.OUT_BLK_H ; j++){
-            int c_i = IN_W_i * matrix_size.OUT_BLK_W + i;
-            int c_j = IN_H_j * matrix_size.OUT_BLK_H + j;
-            if(i >= BLK_W || j >= BLK_H){
+            int c_i = IN_W_i * matrix_size.IN_BLK_W + i;
+            int c_j = IN_H_j * matrix_size.IN_BLK_H + j;
+            int out_global_i = IN_W_i * matrix_size.OUT_BLK_W + i;
+            int out_global_j = IN_H_j * matrix_size.OUT_BLK_H + j;
+            if(out_global_i >= matrix_size.OUT_W || out_global_j >= matrix_size.OUT_H){
                 continue;
             }
             h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] = 0.0;
@@ -528,9 +532,28 @@ float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, f
     return 0;
 }
 
+void print_matrix(sMatrixSize matrix_size){
+    printf("IN_W: %d\n", matrix_size.IN_W);
+    printf("IN_H: %d\n", matrix_size.IN_H);
+    printf("IN_C: %d\n", matrix_size.IN_C);
+    printf("F_W: %d\n", matrix_size.F_W);
+    printf("F_H: %d\n", matrix_size.F_H);
+    printf("S_W: %d\n", matrix_size.S_W);
+    printf("S_H: %d\n", matrix_size.S_H);
+    printf("OUT_C: %d\n", matrix_size.OUT_C);
+    printf("OUT_W: %d\n", matrix_size.OUT_W);
+    printf("OUT_H: %d\n", matrix_size.OUT_H);
+    printf("OUT_W_BLK_CNT: %d\n", matrix_size.OUT_W_BLK_CNT);
+    printf("OUT_H_BLK_CNT: %d\n", matrix_size.OUT_H_BLK_CNT);
+    printf("OUT_BLK_W: %d\n", matrix_size.OUT_BLK_W);
+    printf("OUT_BLK_H: %d\n", matrix_size.OUT_BLK_H);
+}
+
 void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_partial){
+    print_matrix(matrix_size);
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            printf("conv_output_summation: i: %d, j: %d\n", i, j);
             for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
                 for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
                     int ii = i*(matrix_size.OUT_BLK_W)+w;
@@ -538,6 +561,7 @@ void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_part
                     if(ii >= matrix_size.OUT_W || jj >= matrix_size.OUT_H){
                         continue;
                     }
+      //              printf("ii: %d, OUT_H: %d, jj: %d\n", ii, matrix_size.OUT_H, jj);
                     h_C[ii*(matrix_size.OUT_H)+jj] = 
                         h_c_partial[i*matrix_size.OUT_H_BLK_CNT+j][w*matrix_size.OUT_BLK_H+h];
                 }
@@ -1097,9 +1121,9 @@ void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
     fprintf(f, "P6\n%i %i 255\n", matrix_size.OUT_W, matrix_size.OUT_H);
     for(int i = 0 ; i < matrix_size.OUT_H ; i++){
         for(int j = 0 ; j < matrix_size.OUT_W ; j++){
-            fputc((char)h_c[j*(matrix_size.OUT_W)+i], f);
-            fputc(255, f);
-            fputc(255, f);
+            fputc((char)h_c[(matrix_size.OUT_H-i-1)*(matrix_size.OUT_W)+(j)], f);
+            fputc(128, f);
+            fputc(128, f);
         }
     }
     fclose(f);
@@ -1146,10 +1170,13 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     // assign partitioning
     assign_blk_size(argc, argv);
 
-    assert(matrix_size.IN_W % BLK_W == 0);
-    assert(matrix_size.IN_H % BLK_H == 0);
-    int w_cnt = matrix_size.IN_W / BLK_W;
-    int h_cnt = matrix_size.IN_H / BLK_H;
+    matrix_size.IN_BLK_W = BLK_W;
+    matrix_size.IN_BLK_H = BLK_H;
+
+    assert(matrix_size.IN_W % matrix_size.IN_BLK_W == 0);
+    assert(matrix_size.IN_H % matrix_size.IN_BLK_H == 0);
+    int w_cnt = matrix_size.IN_W / matrix_size.IN_BLK_W;
+    int h_cnt = matrix_size.IN_H / matrix_size.IN_BLK_H;
     matrix_size.OUT_W_BLK_CNT = w_cnt;
     matrix_size.OUT_H_BLK_CNT = h_cnt;
     assert(size_C_W % w_cnt == 0);
