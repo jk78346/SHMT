@@ -250,8 +250,8 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(EXTRA_LDFLAGS))
 
 # Common includes and paths for CUDA
-INCLUDES  := -I../../common/inc
-LIBRARIES :=
+INCLUDES  := -I../../common/inc -I/usr/local/include/opencv4/
+LIBRARIES := -lopencv_calib3d -lopencv_core -lopencv_dnn -lopencv_features2d -lopencv_flann -lopencv_gapi -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -lopencv_ml -lopencv_objdetect -lopencv_photo -lopencv_stitching -lopencv_video -lopencv_videoio
 
 ################################################################################
 
@@ -299,7 +299,8 @@ else
 endif
 
 matrixMulCUBLAS.o:matrixMulCUBLAS.cpp
-	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
+	g++ --std=c++11 matrixMulCUBLAS.cpp -I/usr/local/include/opencv4/ -lgptpu $(LIBRARIES) -ldl -o conv
+	#$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
 matrixMulCUBLAS: matrixMulCUBLAS.o
 	# move shared library, make sure the shared library is up-to-date
@@ -308,7 +309,6 @@ matrixMulCUBLAS: matrixMulCUBLAS.o
 	#sudo cp ~/GPTPU.internal/lib/libdense_arm.so /usr/local/lib/libdense.so
 	#sudo cp ~/GPTPU.internal/include/dense.h /usr/local/include
 	#$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES) -lgptpu -ldl
-	g++ --std=c++11 matrixMulCUBLAS.cpp -lgptpu -ldl -o conv
 	#$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	#$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 

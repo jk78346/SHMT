@@ -78,6 +78,9 @@
 #include <vector>
 #include <unordered_map>
 #include <assert.h>
+#include <opencv2/opencv.hpp>
+
+using namespace cv;
 
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
@@ -517,6 +520,8 @@ float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, f
                 continue;
             }
             h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] = 0.0;
+            //printf("partition: %d, index(%d, %d)\n", IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j,
+            //                        i, j);
             for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
                 for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
                     if((c_i+fi) >= matrix_size.IN_W || (c_j+fj) >= matrix_size.IN_H){
@@ -572,6 +577,10 @@ void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_part
 
 float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
 	printf("calling conv_CPU_TILES...\n");
+    printf("cropping using opencv\n");
+    
+    
+    
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             conv_CPU_blocking(nIter, matrix_size, alpha, h_in, i, j, h_filter, beta, h_C, h_C_partial);
@@ -1116,12 +1125,13 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
 }
 
 void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
-    unsigned int file_size = matrix_size.OUT_W * matrix_size.OUT_H;
     FILE *f = fopen(file_name.c_str(), "wb");
     fprintf(f, "P6\n%i %i 255\n", matrix_size.OUT_W, matrix_size.OUT_H);
     for(int i = 0 ; i < matrix_size.OUT_H ; i++){
         for(int j = 0 ; j < matrix_size.OUT_W ; j++){
-            fputc((char)h_c[(matrix_size.OUT_H-i-1)*(matrix_size.OUT_W)+(j)], f);
+            unsigned int index = (matrix_size.OUT_H-i-1)*(matrix_size.OUT_W)+(j);
+            //printf("pixel(%d, %d): %d, = %f\n", i, j, (char)h_c[index], h_c[index]);
+            fputc((char)h_c[index], f);
             fputc(128, f);
             fputc(128, f);
         }
@@ -1153,6 +1163,11 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     // initialize host memory
     assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
+    
+    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
+    
+    Mat img = imread(file_name);
+
     randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
     randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
 
