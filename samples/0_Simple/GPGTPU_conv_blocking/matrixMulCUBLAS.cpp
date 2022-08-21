@@ -83,6 +83,8 @@
 
 using namespace cv;
 
+Mat* crops;
+
 #ifndef get_time_ms
 #define get_time_ms(_end, _start) (std::chrono::duration_cast<std::chrono::nanoseconds>(_end - _start).count()/1000000.0)
 #endif
@@ -200,16 +202,16 @@ int findIndex(vector<string> &arr, string item){
 // Allocates a matrix with random float entries.
 void randomInit(float *data, int m, int n, int _mode)
 {
-    if(_mode == 6){ // Sobel filter weights
-        data[0] =  1;
+    if(_mode == 6){ // Gx Sobel filter weights
+        data[0] = -1;
         data[1] =  0;
-        data[2] = -1;
-        data[3] =  2;
+        data[2] =  1;
+        data[3] = -2;
         data[4] =  0;
-        data[5] = -2;
-        data[6] =  1;
+        data[5] =  2;
+        data[6] = -1;
         data[7] =  0;
-        data[8] = -1;
+        data[8] =  1;
         return;
     }
 
@@ -483,69 +485,6 @@ void matrix_mul(openctpu_buffer *matrix_a,
 }
 /* =============================================================================================================== */
 
-float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C){
-	printf("calling conv_CPU...\n");
-
-    printf("passing through input to output\n");
-    for(int i = 0 ; i < matrix_size.OUT_W ; i++){
-        for(int j = 0 ; j < matrix_size.OUT_H ; j++){
-            h_C[i*matrix_size.OUT_H+j] = h_in[i*matrix_size.IN_H+j];
-        }
-    }
-    return 0;
-
-    for(int i = 0 ; i < matrix_size.IN_W ; i++){
-        for(int j = 0 ; j < matrix_size.IN_H ; j++){
-            int c_i = i;
-            int c_j = j;
-            if(c_i >= matrix_size.OUT_W || c_j >= matrix_size.OUT_H){
-                continue;
-            }
-            h_C[c_i*(matrix_size.OUT_H)+c_j] = 0;
-            for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
-                for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
-                    if((i+fi) >= matrix_size.IN_W || (j+fj) >= matrix_size.IN_H){
-                        continue;
-                    }
-                    h_C[c_i*(matrix_size.OUT_H)+c_j] += 
-                        h_in[(i+fi)*matrix_size.IN_H+(j+fj)] *
-                        h_filter[fi*(matrix_size.F_H)*fj];
-                }    
-            }
-        }
-    } 
-	return 0;
-}
-
-float conv_CPU_blocking(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, int IN_W_i, int IN_H_j, float* h_filter, const float beta, float* h_C, float** h_C_partial){
-	printf("\tcalling conv_CPU_blocking(%d, %d)...\n", IN_W_i, IN_H_j);
-    for(int i = 0 ; i < matrix_size.OUT_BLK_W ; i++){
-        for(int j = 0 ; j < matrix_size.OUT_BLK_H ; j++){
-            int c_i = IN_W_i * matrix_size.IN_BLK_W + i;
-            int c_j = IN_H_j * matrix_size.IN_BLK_H + j;
-            int out_global_i = IN_W_i * matrix_size.OUT_BLK_W + i;
-            int out_global_j = IN_H_j * matrix_size.OUT_BLK_H + j;
-            if(out_global_i >= matrix_size.OUT_W || out_global_j >= matrix_size.OUT_H){
-                continue;
-            }
-            h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] = 0.0;
-            //printf("partition: %d, index(%d, %d)\n", IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j,
-            //                        i, j);
-            for(int fi = 0 ; fi < matrix_size.F_W ; fi++){
-                for(int fj = 0 ; fj < matrix_size.F_H ; fj++){
-                    if((c_i+fi) >= matrix_size.IN_W || (c_j+fj) >= matrix_size.IN_H){
-                        continue;
-                    }
-                    h_C_partial[IN_W_i*(matrix_size.OUT_H_BLK_CNT)+IN_H_j][i*(matrix_size.OUT_BLK_H)+j] += 
-                        h_in[(c_i+fi)*matrix_size.IN_H+(c_j+fj)] *
-                        h_filter[fi*(matrix_size.F_H)*fj];
-                }    
-            }
-        }
-    } 
-    return 0;
-}
-
 void print_matrix(sMatrixSize matrix_size){
     printf("IN_W: %d\n", matrix_size.IN_W);
     printf("IN_H: %d\n", matrix_size.IN_H);
@@ -563,39 +502,59 @@ void print_matrix(sMatrixSize matrix_size){
     printf("OUT_BLK_H: %d\n", matrix_size.OUT_BLK_H);
 }
 
-void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_partial){
-    print_matrix(matrix_size);
+void Mat2array(Mat& img, float* data){
+    // data has to be pre-allocated with proper size
+    assert(img.isContinuous());
+    printf("Mat2array - img.size().width: %d, img.size().height: %d\n", img.size().width, img.size().height );
+    for(int i = 0 ; i < img.size().width ; i++){
+        for(int j = 0 ; j < img.size().height ; j++){
+            int idx = i*(img.size().height)+j;
+            data[idx] = img.data[idx]; // uint8_t to float conversion
+        }
+    }
+}
+
+float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, float* h_C){
+	printf("calling conv_CPU...\n");
+    Mat grad_x, grad_y;
+    Mat abs_grad_x, abs_grad_y;
+    Sobel(img, grad_x, CV_16S/*ddepth*/, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+    Sobel(img, grad_y, CV_16S/*ddepth*/, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+
+    convertScaleAbs(grad_x, abs_grad_x);
+    convertScaleAbs(grad_y, abs_grad_y);
+
+    Mat grad;
+    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+
+    Mat2array(grad, h_C);
+    return 0;
+}
+
+void reverse_crop(sMatrixSize matrix_size, float* h_C, float** h_C_partial){
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
-            printf("conv_output_summation: i: %d, j: %d\n", i, j);
+            int idx = i*matrix_size.OUT_H_BLK_CNT+j;
             for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
                 for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
-                    int ii = i*(matrix_size.OUT_BLK_W)+w;
-                    int jj = j*(matrix_size.OUT_BLK_H)+h;
-                    if(ii >= matrix_size.OUT_W || jj >= matrix_size.OUT_H){
-                        continue;
-                    }
-      //              printf("ii: %d, OUT_H: %d, jj: %d\n", ii, matrix_size.OUT_H, jj);
-                    h_C[ii*(matrix_size.OUT_H)+jj] = 
-                        h_c_partial[i*matrix_size.OUT_H_BLK_CNT+j][w*matrix_size.OUT_BLK_H+h];
+                    int offset = w*matrix_size.OUT_BLK_H+h;
+                    h_C[offset] = h_C_partial[idx][offset];
                 }
             }
         }
     }
 }
 
-float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
+float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float** h_partial_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
 	printf("calling conv_CPU_TILES...\n");
-    
-    
-    
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
-            conv_CPU_blocking(nIter, matrix_size, alpha, h_in, i, j, h_filter, beta, h_C, h_C_partial);
+            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
+            conv_CPU(nIter, matrix_size, alpha, crops[idx], h_partial_in[idx], h_filter, beta, h_C_partial[idx]);
         }
     }
-    conv_output_summation(matrix_size, h_C, h_C_partial);
-
+    // combine partial to one
+    reverse_crop(matrix_size, h_C, h_C_partial);
     return 0;
 }
 
@@ -1110,10 +1069,9 @@ void assign_mix_p(int argc, char** argv){
 	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
 }
 
-void get_partitions(const std::string file_name, sMatrixSize matrix_size, float* h_in, float** h_partial_in){
+void read_img(const std::string file_name, sMatrixSize matrix_size, Mat& img){
     Mat raw = imread(file_name);
     assert(!raw.empty());
-    Mat img;
     cvtColor(raw, img, COLOR_BGR2GRAY);
     std::cout << "img rows    : " << img.rows          << std::endl;
     std::cout << "img cols    : " << img.cols          << std::endl;
@@ -1122,43 +1080,24 @@ void get_partitions(const std::string file_name, sMatrixSize matrix_size, float*
     std::cout << "img channels: " << img.channels()    << std::endl;
 
     assert(img.size().width * img.size().height == matrix_size.IN_W * matrix_size.IN_H);
-
-    // prepare h_in (deep copy)
-    for(int i = 0 ; i < matrix_size.IN_W ; i++){
-        for(int j = 0 ; j < matrix_size.IN_H ; j++){
-            int idx = i*matrix_size.IN_H+j;
-            h_in[idx] = img.data[idx]; // uint8_t to float conversion
-        }
-    }
-
-    // prepare h_partial_in using cropping
-    Mat *img_pars = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
-    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
-        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
-            int index = i*matrix_size.OUT_H_BLK_CNT+j;
-            Mat crop = img(Range(i   * matrix_size.IN_BLK_W, 
-                                (i+1)* matrix_size.IN_BLK_W),
-                           Range(j   * matrix_size.IN_BLK_H,
-                                (j+1)* matrix_size.IN_BLK_H));
-            Mat tmp_flat = crop.reshape(1, matrix_size.IN_BLK_W * matrix_size.IN_BLK_H);
-            assert(crop.isContinuous());
-//            for(){
-//                for(){
-//                
-//                }
-//            }
-            //h_partial_in[index] = tmp_flat.data[];
-            std::memcpy(h_partial_in[index], (float*)tmp_flat.data, matrix_size.IN_BLK_W * matrix_size.IN_BLK_H * sizeof(float));
-        }
-    }
+    return;
 }
 
-float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, float* h_in, float** h_partial_in, float* h_filter, float* h_C, float** h_partial_C){
+void get_partitions(sMatrixSize matrix_size, int i, int j, Mat& img, Mat& crop){
+    assert(i >= 0 && i < matrix_size.OUT_W_BLK_CNT);
+    assert(j >= 0 && j < matrix_size.OUT_H_BLK_CNT);
+    crop = img(Range(i   * matrix_size.IN_BLK_W, 
+                    (i+1)* matrix_size.IN_BLK_W),
+               Range(j   * matrix_size.IN_BLK_H,
+                    (j+1)* matrix_size.IN_BLK_H));
+}
+
+float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, Mat& img, float* h_in, float** h_partial_in, float* h_filter, float* h_C, float** h_partial_C){
 	float kernel_ms = 0;
     if(_mode == 0){ // CPU mode
-		kernel_ms = conv_CPU(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C);
+		kernel_ms = conv_CPU(nIter, matrix_size, alpha, img, h_in, h_filter, beta, h_C);
     }else if(_mode == 1){ // CPU tiling algorithm mode
-		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C, h_partial_C);
+		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_partial_in, h_filter, beta, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size, h_in, h_filter, h_C);
 	}else if(_mode == 3){ // TPU tiling algorithm mode
@@ -1183,8 +1122,8 @@ void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
             unsigned int index = (i)*(matrix_size.OUT_W)+(j);
             //printf("pixel(%d, %d): %d, = %f\n", i, j, (char)h_c[index], h_c[index]);
             fputc((char)h_c[index], f);
-            fputc(128, f);
-            fputc(128, f);
+            fputc(0, f);
+            fputc(0, f);
         }
     }
     fclose(f);
@@ -1218,12 +1157,12 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
 
     //randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
-    randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
+    randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Gx Sobel filter*/);
 
     // allocate host memory for the result
     // no padding is assumed here.
-    unsigned int size_C_W = ceil((matrix_size.IN_W - matrix_size.F_W) / matrix_size.S_W) + 1;
-    unsigned int size_C_H = ceil((matrix_size.IN_H - matrix_size.F_H) / matrix_size.S_H) + 1;
+    unsigned int size_C_W = ceil((matrix_size.IN_W - matrix_size.F_W + 2) / matrix_size.S_W) + 1;
+    unsigned int size_C_H = ceil((matrix_size.IN_H - matrix_size.F_H + 2) / matrix_size.S_H) + 1;
     matrix_size.OUT_W = size_C_W;
     matrix_size.OUT_H = size_C_H;
     unsigned int size_c = size_C_W * size_C_H;
@@ -1268,18 +1207,28 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     const float beta  = 0.0f;
     
     // Using opencv to partition input image and populate to h_in and h_partial_in
-    get_partitions(file_name, matrix_size, h_in, h_partial_in);
-
+    Mat img;
+    read_img(file_name, matrix_size, img);
+    Mat2array(img, h_in);
+    
+    crops = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            int idx = i*matrix_size.OUT_H_BLK_CNT+j;
+            get_partitions(matrix_size, i, j, img, crops[idx]);
+            Mat2array(crops[idx], h_partial_in[idx]);
+        }
+    }
     int _mode;
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, h_in, h_partial_in, h_filter, h_C_baseline, h_C_baseline_partial);
+    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
     _mode = atoi(argv[6]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, h_in, h_partial_in, h_filter, h_C_proposed, h_C_proposed_partial);
+    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
