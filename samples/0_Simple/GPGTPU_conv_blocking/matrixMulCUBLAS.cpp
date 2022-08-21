@@ -79,6 +79,7 @@
 #include <unordered_map>
 #include <assert.h>
 #include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 using namespace cv;
 
@@ -485,6 +486,14 @@ void matrix_mul(openctpu_buffer *matrix_a,
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C){
 	printf("calling conv_CPU...\n");
 
+    printf("passing through input to output\n");
+    for(int i = 0 ; i < matrix_size.OUT_W ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H ; j++){
+            h_C[i*matrix_size.OUT_H+j] = h_in[i*matrix_size.IN_H+j];
+        }
+    }
+    return 0;
+
     for(int i = 0 ; i < matrix_size.IN_W ; i++){
         for(int j = 0 ; j < matrix_size.IN_H ; j++){
             int c_i = i;
@@ -577,7 +586,6 @@ void conv_output_summation(sMatrixSize matrix_size, float* h_C, float** h_c_part
 
 float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, float* h_in, float* h_filter, const float beta, float* h_C, float** h_C_partial){
 	printf("calling conv_CPU_TILES...\n");
-    printf("cropping using opencv\n");
     
     
     
@@ -1102,11 +1110,54 @@ void assign_mix_p(int argc, char** argv){
 	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
 }
 
-float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const float alpha, const float beta, float* h_in, float* h_filter, float* h_C, float** h_partial_C){
+void get_partitions(const std::string file_name, sMatrixSize matrix_size, float* h_in, float** h_partial_in){
+    Mat raw = imread(file_name);
+    assert(!raw.empty());
+    Mat img;
+    cvtColor(raw, img, COLOR_BGR2GRAY);
+    std::cout << "img rows    : " << img.rows          << std::endl;
+    std::cout << "img cols    : " << img.cols          << std::endl;
+    std::cout << "img width   : " << img.size().width  << std::endl;
+    std::cout << "img hieght  : " << img.size().height << std::endl;
+    std::cout << "img channels: " << img.channels()    << std::endl;
+
+    assert(img.size().width * img.size().height == matrix_size.IN_W * matrix_size.IN_H);
+
+    // prepare h_in (deep copy)
+    for(int i = 0 ; i < matrix_size.IN_W ; i++){
+        for(int j = 0 ; j < matrix_size.IN_H ; j++){
+            int idx = i*matrix_size.IN_H+j;
+            h_in[idx] = img.data[idx]; // uint8_t to float conversion
+        }
+    }
+
+    // prepare h_partial_in using cropping
+    Mat *img_pars = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            int index = i*matrix_size.OUT_H_BLK_CNT+j;
+            Mat crop = img(Range(i   * matrix_size.IN_BLK_W, 
+                                (i+1)* matrix_size.IN_BLK_W),
+                           Range(j   * matrix_size.IN_BLK_H,
+                                (j+1)* matrix_size.IN_BLK_H));
+            Mat tmp_flat = crop.reshape(1, matrix_size.IN_BLK_W * matrix_size.IN_BLK_H);
+            assert(crop.isContinuous());
+//            for(){
+//                for(){
+//                
+//                }
+//            }
+            //h_partial_in[index] = tmp_flat.data[];
+            std::memcpy(h_partial_in[index], (float*)tmp_flat.data, matrix_size.IN_BLK_W * matrix_size.IN_BLK_H * sizeof(float));
+        }
+    }
+}
+
+float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, float* h_in, float** h_partial_in, float* h_filter, float* h_C, float** h_partial_C){
 	float kernel_ms = 0;
-	if(_mode == 0){ // CPU mode
+    if(_mode == 0){ // CPU mode
 		kernel_ms = conv_CPU(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C);
-	}else if(_mode == 1){ // GPU tiling algorithm mode
+    }else if(_mode == 1){ // CPU tiling algorithm mode
 		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_in, h_filter, beta, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
         	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size, h_in, h_filter, h_C);
@@ -1129,7 +1180,7 @@ void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
     fprintf(f, "P6\n%i %i 255\n", matrix_size.OUT_W, matrix_size.OUT_H);
     for(int i = 0 ; i < matrix_size.OUT_H ; i++){
         for(int j = 0 ; j < matrix_size.OUT_W ; j++){
-            unsigned int index = (matrix_size.OUT_H-i-1)*(matrix_size.OUT_W)+(j);
+            unsigned int index = (i)*(matrix_size.OUT_W)+(j);
             //printf("pixel(%d, %d): %d, = %f\n", i, j, (char)h_c[index], h_c[index]);
             fputc((char)h_c[index], f);
             fputc(128, f);
@@ -1165,10 +1216,8 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
     
     const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
-    
-    Mat img = imread(file_name);
 
-    randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
+    //randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
     randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Sobel filter*/);
 
     // allocate host memory for the result
@@ -1198,10 +1247,12 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     assert(size_C_H % h_cnt == 0);
     matrix_size.OUT_BLK_W = size_C_W / w_cnt;
     matrix_size.OUT_BLK_H = size_C_H / h_cnt;
-
+    
+    float** h_partial_in         = (float**) malloc( w_cnt * h_cnt * sizeof(float*));
     float** h_C_baseline_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
     float** h_C_proposed_partial = (float **) malloc(w_cnt * h_cnt * sizeof(float*));
     for(int i = 0 ; i < (w_cnt * h_cnt) ; i++){
+        h_partial_in[i]         = (float*) malloc(matrix_size.IN_BLK_W  * matrix_size.IN_BLK_H );
 	    h_C_baseline_partial[i] = (float*) malloc(matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H);
 	    h_C_proposed_partial[i] = (float*) malloc(matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H);
     }
@@ -1215,17 +1266,20 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     
     const float alpha = 1.0f;
     const float beta  = 0.0f;
+    
+    // Using opencv to partition input image and populate to h_in and h_partial_in
+    get_partitions(file_name, matrix_size, h_in, h_partial_in);
 
     int _mode;
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
-    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_in, h_filter, h_C_baseline, h_C_baseline_partial);
+    baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, h_in, h_partial_in, h_filter, h_C_baseline, h_C_baseline_partial);
     _end = clk::now();
     baseline_total_ms = get_time_ms(_end, _start);
 	
     _mode = atoi(argv[6]); // proposed
     _start = clk::now();
-    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, alpha, beta, h_in, h_filter, h_C_proposed, h_C_proposed_partial);
+    proposed_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, h_in, h_partial_in, h_filter, h_C_proposed, h_C_proposed_partial);
     _end = clk::now();
     proposed_total_ms = get_time_ms(_end, _start);
 
