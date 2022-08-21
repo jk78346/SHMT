@@ -103,7 +103,7 @@ typedef std::chrono::high_resolution_clock clk;
 
 float mix_p = 0.5; // percentage of weighted RR on GPU if mix mode is used
 
-unsigned int COMMON_BLK = 4096; // default is optimal
+unsigned int COMMON_BLK = 2048; // default is optimal
 unsigned int BLK_H = COMMON_BLK;
 unsigned int BLK_W = COMMON_BLK;
 
@@ -218,7 +218,7 @@ void randomInit(float *data, int m, int n, int _mode)
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
-    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
+    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
     int fd = open(file_name.c_str(), O_RDONLY);
     char *src;
     struct stat st_temp;
@@ -307,8 +307,8 @@ void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &mat
 
     int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
-    matrix_size.IN_W = 4096;
-    matrix_size.IN_H = 4096;
+    matrix_size.IN_W = 2048;
+    matrix_size.IN_H = 2048;
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
@@ -571,43 +571,20 @@ float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
 
 float conv_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_TPU){
 	printf("calling conv_TPU...\n");
-	
-//	int m = matrix_size.uiWB;
-//	int n = matrix_size.uiHA;
-//	int k = matrix_size.uiWA;
-//	
-//        // edgeTPU setup
-//        openctpu_init(1, 1);
-//	openctpu_dimension *matrix_a_d, *matrix_b_d, *matrix_c_d;
-//	openctpu_buffer    *tensor_a,   *tensor_b,   *tensor_c;
-//	
-//	timing b_s = clk::now();
-//	matrix_a_d = openctpu_alloc_dimension(3, m, n, n);
-//	matrix_b_d = openctpu_alloc_dimension(3, n, k, k);
-//	matrix_c_d = openctpu_alloc_dimension(3, m, k, k);
-//    
-//	auto config = openctpu_setConfig(1/*0: int, 1:float*/, false/*exact_mode*/, false/*mm256_mode*/, 1/*chunk_num*/);
-//
-//        float average, sdev;
-//
-//	tensor_a = openctpu_create_buffer(argc, argv, matrix_a_d, h_A,   config, false/*b_major*/, 0/*tensor_type*/, average, sdev);
-//	tensor_b = openctpu_create_buffer(argc, argv, matrix_b_d, h_B,   config, false/*b_major*/, 1/*tensor_type*/, average, sdev);
-//	tensor_c = openctpu_create_buffer(argc, argv, matrix_c_d, h_TPU, config, false/*b_major*/, 2/*tensor_type*/, average, sdev);
-//	timing b_e = clk::now();
-//        double bms = get_time_ms(b_e, b_s);
-//	printf("binary creation time: %f (ms)\n", bms);
-//
-//	timing _start = clk::now();	
-//	for (int j = 0; j < nIter; j++)
-//        {
-//		openctpu_enqueue(matrix_mul/*kernel name*/, tensor_a, tensor_b, tensor_c, atof(argv[4]));
-//	}
-//	openctpu_sync(); 
-//	openctpu_clean_up();
-//	timing _end = clk::now();	
-//	
-//	float TPU_ms = get_time_ms(_end, _start);
-//	return TPU_ms;
+    
+    int in_size  = matrix_size.IN_BLK_W * matrix_size.IN_BLK_H;
+    int out_size = matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H;
+    int* in  = (int*) malloc(in_size * sizeof(int));
+    int* out = (int*) calloc(out_size, sizeof(int));
+    for(int i = 0 ; i < in_size ; i++){
+        in[i] = h_in[i];
+    }
+    std::string model_path = "conv_IN_2K_2K_1_F_3_3_1_S_1_1_SAME_Sobel_edgetpu.tflite";
+    run_a_model(model_path, nIter, in , in_size, out, out_size, 255);
+    
+    for(int i = 0 ; i < out_size ; i++){
+        h_TPU[i] = out[i];
+    }
 }
 
 void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
@@ -1175,7 +1152,7 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
     
-    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
+    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
 
     //randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
     randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Gx Sobel filter*/);
