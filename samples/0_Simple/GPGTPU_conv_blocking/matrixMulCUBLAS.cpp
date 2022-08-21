@@ -103,7 +103,7 @@ typedef std::chrono::high_resolution_clock clk;
 
 float mix_p = 0.5; // percentage of weighted RR on GPU if mix mode is used
 
-unsigned int COMMON_BLK = 2048; // default is optimal
+unsigned int COMMON_BLK = 4096; // default is optimal
 unsigned int BLK_H = COMMON_BLK;
 unsigned int BLK_W = COMMON_BLK;
 
@@ -218,7 +218,7 @@ void randomInit(float *data, int m, int n, int _mode)
     std::default_random_engine gen;
     std::normal_distribution<float> dis(128.0, 32.0);
 
-    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
+    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
     int fd = open(file_name.c_str(), O_RDONLY);
     char *src;
     struct stat st_temp;
@@ -307,8 +307,8 @@ void initializeSHAPE(int argc, char **argv, int &iSizeMultiple, sMatrixSize &mat
 
     int block_size = atoi(argv[2]);  // iSizeMultiple is 5
 
-    matrix_size.IN_W = 2048;
-    matrix_size.IN_H = 2048;
+    matrix_size.IN_W = 4096;
+    matrix_size.IN_H = 4096;
     matrix_size.IN_C = 1;
     matrix_size.F_W = 3;
     matrix_size.F_H = 3;
@@ -504,20 +504,26 @@ void print_matrix(sMatrixSize matrix_size){
 
 void Mat2array(Mat& img, float* data){
     // data has to be pre-allocated with proper size
-    assert(img.isContinuous());
-    printf("Mat2array - img.size().width: %d, img.size().height: %d\n", img.size().width, img.size().height );
-    for(int i = 0 ; i < img.size().width ; i++){
-        for(int j = 0 ; j < img.size().height ; j++){
-            int idx = i*(img.size().height)+j;
+    if(! img.isContinuous()){
+        img = img.clone();
+    }
+    // row-major
+    for(int i = 0 ; i < img.rows ; i++){
+        for(int j = 0 ; j < img.cols ; j++){
+            int idx = i*(img.cols)+j;
             data[idx] = img.data[idx]; // uint8_t to float conversion
         }
     }
 }
 
+int cnt = 0;
+
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, float* h_C){
 	printf("calling conv_CPU...\n");
+   
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
+    
     Sobel(img, grad_x, CV_16S/*ddepth*/, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
     Sobel(img, grad_y, CV_16S/*ddepth*/, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
 
@@ -527,18 +533,23 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
     Mat grad;
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
 
+    printf("grad size: %d, %d\n", grad.size().width, grad.size().height);
     Mat2array(grad, h_C);
+
+    imwrite("sobel_"+std::to_string(cnt)+".jpg", grad);
+    cnt+=1;
+
     return 0;
 }
 
 void reverse_crop(sMatrixSize matrix_size, float* h_C, float** h_C_partial){
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
-            int idx = i*matrix_size.OUT_H_BLK_CNT+j;
+            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
             for(int w = 0 ; w < matrix_size.OUT_BLK_W ; w++){
                 for(int h = 0 ; h < matrix_size.OUT_BLK_H ; h++){
-                    int offset = w*matrix_size.OUT_BLK_H+h;
-                    h_C[offset] = h_C_partial[idx][offset];
+                    int offset = w*(matrix_size.OUT_BLK_H)+h;
+                    h_C[(i*matrix_size.OUT_BLK_W+w) * matrix_size.OUT_H + (j*matrix_size.OUT_BLK_H+h)] = h_C_partial[idx][offset];
                 }
             }
         }
@@ -648,7 +659,16 @@ float get_dist_similarity(float* in, int m, int n, int ldn){
 }
 
 float conv_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_TPU, float** h_partial_c){
-	printf("calling GEMM_TPU_TILES...\n");
+	printf("calling conv_TPU_TILES...\n");
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
+            //conv_CPU(nIter, matrix_size, alpha, crops[idx], h_partial_in[idx], h_filter, beta, h_C_partial[idx]);
+        }
+    }
+    // combine partial to one
+    //reverse_crop(matrix_size, h_C, h_C_partial);
+    return 0;
 	
 //	int m     = matrix_size.uiHA;
 //	int n     = matrix_size.uiHB;
@@ -1086,10 +1106,11 @@ void read_img(const std::string file_name, sMatrixSize matrix_size, Mat& img){
 void get_partitions(sMatrixSize matrix_size, int i, int j, Mat& img, Mat& crop){
     assert(i >= 0 && i < matrix_size.OUT_W_BLK_CNT);
     assert(j >= 0 && j < matrix_size.OUT_H_BLK_CNT);
-    crop = img(Range(i   * matrix_size.IN_BLK_W, 
-                    (i+1)* matrix_size.IN_BLK_W),
-               Range(j   * matrix_size.IN_BLK_H,
-                    (j+1)* matrix_size.IN_BLK_H));
+    Rect roi(i*matrix_size.IN_BLK_W, j*matrix_size.IN_BLK_H, matrix_size.IN_BLK_W, matrix_size.IN_BLK_H);
+    //crop = img(Range(i * matrix_size.IN_BLK_W, (i+1) * matrix_size.IN_BLK_W),
+    //           Range(j * matrix_size.IN_BLK_H, (j+1) * matrix_size.IN_BLK_H));
+    std::cout << roi << std::endl;
+    img(roi).copyTo(crop);
 }
 
 float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_size, const std::string file_name, float alpha, float beta, Mat& img, float* h_in, float** h_partial_in, float* h_filter, float* h_C, float** h_partial_C){
@@ -1154,7 +1175,7 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     assert(matrix_size.IN_C == 1 && matrix_size.OUT_C == 1);
     assert(matrix_size.S_W == 1 && matrix_size.S_H == 1);
     
-    const std::string file_name = "./data/lena_gray_2Kx2K.bmp";
+    const std::string file_name = "./data/lena_gray_4Kx4K.bmp";
 
     //randomInit(h_in, matrix_size.IN_W, matrix_size.IN_H, atoi(argv[1]));
     randomInit(h_filter, matrix_size.F_W, matrix_size.F_H, 6/*Gx Sobel filter*/);
@@ -1206,12 +1227,14 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     const float alpha = 1.0f;
     const float beta  = 0.0f;
     
+    print_matrix(matrix_size);
     // Using opencv to partition input image and populate to h_in and h_partial_in
     Mat img;
     read_img(file_name, matrix_size, img);
     Mat2array(img, h_in);
     
-    crops = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
+    //crops = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
+    crops = new Mat[matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT];
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             int idx = i*matrix_size.OUT_H_BLK_CNT+j;
