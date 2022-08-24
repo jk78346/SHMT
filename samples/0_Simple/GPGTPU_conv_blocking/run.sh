@@ -7,7 +7,7 @@ input_data_mode=4 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read i
 scale=261000
 
 
-for size in 2048
+for size in 4096
 do
   for blk_size in 2048 #$ 1024 512
   do

@@ -517,6 +517,11 @@ void Mat2array(Mat& img, float* data){
     }
 }
 
+void array2Mat(Mat& img, float* data, int CV_type, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_type, data);
+    tmp.copyTo(img);
+}
+
 //int cnt = 0;
 
 int ddepth_mode = 0;
@@ -527,7 +532,7 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
-    int ddepth = CV_32F; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
+    int ddepth = CV_16S; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
     if(ddepth_mode == 0){
         ddepth_mode = 1;
     }else{
@@ -1129,6 +1134,11 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
 		printf("undefined mode: %d, exit...\n", _mode);
 		exit(0);
 	}
+
+    if(_mode >= 2 and _mode <= 4){
+        openctpu_clean_up();
+    }
+
 	return kernel_ms;
 }
 
@@ -1149,8 +1159,22 @@ void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
 }
 
 void output_img_to_file(sMatrixSize matrix_size, float* h_c_baseline, float* h_c_proposed){
-    img2ppm(matrix_size, h_c_baseline, "./data/lena_4Kx4K_gray_output_baseline.ppm");
-    img2ppm(matrix_size, h_c_proposed, "./data/lena_4Kx4K_gray_output_proposed.ppm");
+    Mat baseline_img(matrix_size.OUT_W, matrix_size.OUT_H, CV_32F);
+    Mat proposed_img(matrix_size.OUT_W, matrix_size.OUT_H, CV_32F);
+    string baseline_file_name = "./data/lena_4Kx4K_gray_output_baseline.jpg";
+    string proposed_file_name = "./data/lena_4Kx4K_gray_output_proposed.jpg";
+    
+    array2Mat(baseline_img, h_c_baseline, CV_32F, matrix_size.OUT_W, matrix_size.OUT_H);    
+    array2Mat(proposed_img, h_c_proposed, CV_32F, matrix_size.OUT_W, matrix_size.OUT_H);    
+
+    assert(! baseline_img.empty());
+    assert(! proposed_img.empty());
+
+    imwrite(baseline_file_name, baseline_img);
+    imwrite(proposed_file_name, proposed_img);
+
+//    img2ppm(matrix_size, h_c_baseline, "./data/lena_4Kx4K_gray_output_baseline.ppm");
+//    img2ppm(matrix_size, h_c_proposed, "./data/lena_4Kx4K_gray_output_proposed.ppm");
 }
 ////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test matrix multiply using CUBLAS
