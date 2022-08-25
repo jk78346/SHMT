@@ -299,6 +299,7 @@ else
 endif
 
 matrixMulCUBLAS.o:matrixMulCUBLAS.cpp
+	mkdir -p ./log/
 	g++ --std=c++11 matrixMulCUBLAS.cpp -I/usr/local/include/opencv4/ -lgptpu $(LIBRARIES) -ldl -o conv
 	#$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 

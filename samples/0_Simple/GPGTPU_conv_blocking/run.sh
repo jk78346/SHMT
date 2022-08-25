@@ -3,11 +3,11 @@
 iter=1
 p=0.5
 baseline_mode=0
-input_data_mode=4 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read image 5: read mtx file 6: markov text generation
+input_data_mode=0 # 0: uniform, 1: normal, 2: Hankel, 3: Frank matrix, 4: read image 5: read mtx file 6: markov text generation
 scale=261000
 
 
-for size in 4096
+for size in 2048
 do
   for blk_size in 2048 #$ 1024 512
   do

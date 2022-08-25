@@ -424,7 +424,8 @@ float SSIM(int w, int h, int ldn, float* buf1, float* buf2, int verbose, int cas
         c2 = (k2*L)*(k2*L);
 /* verbose */
 	if(verbose > 0){
-		printf("output casted to int? %d\n", casted_to_int);
+		printf("buf1 max: %f, min: %f | buf2 max: %f, min: %f\n", max1, min1, max2, min2);
+        printf("output casted to int? %d\n", casted_to_int);
 		printf("h_baseline: \n");
 		for(int i = 0 ; i < 5 ; i++){
 			for(int j = 0 ; j < 5 ; j++){
@@ -522,22 +523,13 @@ void array2Mat(Mat& img, float* data, int CV_type, int rows, int cols){
     tmp.copyTo(img);
 }
 
-//int cnt = 0;
-
-int ddepth_mode = 0;
-
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, Mat& out_img, float* h_C){
 	printf("calling conv_CPU...\n");
    
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
-    int ddepth = CV_16S; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
-    if(ddepth_mode == 0){
-        ddepth_mode = 1;
-    }else{
-        ddepth = CV_8U;
-    }
+    int ddepth = CV_32F; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
     Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
     Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
 
@@ -546,12 +538,7 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
 
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 
-    //printf("grad size: %d, %d\n", grad.size().width, grad.size().height);
     Mat2array(out_img, h_C);
-
-    //imwrite("sobel_"+std::to_string(cnt)+".jpg", grad);
-    //cnt+=1;
-
     return 0;
 }
 
@@ -588,25 +575,46 @@ float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
     return 0;
 }
 
-float conv_TPU(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_TPU){
+float conv_TPU(int nIter, int argc, char** argv, int in_w, int in_h, int out_w, int out_h, float* h_in, float* h_filter, float* h_TPU){
 	printf("calling conv_TPU...\n");
     
-    int in_size  = matrix_size.IN_BLK_W * matrix_size.IN_BLK_H;
-    int out_size = matrix_size.OUT_BLK_W * matrix_size.OUT_BLK_H;
+    int in_size  =  in_w *  in_h;
+    int out_size = out_w * out_h;
     int* in  = (int*) malloc(in_size * sizeof(int));
-    int* out = (int*) calloc(out_size, sizeof(int));
+    int* Gx_out = (int*) calloc(out_size, sizeof(int));
+    int* Gy_out = (int*) calloc(out_size, sizeof(int));
+    float* Gx_fout = (float*) malloc(out_size * sizeof(float));
+    float* Gy_fout = (float*) malloc(out_size * sizeof(float));
     for(int i = 0 ; i < in_size ; i++){
-        in[i] = h_in[i];
+        in[i] = h_in[i]; // float to int conversion
     }
-    //std::string model_path = "conv_IN_2K_2K_1_F_3_3_1_S_1_1_SAME_Sobel_edgetpu.tflite";
-    std::string model_path = "Sobel_2Kx2Kx1_3x3x1x1_SAME_edgetpu.tflite";
-    printf("conv_TPU: in_size: %d, out_size: %d\n", in_size, out_size);
-    run_a_model(model_path, nIter, in, in_size, out, out_size, 1);
- 
+    std::string Gx_model_path = "Sobel_Scharr_Gx_2Kx2Kx1_3x3x1x1_SAME_int8_scale_0.1_edgetpu.tflite";
+    std::string Gy_model_path = "Sobel_Scharr_Gy_2Kx2Kx1_3x3x1x1_SAME_int8_scale_0.1_edgetpu.tflite";
+    
+    Mat grad_x, grad_y;
+    Mat abs_grad_x, abs_grad_y;
+    // ================================================================================
+    // reversed unit test passed by the commented section.
+//    Mat img;
+//    array2Mat(img, h_in, CV_32F, in_w, in_h);
+//    int ddepth = CV_8U;
+//    Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+//    Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+    run_a_model(Gx_model_path, nIter, in, in_size, Gx_out, out_size, 1);
+    run_a_model(Gy_model_path, nIter, in, in_size, Gy_out, out_size, 1);
     for(int i = 0 ; i < out_size ; i++){
-        h_TPU[i] = (float)out[i];
+        Gx_fout[i] = (float)Gx_out[i]*10;
+        Gx_fout[i] = (float)Gx_out[i]*10;
     }
-    printf("end of conv_TPU\n");
+    array2Mat(grad_x, Gx_fout, CV_32F, out_w, out_h);
+    array2Mat(grad_y, Gy_fout, CV_32F, out_w, out_h);
+    // ================================================================================
+    convertScaleAbs(grad_x, abs_grad_x);
+    convertScaleAbs(grad_y, abs_grad_y);
+
+    Mat out_img;
+    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
+    Mat2array(out_img, h_TPU);
 }
 
 void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
@@ -1122,7 +1130,7 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
     }else if(_mode == 1){ // CPU tiling algorithm mode
 		kernel_ms = conv_CPU_TILES(nIter, matrix_size, alpha, h_partial_in, h_filter, beta, out_img, h_C, h_partial_C);
 	}else if(_mode == 2){ // TPU mode
-        	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size, h_in, h_filter, h_C);
+        	kernel_ms = conv_TPU(nIter, argc, argv, matrix_size.IN_W, matrix_size.IN_H, matrix_size.OUT_W, matrix_size.OUT_H, h_in, h_filter, h_C);
 	}else if(_mode == 3){ // TPU tiling algorithm mode
         	kernel_ms = conv_TPU_TILES(nIter, argc, argv, matrix_size, h_in, h_filter, h_C, h_partial_C);
 	}else if(_mode == 4){ // mix tiling algorithm mode
@@ -1161,8 +1169,8 @@ void img2ppm(sMatrixSize matrix_size, float* h_c, const std::string file_name){
 void output_img_to_file(sMatrixSize matrix_size, float* h_c_baseline, float* h_c_proposed){
     Mat baseline_img(matrix_size.OUT_W, matrix_size.OUT_H, CV_32F);
     Mat proposed_img(matrix_size.OUT_W, matrix_size.OUT_H, CV_32F);
-    string baseline_file_name = "./data/lena_4Kx4K_gray_output_baseline.jpg";
-    string proposed_file_name = "./data/lena_4Kx4K_gray_output_proposed.jpg";
+    string baseline_file_name = "./data/lena_"+std::to_string(matrix_size.OUT_W)+"x"+std::to_string(matrix_size.OUT_H)+"_gray_output_baseline.jpg";
+    string proposed_file_name = "./data/lena_"+std::to_string(matrix_size.OUT_W)+"x"+std::to_string(matrix_size.OUT_H)+"_gray_output_proposed.jpg";
     
     array2Mat(baseline_img, h_c_baseline, CV_32F, matrix_size.OUT_W, matrix_size.OUT_H);    
     array2Mat(proposed_img, h_c_proposed, CV_32F, matrix_size.OUT_W, matrix_size.OUT_H);    
