@@ -84,7 +84,7 @@ int main(int argc, char** argv){
     params.push_back(JPEG_QUALITY);
     
     glob_t glob_result;
-    cout << "globing files...";
+    cout << "globing files from " <<  in_dir+in_file_re << "...";
     glob((in_dir+in_file_re).c_str(), GLOB_TILDE, NULL, &glob_result);
     cout << ", and " << glob_result.gl_pathc << " files found." << endl;
 
