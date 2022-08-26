@@ -300,8 +300,8 @@ endif
 
 matrixMulCUBLAS.o:matrixMulCUBLAS.cpp
 	mkdir -p ./log/
-	g++ --std=c++11 matrixMulCUBLAS.cpp -I/usr/local/include/opencv4/ -lgptpu $(LIBRARIES) -ldl -o conv
-	g++ --std=c++11 Sobel.cpp -I/usr/local/include/opencv4/ $(LIBRARIES) -ldl -o Sobel
+	g++ --std=c++11 -O3 -g matrixMulCUBLAS.cpp -I/usr/local/include/opencv4/ -lgptpu $(LIBRARIES) -ldl -o conv
+	g++ --std=c++11 -O3 -g Sobel.cpp -I/usr/local/include/opencv4/ $(LIBRARIES) -ldl -fopenmp -o Sobel
 	#$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
 matrixMulCUBLAS: matrixMulCUBLAS.o
