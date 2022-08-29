@@ -1,20 +1,24 @@
-ARG UBUNTU_VERSION=20.04
-FROM ubuntu:${UBUNTU_VERSION}
-MAINTAINER khsu037
+# Official tensorflow images built after Sept 2021 are based on Ubuntu 20.04
+# Check: https://hub.docker.com/r/tensorflow/tensorflow/
 
-COPY . /usr/src/gpgtpu
-WORKDIR /usr/src/gpgtpu
+FROM tensorflow/tensorflow:latest-gpu AS BASE_BUILD
 
+FROM BASE_BUILD AS BUILD1
 RUN apt-get update && apt-get install -y \
         python3 \
-        python3-pip
+        python3-pip && \
+        apt-get -y install vim
+
+FROM BUILD1 AS BUILD2
+COPY . /home/gpgtpu
+WORKDIR /home/gpgtpu
 
 # use python convention
 RUN ln -s $(which python3) /usr/bin/python
 
+#FROM BUILD2 AS BUILD3
 # Installs the latest version by default.
-ARG TF_PACKAGE=tensorflow
-ARG TF_PACKAGE_VERSION=
-RUN python3 -m pip install --no-cache-dir ${TF_PACKAGE}${TF_PACKAGE_VERSION:+==${TF_PACKAGE_VERSION}}
+#ARG TF_PACKAGE=tensorflow-gpu
+#ARG TF_PACKAGE_VERSION=
+#RUN python3 -m pip install --no-cache-dir ${TF_PACKAGE}${TF_PACKAGE_VERSION:+==${TF_PACKAGE_VERSION}}
 
-RUN python show_tf_version.py
