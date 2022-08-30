@@ -17,19 +17,20 @@ assert tf.test.is_built_with_cuda()
 size = 2048
 img_size=(size, size)
 num_classes=1
-batch_size = 32
+batch_size = 16
 epochs=1
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 
 def get_gittop():
+    """"""
     return subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], \
                             stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8')
 
 conf_file = get_gittop()+"/configure.cfg"
 config.readfp(open(conf_file))
 
-path_base = config.get('DATASET_MOUNT')+"/Data/Sobel_"+str(size)+"/"
+path_base = config.get('global_path', 'DATASET_MOUNT')+"/Data/Sobel_"+str(size)+"/"
 train_input_img_paths  = path_base + "in_npy/train/ILSVRC2014_train_0000/"
 train_target_img_paths = path_base + "out_npy/train/ILSVRC2014_train_0000/"
 val_input_img_paths  = path_base + "in_npy/val/"
@@ -37,8 +38,11 @@ val_target_img_paths = path_base + "out_npy/val/"
 test_input_img_paths  = path_base + "in_npy/test/"
 test_target_img_paths = path_base + "out_npy/test/"
 
-checkpoint_path  = "./Sobel_checkpoint/cp.ckpt"
-saved_model_path = "./Sobel_model"
+sobel_model_base = get_gittop()+"/models/Sobel/"
+os.system("mkdir -p "+sobel_model_base)
+
+checkpoint_path  = sobel_model_base+"/Sobel_checkpoint/cp.ckpt"
+saved_model_path = sobel_model_base+"/Sobel_model"
 
 def get_imgs_num(path):
     """ This function returns number of images under this path """

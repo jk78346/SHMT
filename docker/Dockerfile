@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
         pip install opencv-python && \
         apt-get install ffmpeg libsm6 libxext6 -y && \
         apt-get install time && \
-        pip install gitpython
+        pip install gitpython && \
+        apt-get install -y git
 
 FROM BUILD1 AS BUILD2
 #COPY . /home/gpgtpu
