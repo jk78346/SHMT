@@ -19,19 +19,19 @@ batch_size = 4
 epochs=1
 
 path_base = "/mnt/Data/Sobel_"+str(size)+"/"
-train_input_img_paths  = path_base + "in/train/ILSVRC2014_train_0000/"
-train_target_img_paths = path_base + "out/train/ILSVRC2014_train_0000/"
-val_input_img_paths  = path_base + "in/val/"
-val_target_img_paths = path_base + "out/val/"
-test_input_img_paths  = path_base + "in/test/"
-test_target_img_paths = path_base + "out/test/"
+train_input_img_paths  = path_base + "in_npy/train/ILSVRC2014_train_0000/"
+train_target_img_paths = path_base + "out_npy/train/ILSVRC2014_train_0000/"
+val_input_img_paths  = path_base + "in_npy/val/"
+val_target_img_paths = path_base + "out_npy/val/"
+test_input_img_paths  = path_base + "in_npy/test/"
+test_target_img_paths = path_base + "out_npy/test/"
 
 def get_imgs_num(path):
     """ This function returns number of images under this path """
     return len([
         os.path.join(path, fname)
         for fname in os.listdir(path)
-        if fname.endswith(".JPEG")
+        if fname.endswith(".npy")
     ])
 
 def get_imgs(path):
@@ -40,7 +40,7 @@ def get_imgs(path):
             [
                 os.path.join(path, fname)
                 for fname in os.listdir(path)
-                if fname.endswith(".JPEG")
+                if fname.endswith(".npy")
             ]
             )
 
@@ -60,23 +60,26 @@ class MyDataGen(keras.utils.Sequence):
         i = idx * self.batch_size;
         batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
-        x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
         for j, path in enumerate(batch_input_img_paths):
-            img = load_img(path, target_size=self.img_size, color_mode="grayscale")
+            img = np.load(path)
             img = np.expand_dims(img, axis=2) 
             x[j] = img
-        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
         for j, path in enumerate(batch_target_img_paths):
-            img = load_img(path, target_size=self.img_size, color_mode="grayscale")
+            img = np.load(path)
             img = np.expand_dims(img, axis=2) 
             y[j] = img
         return x, y
 
 def get_model(img_size, num_classes):
+    encoded_dim = 4
     inputs = keras.Input(shape=img_size+(1,))
-    x = layers.Conv2D(16, 1, padding="same")(inputs)
-    outputs = layers.Conv2D(num_classes, 1, activation="softmax", padding="same")(x)
-
+    x = layers.Resizing(128, 128)(inputs)
+    x = layers.Flatten()(x)
+    x = layers.Dense(encoded_dim * encoded_dim, activation="sigmoid")(x)
+    x = layers.Reshape((encoded_dim, encoded_dim, 1))(x)
+    outputs = layers.UpSampling2D((img_size[i]/encoded_dim for i in range(len(img_size))), interpolation='bilinear')(x)
     model = keras.Model(inputs, outputs)
     return model
 

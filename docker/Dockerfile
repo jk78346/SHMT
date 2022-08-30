@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y \
         python3 \
         python3-pip && \
         apt-get -y install vim && \
-        pip install tflearn
+        pip install tflearn && \
+        pip install opencv-python && \
+        apt-get install ffmpeg libsm6 libxext6 -y
 
 FROM BUILD1 AS BUILD2
 #COPY . /home/gpgtpu

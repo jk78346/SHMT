@@ -5,7 +5,7 @@ DOCKERFILE_PATH=./../docker
 IMAGE_NAME=${PROJ}_image
 CONTAINER_NAME=${PROJ}_container
 DATASET_DIR=/nfshome/khsu037/ILSVRC
-SRC_DIR=~/GPGTPU/src/
+SRC_DIR=~/GPGTPU/
 
 DATASET_TARGET_DIR=/mnt # the dataset mount point within container
 SRC_TARGET_DIR=/home/ # the src code mount point within container
