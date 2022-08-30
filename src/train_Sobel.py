@@ -23,13 +23,15 @@ epochs=100
 config = configparser.ConfigParser()
 
 def get_gittop():
-    """"""
+    """ This function returns gittop path. """
     return subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], \
                             stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8')
 
+# read conf file
 conf_file = get_gittop()+"/configure.cfg"
 config.readfp(open(conf_file))
 
+# setup dataset paths
 path_base = config.get('global_path', 'DATASET_MOUNT')+"/Data/Sobel_"+str(size)+"/"
 train_input_img_paths  = path_base + "in_npy/train/ILSVRC2014_train_0000/"
 train_target_img_paths = path_base + "out_npy/train/ILSVRC2014_train_0000/"
@@ -38,9 +40,9 @@ val_target_img_paths = path_base + "out_npy/val/"
 test_input_img_paths  = path_base + "in_npy/test/"
 test_target_img_paths = path_base + "out_npy/test/"
 
+# setup model output dir
 sobel_model_base = get_gittop()+"/models/Sobel/"
 os.system("mkdir -p "+sobel_model_base)
-
 checkpoint_path  = sobel_model_base+"/Sobel_checkpoint/cp.ckpt"
 saved_model_path = sobel_model_base+"/Sobel_model"
 
@@ -133,6 +135,7 @@ hist = model.fit(train_gen,
                  workers=4,
                  callbacks=[early, cp_callback])
 
+print("start saving Sobel model...")
 tf.saved_model.save(model, saved_model_path)
 print("Sobel model saved.")
 

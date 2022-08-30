@@ -16,6 +16,19 @@ RUN apt-get update && apt-get install -y \
         apt-get install -y git
 
 FROM BUILD1 AS BUILD2
+RUN apt-get install --no-install-recommends -y \
+        gnupg \
+        ca-certificates \
+        curl \
+        apt-utils \
+        apt-transport-https
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+        | apt-key add -
+RUN echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" \
+        | tee /etc/apt/sources.list.d/coral-edgetpu.list
+RUN apt-get update && apt-get install -y edgetpu-compiler
+
+FROM BUILD2 AS BUILD3
 #COPY . /home/gpgtpu
 WORKDIR /home
 
