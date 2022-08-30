@@ -2,7 +2,8 @@ import glob
 import argparse
 import cv2 as cv
 import numpy as np
-import multiprocessing
+from multiprocessing import Pool, Value, Lock
+from functools import partial
 
 def get_full_file_name_from_path(file_path):
     return file_path.split("/")[-1]
@@ -35,25 +36,46 @@ def run_Sobel(input_file_path, src, size, out_path, postfix, file_ext):
     out_file_name = out_path+"/"+get_file_name_wo_ext_from_path(input_file_path) + postfix
     np.save(out_file_name, out)
 
+def main_func(fpath, args):
+    args, num_in_dir_files = args
+    resized_in_dir = args.resized_in_dir
+    out_dir = args.out_dir
+    target_size = args.target_size
+    postfix = "_Sobel"
+    file_ext = "JPEG"
+    resized_in_path, resized = generate_resized_img(fpath, target_size, resized_in_dir)
+    run_Sobel(resized_in_path, resized, target_size, out_dir, postfix, file_ext)
+    counter.increment()
+    print("Sobel progress: ", counter.value, "/", num_in_dir_files, ", resized_in_file: ", resized_in_path)
+
+
+class Counter(object):
+        def __init__(self, initval=0):
+            self.val = Value('i', initval)
+            self.lock = Lock()
+        def increment(self):
+            with self.lock:
+                self.val.value += 1
+        @property
+        def value(self):
+            return self.val.value
+
+counter = Counter(0)
+
 def main():
     parser = argparse.ArgumentParser(description='Sobel operation on dataset')
     parser.add_argument(dest='in_dir', action='store', type=str, help='input dir')
     parser.add_argument(dest='resized_in_dir', action='store', type=str, help='resized_input dir')
     parser.add_argument(dest='out_dir', action='store', type=str, help='output dir')
     parser.add_argument(dest='target_size', action='store', type=int, help='target_size')
+    
     args = parser.parse_args()
+    
     in_dir = args.in_dir
-    resized_in_dir = args.resized_in_dir
-    out_dir = args.out_dir
-    target_size = args.target_size
-    postfix = "_Sobel"
-    file_ext = "JPEG"
-    print(args)
     num_in_dir_files = len(glob.glob(in_dir+"/*"))
-    for idx, fpath in enumerate(glob.glob(in_dir+"/*")):
-        resized_in_path, resized = generate_resized_img(fpath, target_size, resized_in_dir)
-        run_Sobel(resized_in_path, resized, target_size, out_dir, postfix, file_ext)
-        print("Sobel progress: ", idx, "/", num_in_dir_files, ", resized_input_file: ", resized_in_path)
+    
+    with Pool(8) as p:
+        p.map(partial(main_func, args=(args, num_in_dir_files)), glob.glob(in_dir+"/*"))
 
 if __name__ == "__main__":
     main()

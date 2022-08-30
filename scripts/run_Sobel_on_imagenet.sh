@@ -11,10 +11,8 @@ do
     in_dir="${in_root}${DET}${seg}"
     resized_in_dir="${in_root}/Sobel_${img_size}/in_npy/${seg}"
     out_dir="${in_root}/Sobel_${img_size}/out_npy/${seg}"
-    rm -rf ${resized_in_dir}
-    rm -rf ${out_dir}
     mkdir -p ${resized_in_dir}
     mkdir -p ${out_dir}
-    python3 ./../src/run_Sobel_on_dataset.py ${in_dir} ${resized_in_dir} ${out_dir} ${img_size}
+    time python3 ./../src/run_Sobel_on_dataset.py ${in_dir} ${resized_in_dir} ${out_dir} ${img_size}
 done
 
