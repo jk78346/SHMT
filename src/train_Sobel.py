@@ -13,11 +13,26 @@ physical_devices = tf.config.list_physical_devices('GPU')
 assert tf.test.is_built_with_cuda()
 
 size = 2048
-# mounted ILSVRC dir path within docker container
 img_size=(size, size)
 num_classes=1
-batch_size = 64
+batch_size = 4
 epochs=1
+
+path_base = "/mnt/Data/Sobel_"+str(size)+"/"
+train_input_img_paths  = path_base + "in/train/ILSVRC2014_train_0000/"
+train_target_img_paths = path_base + "out/train/ILSVRC2014_train_0000/"
+val_input_img_paths  = path_base + "in/val/"
+val_target_img_paths = path_base + "out/val/"
+test_input_img_paths  = path_base + "in/test/"
+test_target_img_paths = path_base + "out/test/"
+
+def get_imgs_num(path):
+    """ This function returns number of images under this path """
+    return len([
+        os.path.join(path, fname)
+        for fname in os.listdir(path)
+        if fname.endswith(".JPEG")
+    ])
 
 def get_imgs(path):
     """ This function returns list of img paths """
@@ -34,8 +49,8 @@ class MyDataGen(keras.utils.Sequence):
     def __init__(self, batch_size, img_size, input_img_paths, target_img_paths):
         self.batch_size       = batch_size
         self.img_size         = img_size
-        self.input_img_paths  = input_img_paths
-        self.target_img_paths = target_img_paths
+        self.input_img_paths  = get_imgs(input_img_paths)
+        self.target_img_paths = get_imgs(target_img_paths)
 
     def __len__(self):
         return len(self.target_img_paths) // self.batch_size
@@ -48,39 +63,22 @@ class MyDataGen(keras.utils.Sequence):
         x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
             img = load_img(path, target_size=self.img_size, color_mode="grayscale")
+            img = np.expand_dims(img, axis=2) 
             x[j] = img
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
         for j, path in enumerate(batch_target_img_paths):
             img = load_img(path, target_size=self.img_size, color_mode="grayscale")
+            img = np.expand_dims(img, axis=2) 
             y[j] = img
-        print(x.shape, y.shape)
         return x, y
 
 def get_model(img_size, num_classes):
     inputs = keras.Input(shape=img_size+(1,))
-    x = layers.Dense(512)(inputs)
-    x = layers.Dense(512)(x)
+    x = layers.Conv2D(16, 1, padding="same")(inputs)
     outputs = layers.Conv2D(num_classes, 1, activation="softmax", padding="same")(x)
 
     model = keras.Model(inputs, outputs)
     return model
-
-path_base = "/mnt/Data/Sobel_"+str(size)+"/"
-train_input_img_paths  = path_base + "in/train/ILSVRC2014_train_0000/"
-train_target_img_paths = path_base + "out/train/ILSVRC2014_train_0000/"
-val_input_img_paths  = path_base + "in/val/"
-val_target_img_paths = path_base + "out/val/"
-test_input_img_paths  = path_base + "in/test/"
-test_target_img_paths = path_base + "out/test/"
-
-train_input_imgs  = get_imgs(train_input_img_paths)
-train_target_imgs = get_imgs(train_target_img_paths)
-val_input_imgs    = get_imgs(val_input_img_paths)
-val_target_imgs   = get_imgs(val_target_img_paths)
-test_input_imgs   = get_imgs(test_input_img_paths)
-test_target_imgs  = get_imgs(test_target_img_paths)
-
-print("number of samples: ", len(train_input_imgs))
 
 model = get_model(img_size, num_classes)
 model.summary()
@@ -97,10 +95,15 @@ train_gen = MyDataGen(batch_size, img_size, train_input_img_paths, train_target_
 val_gen   = MyDataGen(batch_size, img_size, val_input_img_paths,   val_target_img_paths)
 test_gen  = MyDataGen(batch_size, img_size, test_input_img_paths,  test_target_img_paths)
 
+print("number of train samples: ", get_imgs_num(train_input_img_paths))
+print("number of val   samples: ", get_imgs_num(val_input_img_paths))
+print("number of test  samples: ", get_imgs_num(test_input_img_paths))
+
 model.compile(optimizer="rmsprop", 
-              loss=keras.losses.categorical_crossentropy, 
+              loss=keras.losses.sparse_categorical_crossentropy, 
               metrics=['accuracy'])
 
+print("model.fit starting...")
 hist = model.fit(train_gen, 
                  epochs=epochs, 
                  validation_data=val_gen, 
