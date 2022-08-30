@@ -1,14 +1,19 @@
 #!/bin/sh
 
 PROJ=gpgtpu
-DOCKERFILE_PATH=./../docker
+GITTOP="$(git rev-parse --show-toplevel 2>&1)"
+
+# source configure file
+. "${GITTOP}/configure.cfg"
+
+DOCKERFILE_PATH="${GITTOP}/docker"
 IMAGE_NAME=${PROJ}_image
 CONTAINER_NAME=${PROJ}_container
-DATASET_DIR=/nfshome/khsu037/ILSVRC
-SRC_DIR=~/GPGTPU/
+DATASET_DIR="${DATASET_HOST_ROOT}"
+SRC_DIR="${GITTOP}"
 
-DATASET_TARGET_DIR=/mnt # the dataset mount point within container
-SRC_TARGET_DIR=/home/ # the src code mount point within container
+DATASET_TARGET_DIR="${DATASET_MOUNT}" # the dataset mount point within container
+SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
 echo "[${PROJ}] - building docker image from dockerfile..."

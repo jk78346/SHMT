@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
         pip install tflearn && \
         pip install opencv-python && \
         apt-get install ffmpeg libsm6 libxext6 -y && \
-        apt-get install time
+        apt-get install time && \
+        pip install gitpython
 
 FROM BUILD1 AS BUILD2
 #COPY . /home/gpgtpu

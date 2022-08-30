@@ -7,6 +7,8 @@ import numpy as np
 import tflearn
 from tensorflow.keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, EarlyStopping
+import configparser
+import subprocess
 
 physical_devices = tf.config.list_physical_devices('GPU')
 #tf.config.experimental.set_memory_growth(physical_devices[0], True)
@@ -15,16 +17,28 @@ assert tf.test.is_built_with_cuda()
 size = 2048
 img_size=(size, size)
 num_classes=1
-batch_size = 4
+batch_size = 32
 epochs=1
 
-path_base = "/mnt/Data/Sobel_"+str(size)+"/"
+config = ConfigParser.ConfigParser()
+
+def get_gittop():
+    return subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], \
+                            stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8')
+
+conf_file = get_gittop()+"/configure.cfg"
+config.readfp(open(conf_file))
+
+path_base = config.get('DATASET_MOUNT')+"/Data/Sobel_"+str(size)+"/"
 train_input_img_paths  = path_base + "in_npy/train/ILSVRC2014_train_0000/"
 train_target_img_paths = path_base + "out_npy/train/ILSVRC2014_train_0000/"
 val_input_img_paths  = path_base + "in_npy/val/"
 val_target_img_paths = path_base + "out_npy/val/"
 test_input_img_paths  = path_base + "in_npy/test/"
 test_target_img_paths = path_base + "out_npy/test/"
+
+checkpoint_path  = "./Sobel_checkpoint/cp.ckpt"
+saved_model_path = "./Sobel_model"
 
 def get_imgs_num(path):
     """ This function returns number of images under this path """
@@ -56,7 +70,7 @@ class MyDataGen(keras.utils.Sequence):
         return len(self.target_img_paths) // self.batch_size
 
     def __getitem__(self, idx):
-        """ This function returns tuple (input, target) correspond to btach #idx.  """
+        """ This function returns tuple (input, target) correspond to btach #idx. """
         i = idx * self.batch_size;
         batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
@@ -73,6 +87,7 @@ class MyDataGen(keras.utils.Sequence):
         return x, y
 
 def get_model(img_size, num_classes):
+    """ This function returns a simple design of Sobel model """
     encoded_dim = 4
     inputs = keras.Input(shape=img_size+(1,))
     x = layers.Resizing(128, 128)(inputs)
@@ -88,10 +103,9 @@ model.summary()
 
 early = EarlyStopping(min_delta=0, patience=20, verbose=1, mode='auto')
 
-checkpoint_path = "train/cp.ckpt"
 checkpoint_dir = os.path.dirname(checkpoint_path)
 cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, 
-                                              save_weights_only=True, 
+                                              save_weights_only=False, 
                                               verbose=1)
 
 train_gen = MyDataGen(batch_size, img_size, train_input_img_paths, train_target_img_paths)
@@ -112,23 +126,7 @@ hist = model.fit(train_gen,
                  validation_data=val_gen, 
                  callbacks=[early, cp_callback])
 
-tf.saved_model.save(model, './Sobel_model')
-
-model.load_weights(checkpoint_path)
-
-layer_array = ["conv2d", "conv2d_1", "dense", "dense_1", "dense_2"]
-
-def get_tf_weights(model, layer_array):
-    data_file = [] # contains weights and bias
-    
-    for layer in layer_array:
-        weights = model.get_layer(layer).get_weights()[0]
-        biases  = model.get_layer(layer).get_weights()[1]
-        layer_pair = [weights, biases]
-        data_file.append(layer_pair)
-
-    np.save('vgg2_weight.npy', data_file)
-
-get_tf_weights(model, layer_array)
+tf.saved_model.save(model, saved_model_path)
+print("Sobel model saved.")
 
 
