@@ -18,7 +18,7 @@ size = 2048
 img_size=(size, size)
 num_classes=1
 batch_size = 16
-epochs=1
+epochs=100
 
 config = configparser.ConfigParser()
 
@@ -105,7 +105,7 @@ def get_model(img_size, num_classes):
 model = get_model(img_size, num_classes)
 model.summary()
 
-early = EarlyStopping(min_delta=0, patience=20, verbose=1, mode='auto')
+early = EarlyStopping(min_delta=0, patience=10, verbose=1, mode='auto')
 
 checkpoint_dir = os.path.dirname(checkpoint_path)
 cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, 
@@ -128,6 +128,9 @@ print("model.fit starting...")
 hist = model.fit(train_gen, 
                  epochs=epochs, 
                  validation_data=val_gen, 
+                 max_queue_size=8,
+                 use_multiprocessing=True,
+                 workers=4,
                  callbacks=[early, cp_callback])
 
 tf.saved_model.save(model, saved_model_path)
