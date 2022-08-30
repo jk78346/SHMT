@@ -7,11 +7,12 @@ FROM BASE_BUILD AS BUILD1
 RUN apt-get update && apt-get install -y \
         python3 \
         python3-pip && \
-        apt-get -y install vim
+        apt-get -y install vim && \
+        pip install tflearn
 
 FROM BUILD1 AS BUILD2
-COPY . /home/gpgtpu
-WORKDIR /home/gpgtpu
+#COPY . /home/gpgtpu
+WORKDIR /home
 
 # use python convention
 RUN ln -s $(which python3) /usr/bin/python
