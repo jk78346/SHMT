@@ -1,4 +1,7 @@
-import keras,os
+import os
+assert('IS_GPGTPU_CONTAINER' in os.environ), \
+        f""" Sobel model training script is not running within GPGTPU container. """
+import keras
 import tensorflow as tf
 from keras.models import Sequential
 from tensorflow.keras import layers
