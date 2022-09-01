@@ -39,3 +39,8 @@ sudo apt-get update
 sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
+
+
+# Trouble shooting
+1. ```docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].``` \
+Follow this steps to uninstall and install docker for nvidia image: https://github.com/NVIDIA/nvidia-docker/issues/1637#issuecomment-1130151618
