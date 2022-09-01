@@ -1,6 +1,6 @@
 import os
-assert('IS_GPGTPU_CONTAINER' in os.environ), \
-        f""" Sobel model training script is not running within GPGTPU container. """
+assert 'IS_GPGTPU_CONTAINER' in os.environ, \
+           f""" Sobel model training script is not running within GPGTPU container. """
 import keras
 import tensorflow as tf
 from keras.models import Sequential
@@ -20,8 +20,8 @@ assert tf.test.is_built_with_cuda()
 size = 2048
 img_size=(size, size)
 num_classes=1
-batch_size = 16
-epochs=100
+batch_size = 4
+epochs=1
 
 config = configparser.ConfigParser()
 
@@ -32,7 +32,7 @@ def get_gittop():
 
 # read conf file
 conf_file = get_gittop()+"/configure.cfg"
-config.readfp(open(conf_file))
+config.read_file(open(conf_file))
 
 # setup dataset paths
 path_base = config.get('global_path', 'DATASET_MOUNT')+"/Data/Sobel_"+str(size)+"/"
@@ -97,49 +97,54 @@ class MyDataGen(keras.utils.Sequence):
 
 def get_model(img_size, num_classes):
     """ This function returns a simple design of Sobel model """
-    encoded_dim = 4
+    encoded_dim = 16
     inputs = keras.Input(shape=img_size+(1,))
-    x = layers.Resizing(128, 128)(inputs)
-    x = layers.Flatten()(x)
-    x = layers.Dense(encoded_dim * encoded_dim, activation="sigmoid")(x)
-    x = layers.Reshape((encoded_dim, encoded_dim, 1))(x)
-    outputs = layers.UpSampling2D((img_size[i]/encoded_dim for i in range(len(img_size))), interpolation='bilinear')(x)
+    x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='sigmoid')(inputs)
+    outputs = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='sigmoid')(x)
+
+#    x = layers.Dense(encoded_dim * encoded_dim, activation="sigmoid")(x)
+#    x = layers.Reshape((encoded_dim, encoded_dim, 1))(x)
+#    outputs = layers.UpSampling2D((img_size[i]/encoded_dim for i in range(len(img_size))), interpolation='bilinear')(x)
     model = keras.Model(inputs, outputs)
     return model
 
-model = get_model(img_size, num_classes)
-model.summary()
+def main():
+    model = get_model(img_size, num_classes)
+    model.summary()
 
-early = EarlyStopping(min_delta=0, patience=10, verbose=1, mode='auto')
+    early = EarlyStopping(min_delta=0, patience=10, verbose=1, mode='auto')
 
-checkpoint_dir = os.path.dirname(checkpoint_path)
-cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, 
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, 
                                               save_weights_only=False, 
                                               verbose=1)
 
-train_gen = MyDataGen(batch_size, img_size, train_input_img_paths, train_target_img_paths)
-val_gen   = MyDataGen(batch_size, img_size, val_input_img_paths,   val_target_img_paths)
-test_gen  = MyDataGen(batch_size, img_size, test_input_img_paths,  test_target_img_paths)
+    train_gen = MyDataGen(batch_size, img_size, train_input_img_paths, train_target_img_paths)
+    val_gen   = MyDataGen(batch_size, img_size, val_input_img_paths,   val_target_img_paths)
+    test_gen  = MyDataGen(batch_size, img_size, test_input_img_paths,  test_target_img_paths)
 
-print("number of train samples: ", get_imgs_num(train_input_img_paths))
-print("number of val   samples: ", get_imgs_num(val_input_img_paths))
-print("number of test  samples: ", get_imgs_num(test_input_img_paths))
+    print("number of train samples: ", get_imgs_num(train_input_img_paths))
+    print("number of val   samples: ", get_imgs_num(val_input_img_paths))
+    print("number of test  samples: ", get_imgs_num(test_input_img_paths))
 
-model.compile(optimizer="rmsprop", 
+    model.compile(optimizer="adam", 
               loss=keras.losses.sparse_categorical_crossentropy, 
               metrics=['accuracy'])
 
-print("model.fit starting...")
-hist = model.fit(train_gen, 
+    print("model.fit starting...")
+    hist = model.fit(train_gen, 
                  epochs=epochs, 
                  validation_data=val_gen, 
-                 max_queue_size=8,
-                 use_multiprocessing=True,
-                 workers=4,
+                 max_queue_size=1,
+                 use_multiprocessing=False,
+                 workers=1,
+                 validation_steps=1,
+                 verbose=1,
                  callbacks=[early, cp_callback])
 
-print("start saving Sobel model...")
-tf.saved_model.save(model, saved_model_path)
-print("Sobel model saved.")
+    print("start saving Sobel model...")
+    tf.saved_model.save(model, saved_model_path)
+    print("Sobel model saved.")
 
-
+if __name__ == "__main__":
+    main()

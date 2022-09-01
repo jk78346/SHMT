@@ -29,10 +29,16 @@ echo "[${PROJ}] - build docker container..."
 sudo docker run -d \
          -it \
          -e IS_GPGTPU_CONTAINER='true' \
-         --gpus all \
          --name ${CONTAINER_NAME} \
+         --gpus all \
          --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
          ${IMAGE_NAME} \
          bash
+         
+
+
+
+
+
 
