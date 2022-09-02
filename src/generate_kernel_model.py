@@ -27,9 +27,10 @@ from kernels.ground_truth_functions import Applications
 class MyDataGen():
     """ A customized data generator """
     def __init__(self, params, target_func):
-        self.batch_size  = params.batch_size
-        self.shape       = params.shape
-        self.num_samples = params.num_train
+        self.batch_size         = params.batch_size
+        self.shape              = params.shape
+        self.num_samples        = params.num_train
+        self.num_representative = params.num_representative
         # The ground truth function callable
         self.func        = target_func
     
@@ -48,7 +49,7 @@ class MyDataGen():
     
     def representative_gen(self):
         """ representative dataset generator """
-        for j in range(10):
+        for j in range(self.num_representative):
             x_slice = np.random.randint(255, size=(1,) + self.shape, dtype="uint8")
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32') / 255.
