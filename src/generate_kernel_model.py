@@ -23,26 +23,21 @@ from tensorflow.keras.optimizers import Adam
 from utils.params_base import TrainParamsBase
 from kernels.kernel_models import KernelModels
 from kernels.ground_truth_functions import Applications
-from tensorflow.keras.preprocessing.image import load_img
 
-class MyDataGen(keras.utils.Sequence):
+class MyDataGen():
     """ A customized data generator """
-    def __init__(self, batch_size, shape, num_samples, func):
-        self.batch_size  = batch_size
-        self.shape       = shape
-        self.num_samples = num_samples
+    def __init__(self, params, target_func):
+        self.batch_size  = params.batch_size
+        self.shape       = params.shape
+        self.num_samples = params.num_train
         # The ground truth function callable
-        self.func        = func
-
-    def __len__(self):
-        """ Return number of batchs of this dataset. """
-        return int(np.floor(self.num_samples) / self.batch_size)
-
-    def __getitem__(self, idx):
-        """ This function returns tuple (input, target) correspond to batch #idx. """
-        x = np.zeros((self.batch_size,) + self.shape + (1,), dtype="float32")
-        y = np.zeros((self.batch_size,) + self.shape + (1,), dtype="float32")
-        for j in range(self.batch_size):
+        self.func        = target_func
+    
+    def random_input_gen(self):
+        """ This function generates random samples for training input. """
+        x = np.zeros((self.num_samples,) + self.shape + (1,), dtype="float32")
+        y = np.zeros((self.num_samples,) + self.shape + (1,), dtype="float32")
+        for j in range(self.num_samples):
             x_slice = np.random.randint(255, size=self.shape, dtype="uint8")
             y_slice = self.func(x_slice)
             x_slice = np.expand_dims(x_slice, axis=-1)
@@ -50,6 +45,14 @@ class MyDataGen(keras.utils.Sequence):
             x[j] = x_slice.astype('float32') / 255.
             y[j] = y_slice.astype('float32') / 255.
         return x, y
+    
+    def representative_gen(self):
+        """ representative dataset generator """
+        for j in range(10):
+            x_slice = np.random.randint(255, size=(1,) + self.shape, dtype="uint8")
+            x_slice = np.expand_dims(x_slice, axis=-1)
+            x = x_slice.astype('float32') / 255.
+            yield [x]
 
 class TrainParams(TrainParamsBase):
     """ training parameters setup. Specify any parameter other than default here. """
@@ -87,32 +90,15 @@ def get_funcs(model_name):
     app = my_application.get_func()
     return app, model
 
-def random_input_gen(params, target_func):
-    """ This function generates random samples. """
-    x = np.zeros((params.num_train,) + params.shape + (1,), dtype="float32")
-    y = np.zeros((params.num_train,) + params.shape + (1,), dtype="float32")
-    for j in range(params.num_train):
-        x_slice = np.random.randint(255, size=params.shape, dtype="uint8")
-        y_slice = target_func(x_slice)
-        x_slice = np.expand_dims(x_slice, axis=-1)
-        y_slice = np.expand_dims(y_slice, axis=-1)
-        x[j] = x_slice.astype('float32') / 255.
-        y[j] = y_slice.astype('float32') / 255.
-    return x, y
 
-def train(params, target_func, kernel_model):
+def train(params, kernel_model, random_input_gen):
     """ The main training script """
     gpu_setup()
     model = kernel_model(params.shape)
     model.summary()
 
-    params.print_num_samples()
-    
-#    train_gen = MyDataGen(params.batch_size, params.shape, params.num_train, target_func)
-#    val_gen   = MyDataGen(params.batch_size, params.shape, params.num_val, target_func)
-#    test_gen  = MyDataGen(params.batch_size, params.shape, params.num_test, target_func)
-
-    X_train, Y_train = random_input_gen(params, target_func)
+    print("number of samples: ", params.num_train)
+    X_train, Y_train = random_input_gen()
 
     model.compile(optimizer=params.optimizer, 
               loss=params.loss, 
@@ -145,15 +131,7 @@ def train(params, target_func, kernel_model):
     tf.saved_model.save(model, params.saved_model_dir)
     print(f"model \"{args.model}\" saved at {params.saved_model_dir}.")
 
-def representative_gen():
-    """ representative dataset generator """
-    for j in range(10):
-        x_slice = np.random.randint(255, size=(1, 2048, 2048), dtype="uint8")
-        x_slice = np.expand_dims(x_slice, axis=-1)
-        x = x_slice.astype('float32') / 255.
-        yield [x]
-
-def convert_to_tflite(params, target_func):
+def convert_to_tflite(params, representative_gen):
     """ This function converts saved tf model to edgeTPU-compatible tflite model. """
     converter = tf.lite.TFLiteConverter.from_saved_model(params.saved_model_path)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
@@ -163,10 +141,8 @@ def convert_to_tflite(params, target_func):
     converter.inference_output_type = tf.int8
     print("converter starts converting...")
     tflite_model = converter.convert()
-
     with open(params.tflite_model_path, "wb") as f:
         f.write(tflite_model)
-
     print("edgetpu_compiler compiling...")
     os.system("edgetpu_compiler -s "+params.tflite_model_path+" -o "+params.saved_model_dir)
 
@@ -174,10 +150,11 @@ def main(args):
     """ The main script """
     params = TrainParams(args.model)
     target_func, kernel_model = get_funcs(args.model)
+    my_data_gen = MyDataGen(params, target_func)
     if args.skip_train == False:
-        train(params, target_func, kernel_model)
+        train(params, kernel_model, my_data_gen.random_input_gen)
     if args.skip_tflite == False:
-        convert_to_tflite(params, target_func)
+        convert_to_tflite(params, my_data_gen.representative_gen)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This Python script generates NN-based tflite model that simulates target function kernel.')
