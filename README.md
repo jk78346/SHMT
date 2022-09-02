@@ -27,8 +27,6 @@ sudo docker run hello-world
 ## 2. Install NVIDIA Container Toolkit 
 Please refer to: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker
 
-
-
 ``` 
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID) \
 && curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
@@ -39,3 +37,11 @@ sudo apt-get update
 sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
+
+
+# Trouble shooting
+## 1. ```docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].``` 
+1. Follow this steps to uninstall and install docker for nvidia image: https://github.com/NVIDIA/nvidia-docker/issues/1637#issuecomment-1130151618. \
+2. Make sure the following command gives good ```nvidia-smi``` output: \
+```sudo docker run --rm --gpus all nvidia/cuda:11.7.0-devel-ubuntu20.04 nvidia-smi``` \
+(Replace version numbers accordingly if cuda and Ubuntu versions vary.)
