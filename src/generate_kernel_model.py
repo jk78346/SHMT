@@ -1,6 +1,6 @@
 import os
 assert 'IS_GPGTPU_CONTAINER' in os.environ, \
-           f" Kernel model training script is not running within GPGTPU container. "
+           f" Kernel model generating script is not running within GPGTPU container. "
 import keras
 import tflearn
 import argparse
@@ -57,17 +57,21 @@ class TrainParams(TrainParamsBase):
         """ Give default paths for output artifacts. """
         TrainParamsBase.__init__(self, model_name)
         assert (model_name in dir(KernelModels) and model_name in dir(Applications)), \
-            f" Given model name: {model_name} is not supported. Check for available kernel and application implementations. "
+            f" Given model name: \"{model_name}\" is not supported. Check for available kernel and application implementations. "
 
         # callbacks - checkpoint params
-        model_path_base = get_gittop() + "/models/" + model_name + "/"
+        model_path_base = get_gittop() + "/models/" + model_name 
         os.system("mkdir -p " + model_path_base)
         self.checkpoint_path = model_path_base + "/" + model_name + "_checkpoint/" + model_name + ".ckpt"
         self.save_weights_only = False
         self.save_best_only = True
 
-        # output path params
-        self.saved_model_path = model_path_base + "/" + model_name + "_model"
+        # saved tf model dir
+        self.saved_model_dir = model_path_base
+        self.saved_model_path = self.saved_model_dir + "/" + model_name + "_model"
+
+        # saved tflite model path
+        self.tflite_model_path = model_path_base + "/" + model_name + ".tflite"
 
 def gpu_setup():
     """ GPU setup """
@@ -96,11 +100,9 @@ def random_input_gen(params, target_func):
         y[j] = y_slice.astype('float32') / 255.
     return x, y
 
-def main(args):
+def train(params, target_func, kernel_model):
     """ The main training script """
     gpu_setup()
-    params = TrainParams(args.model)
-    target_func, kernel_model = get_funcs(args.model)
     model = kernel_model(params.shape)
     model.summary()
 
@@ -140,11 +142,49 @@ def main(args):
                  verbose=params.verbose,
                  callbacks=[early, cp_callback])
 
-    tf.saved_model.save(model, params.saved_model_path)
-    print(f"model {args.model} saved at {params.saved_model_path}.")
+    tf.saved_model.save(model, params.saved_model_dir)
+    print(f"model \"{args.model}\" saved at {params.saved_model_dir}.")
+
+def representative_gen():
+    """ representative dataset generator """
+    for j in range(10):
+        x_slice = np.random.randint(255, size=(1, 2048, 2048), dtype="uint8")
+        x_slice = np.expand_dims(x_slice, axis=-1)
+        x = x_slice.astype('float32') / 255.
+        yield [x]
+
+def convert_to_tflite(params, target_func):
+    """ This function converts saved tf model to edgeTPU-compatible tflite model. """
+    converter = tf.lite.TFLiteConverter.from_saved_model(params.saved_model_path)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_gen
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8
+    converter.inference_output_type = tf.int8
+    print("converter starts converting...")
+    tflite_model = converter.convert()
+
+    with open(params.tflite_model_path, "wb") as f:
+        f.write(tflite_model)
+
+    print("edgetpu_compiler compiling...")
+    os.system("edgetpu_compiler -s "+params.tflite_model_path+" -o "+params.saved_model_dir)
+
+def main(args):
+    """ The main script """
+    params = TrainParams(args.model)
+    target_func, kernel_model = get_funcs(args.model)
+    if args.skip_train == False:
+        train(params, target_func, kernel_model)
+    if args.skip_tflite == False:
+        convert_to_tflite(params, target_func)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='This Python script trains NN-based TF model that simulates target function kernel.')
+    parser = argparse.ArgumentParser(description='This Python script generates NN-based tflite model that simulates target function kernel.')
     parser.add_argument('--model', action='store', type=str, help='name of the kernel model for training')
+    parser.add_argument('--skip_train', dest='skip_train', action='store_true', help='To skip kernel model training if saved model already exists.')
+    parser.add_argument('--skip_tflite', dest='skip_tflite', action='store_true', help='To skip tflite converting.')
+    parser.set_defaults(skip_train=False)
+    parser.set_defaults(skip_tflite=False)
     args = parser.parse_args()
     main(args)
