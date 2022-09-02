@@ -40,15 +40,15 @@ class MyDataGen(keras.utils.Sequence):
 
     def __getitem__(self, idx):
         """ This function returns tuple (input, target) correspond to batch #idx. """
-        x = np.zeros((self.batch_size,) + self.shape + (1,), dtype="uint8")
-        y = np.zeros((self.batch_size,) + self.shape + (1,), dtype="uint8")
+        x = np.zeros((self.batch_size,) + self.shape + (1,), dtype="float32")
+        y = np.zeros((self.batch_size,) + self.shape + (1,), dtype="float32")
         for j in range(self.batch_size):
             x_slice = np.random.randint(255, size=self.shape, dtype="uint8")
             y_slice = self.func(x_slice)
             x_slice = np.expand_dims(x_slice, axis=-1)
             y_slice = np.expand_dims(y_slice, axis=-1)
-            x[j] = x_slice
-            y[j] = y_slice
+            x[j] = x_slice.astype('float32') / 255.
+            y[j] = y_slice.astype('float32') / 255.
         return x, y
 
 class TrainParams(TrainParamsBase):
@@ -83,6 +83,19 @@ def get_funcs(model_name):
     app = my_application.get_func()
     return app, model
 
+def random_input_gen(params, target_func):
+    """ This function generates random samples. """
+    x = np.zeros((params.num_train,) + params.shape + (1,), dtype="float32")
+    y = np.zeros((params.num_train,) + params.shape + (1,), dtype="float32")
+    for j in range(params.num_train):
+        x_slice = np.random.randint(255, size=params.shape, dtype="uint8")
+        y_slice = target_func(x_slice)
+        x_slice = np.expand_dims(x_slice, axis=-1)
+        y_slice = np.expand_dims(y_slice, axis=-1)
+        x[j] = x_slice.astype('float32') / 255.
+        y[j] = y_slice.astype('float32') / 255.
+    return x, y
+
 def main(args):
     """ The main training script """
     gpu_setup()
@@ -93,9 +106,11 @@ def main(args):
 
     params.print_num_samples()
     
-    train_gen = MyDataGen(params.batch_size, params.shape, params.num_train, target_func)
-    val_gen   = MyDataGen(params.batch_size, params.shape, params.num_val, target_func)
-    test_gen  = MyDataGen(params.batch_size, params.shape, params.num_test, target_func)
+#    train_gen = MyDataGen(params.batch_size, params.shape, params.num_train, target_func)
+#    val_gen   = MyDataGen(params.batch_size, params.shape, params.num_val, target_func)
+#    test_gen  = MyDataGen(params.batch_size, params.shape, params.num_test, target_func)
+
+    X_train, Y_train = random_input_gen(params, target_func)
 
     model.compile(optimizer=params.optimizer, 
               loss=params.loss, 
@@ -112,10 +127,13 @@ def main(args):
                                               verbose=params.verbose)
 
     print("model.fit starting...")
-    hist = model.fit(train_gen, 
+    hist = model.fit(X_train,
+                     Y_train,
                  epochs=params.epochs, 
-                 validation_data=val_gen, 
-                 validation_steps=params.validation_steps,
+                 batch_size=params.batch_size,
+                 validation_split=0.1,
+#                 validation_data=val_gen, 
+#                 validation_steps=params.validation_steps,
                  max_queue_size=params.max_queue_size,
                  use_multiprocessing=params.use_multiprocessing,
                  workers=params.workers,

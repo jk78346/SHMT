@@ -22,8 +22,8 @@ class TrainParamsBase():
 
         # model.compile params
         self.optimizer = "adam"
-        self.loss      = keras.losses.sparse_categorical_crossentropy 
-        self.metrics   = ['accuracy']
+        self.loss      = "mse" #keras.losses.sparse_categorical_crossentropy 
+        self.metrics   = [] # ['accuracy']
 
         # model.fit params
         self.max_queue_size      = 16
