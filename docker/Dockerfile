@@ -1,7 +1,8 @@
 # Official tensorflow images built after Sept 2021 are based on Ubuntu 20.04
 # Check: https://hub.docker.com/r/tensorflow/tensorflow/
 
-FROM tensorflow/tensorflow:latest-gpu AS BASE_BUILD
+FROM tensorflow/tensorflow:latest-gpu
+FROM pachyderm/opencv:latest AS BASE_BUILD
 
 # edgetpu-compiler setup
 FROM BASE_BUILD AS BUILD1
