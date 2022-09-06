@@ -25,7 +25,8 @@ RUN apt update && apt install -y libopencv-dev python3-opencv
 # GPGTPU project setup (including kernel model training setup)
 FROM BUILD2 AS BUILD3
 RUN apt-get -y install vim && \
-        apt-get install -y git
+        apt-get install -y git && \
+        python -m pip install scipy 
 
 # convention setup
 FROM BUILD3 AS BUILD4

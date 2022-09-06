@@ -7,7 +7,8 @@ class TrainParamsBase():
     def __init__(self, model_name: str):
         # general model params
         self.size               = 2048
-        self.shape              = (self.size, self.size)
+        self.in_shape           = (self.size, self.size)
+        self.out_shape          = (self.size, self.size)
         self.batch_size         = 4
         self.epochs             = 100
         self.num_train          = 400
@@ -32,4 +33,9 @@ class TrainParamsBase():
         self.patience  = 4
         self.mode      = 'auto'
 
+
+        self.overwrite_params = {
+            "sobel_2d":     {"in_shape": (self.size, self.size), "out_shape": (self.size, self.size)},
+            "histogram256": {"in_shape": (self.size,),           "out_shape": (256*4,)}
+        }
 

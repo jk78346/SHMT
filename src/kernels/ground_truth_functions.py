@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from scipy.fftpack import fft
 
 class Applications:
     """ This class provides a series of application functions as ground truth. """
@@ -25,3 +26,45 @@ class Applications:
         abs_grad_y = cv.convertScaleAbs(grad_y)
         grad = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
         return np.asarray(grad)
+
+    @staticmethod
+    def fft_1dr2c(src):
+        """ This function implements 1-D Real-to-Complex transforms. 
+            Inputs: numpy array such as  [1.0, 2.0, 1.0, -1.0, 1.5]
+            Outputs: numpy array such as [4.5       +0.j        ,
+                                          2.08155948-1.65109876j,
+                                          -1.83155948+1.60822041j, 
+                                          -1.83155948-1.60822041j,
+                                          2.08155948+1.65109876j]
+
+
+            How to partition?
+                Consider the case that multiple sine waves added up in frequency domain.
+        """
+        return fft(src)
+
+    @staticmethod
+    def histogram256(src):
+        """ This function returns historgram 256 of a array. 
+            cv.calHist returns an array of histogram points of dtype float.32
+        """
+        hist = cv.calcHist([src], [0], None, [256], (0, 256), accumulate=False)
+        hist = hist.astype(np.uint32)
+        x0 = hist
+        x1 = hist >> 8
+        x2 = hist >> 16
+        x3 = hist >> 24
+
+        x0 = np.remainder(x0, 256)
+        x1 = np.remainder(x1, 256)
+        x2 = np.remainder(x2, 256)
+        x3 = np.remainder(x3, 256)
+
+        ret = np.concatenate((x0, x1, x2, x3), axis=None)
+        return ret
+
+
+
+
+
+

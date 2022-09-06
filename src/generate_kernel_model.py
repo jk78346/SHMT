@@ -27,7 +27,8 @@ class MyDataGen():
     """ A customized data generator """
     def __init__(self, params, target_func):
         self.batch_size         = params.batch_size
-        self.shape              = params.shape
+        self.in_shape           = params.in_shape
+        self.out_shape          = params.out_shape
         self.num_samples        = params.num_train
         self.num_representative = params.num_representative
         # The ground truth function callable
@@ -35,11 +36,13 @@ class MyDataGen():
     
     def random_input_gen(self):
         """ This function generates random samples for training input. """
-        x = np.zeros((self.num_samples,) + self.shape + (1,), dtype="float32")
-        y = np.zeros((self.num_samples,) + self.shape + (1,), dtype="float32")
+        x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
+        y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         for j in range(self.num_samples):
-            x_slice = np.random.randint(255, size=self.shape, dtype="uint8")
+            x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
+#            print("x_slice.shape: ", x_slice.shape)
             y_slice = self.func(x_slice)
+#            print("y_slice.shape: ", y_slice.shape)
             x_slice = np.expand_dims(x_slice, axis=-1)
             y_slice = np.expand_dims(y_slice, axis=-1)
             x[j] = x_slice.astype('float32') / 255.
@@ -49,7 +52,7 @@ class MyDataGen():
     def representative_gen(self):
         """ representative dataset generator """
         for j in range(self.num_representative):
-            x_slice = np.random.randint(255, size=(1,) + self.shape, dtype="uint8")
+            x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32') / 255.
             yield [x]
@@ -61,9 +64,11 @@ class TrainParams(TrainParamsBase):
         TrainParamsBase.__init__(self, model_name)
         assert (model_name in dir(KernelModels) and model_name in dir(Applications)), \
             f" Given model name: \"{model_name}\" is not supported. Check for available kernel and application implementations. "
+        # overwrite model params for given model name
+        self.assign_params(model_name)
 
         # callbacks - checkpoint params
-        model_path_base = get_gittop() + "/models/" + model_name 
+        model_path_base = get_gittop() + "/models/" + model_name + "_" + 'x'.join([str(i) for i in self.in_shape])
         os.system("mkdir -p " + model_path_base)
         self.checkpoint_path = model_path_base + "/" + model_name + "_checkpoint/" + model_name + ".ckpt"
         self.save_weights_only = False
@@ -71,10 +76,16 @@ class TrainParams(TrainParamsBase):
 
         # saved tf model dir
         self.saved_model_dir = model_path_base
-        self.saved_model_path = self.saved_model_dir + "/" + model_name + "_model"
+        self.saved_model_path = self.saved_model_dir
 
         # saved tflite model path
         self.tflite_model_path = model_path_base + "/" + model_name + ".tflite"
+    
+    def assign_params(self, model_name):
+        assert model_name in self.overwrite_params, \
+            f"assign_params: model_name: {model_name} not defined."
+        self.in_shape  = self.overwrite_params[model_name]["in_shape"]
+        self.out_shape = self.overwrite_params[model_name]["out_shape"]
 
 def gpu_setup():
     """ GPU setup """
@@ -94,7 +105,7 @@ def get_funcs(model_name):
 def train(params, kernel_model, random_input_gen):
     """ The main training script """
     gpu_setup()
-    model = kernel_model(params.shape)
+    model = kernel_model(params.in_shape, params.out_shape)
     model.summary()
 
     print("number of samples: ", params.num_train)
