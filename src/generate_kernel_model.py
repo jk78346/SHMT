@@ -7,8 +7,8 @@ import cv2 as cv
 import subprocess
 import numpy as np
 import tensorflow as tf
+from utils.params_base import TrainParams
 from utils.utils import (
-        get_gittop, 
         get_imgs_count, 
         get_img_paths_list
 )
@@ -56,36 +56,6 @@ class MyDataGen():
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32') / 255.
             yield [x]
-
-class TrainParams(TrainParamsBase):
-    """ training parameters setup. Specify any parameter other than default here. """
-    def __init__(self, model_name):
-        """ Give default paths for output artifacts. """
-        TrainParamsBase.__init__(self, model_name)
-        assert (model_name in dir(KernelModels) and model_name in dir(Applications)), \
-            f" Given model name: \"{model_name}\" is not supported. Check for available kernel and application implementations. "
-        # overwrite model params for given model name
-        self.assign_params(model_name)
-
-        # callbacks - checkpoint params
-        model_path_base = get_gittop() + "/models/" + model_name + "_" + 'x'.join([str(i) for i in self.in_shape])
-        os.system("mkdir -p " + model_path_base)
-        self.checkpoint_path = model_path_base + "/" + model_name + "_checkpoint/" + model_name + ".ckpt"
-        self.save_weights_only = False
-        self.save_best_only = True
-
-        # saved tf model dir
-        self.saved_model_dir = model_path_base
-        self.saved_model_path = self.saved_model_dir
-
-        # saved tflite model path
-        self.tflite_model_path = model_path_base + "/" + model_name + ".tflite"
-    
-    def assign_params(self, model_name):
-        assert model_name in self.overwrite_params, \
-            f"assign_params: model_name: {model_name} not defined."
-        self.in_shape  = self.overwrite_params[model_name]["in_shape"]
-        self.out_shape = self.overwrite_params[model_name]["out_shape"]
 
 def gpu_setup():
     """ GPU setup """
@@ -160,6 +130,13 @@ def convert_to_tflite(params, representative_gen):
 def main(args):
     """ The main script """
     params = TrainParams(args.model)
+    assert (args.model in dir(KernelModels) and args.model in dir(Applications)), \
+        f" Given model name \"{args.model}\" is not supported. Check for available kernel and application implementations."
+
+    for k, v in vars(params).items():
+        print(k, ": ", v)
+
+
     target_func, kernel_model = get_funcs(args.model)
     my_data_gen = MyDataGen(params, target_func)
     if args.skip_train == False:
