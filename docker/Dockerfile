@@ -1,8 +1,7 @@
 # Official tensorflow images built after Sept 2021 are based on Ubuntu 20.04
 # Check: https://hub.docker.com/r/tensorflow/tensorflow/
 
-FROM tensorflow/tensorflow:latest-gpu
-FROM pachyderm/opencv:latest AS BASE_BUILD
+FROM tensorflow/tensorflow:2.9.2-gpu AS BASE_BUILD
 
 # edgetpu-compiler setup
 FROM BASE_BUILD AS BUILD1
@@ -19,20 +18,16 @@ RUN apt-get update && \
     | tee /etc/apt/sources.list.d/coral-edgetpu.list && \
     apt-get update && apt-get install -y edgetpu-compiler
 
-# GPGTPU project setup (including kernel model training setup)
+# install opencv
 FROM BUILD1 AS BUILD2
-RUN apt-get update && apt-get install -y \
-        python3 \
-        python3-pip && \
-        apt-get -y install vim && \
-        pip install tflearn && \
-        pip install opencv-python && \
-        apt-get install ffmpeg libsm6 libxext6 -y && \
-        apt-get install time && \
-        pip install gitpython && \
+RUN apt update && apt install -y libopencv-dev python3-opencv
+
+# GPGTPU project setup (including kernel model training setup)
+FROM BUILD2 AS BUILD3
+RUN apt-get -y install vim && \
         apt-get install -y git
 
 # convention setup
-FROM BUILD2 AS BUILD3
+FROM BUILD3 AS BUILD4
 WORKDIR /home
 RUN ln -s $(which python3) /usr/bin/python

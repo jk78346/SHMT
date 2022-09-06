@@ -2,7 +2,6 @@ import os
 assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
 import keras
-import tflearn
 import argparse
 import cv2 as cv
 import subprocess
@@ -145,7 +144,7 @@ def convert_to_tflite(params, representative_gen):
     with open(params.tflite_model_path, "wb") as f:
         f.write(tflite_model)
     print("edgetpu_compiler compiling...")
-    os.system("edgetpu_compiler -s "+params.tflite_model_path+" -o "+params.saved_model_dir)
+    os.system("edgetpu_compiler -s -m 13 "+params.tflite_model_path+" -o "+params.saved_model_dir)
 
 def main(args):
     """ The main script """
