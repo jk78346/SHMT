@@ -15,6 +15,5 @@ def get_img_paths_list(path, ext, sort=True):
     ret = [os.path.join(path, fname) for fname in os.listdir(path) if fname.endswith(ext)]
     return sorted(ret) if sort == True else ret
 
-
-
+    
 

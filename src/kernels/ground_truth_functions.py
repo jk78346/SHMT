@@ -28,6 +28,23 @@ class Applications:
         return np.asarray(grad)
 
     @staticmethod
+    def mean_2d(src):
+        """ mean filter on 2D image """
+        assert(len(src.shape) == 2), \
+            f" mean_2d: # of dims of input != 2, found {len(src.shape)}. "
+        blur = cv.blur(src, (3, 3))
+        return blur
+
+    @staticmethod
+    def laplacian_2d(src):
+        """ Laplacian operator on 2D image """
+        assert(len(src.shape) == 2), \
+            f" mean_2d: # of dims of input != 2, found {len(src.shape)}. "
+        ddepth = cv.CV_32F
+        ret = cv.Laplacian(src, ddepth, ksize=3)
+        return ret
+
+    @staticmethod
     def fft_1dr2c(src):
         """ This function implements 1-D Real-to-Complex transforms. 
             Inputs: numpy array such as  [1.0, 2.0, 1.0, -1.0, 1.5]
@@ -47,6 +64,7 @@ class Applications:
     def histogram256(src):
         """ This function returns historgram 256 of a array. 
             cv.calHist returns an array of histogram points of dtype float.32
+            , while every src.size chunk of the array is a 8 bit chunk of output int32 result. 
         """
         hist = cv.calcHist([src], [0], None, [256], (0, 256), accumulate=False)
         hist = hist.astype(np.uint32)

@@ -11,12 +11,12 @@ class TrainParamsBase():
                  in_shape = (2048, 2048),
                  out_shape = (2048, 2048),
                  batch_size = 4,
-                 epochs = 100,
+                 epochs = 1000,
                  num_train = 400,
                  num_representative = 2,
-                 optimizer = 'adam',
-                 loss = 'mse',
-                 metrics = [],
+                 optimizer = keras.optimizers.Adam(learning_rate=0.01),
+                 loss = keras.losses.MeanSquaredError(),
+                 metrics = [keras.metrics.RootMeanSquaredError()],
                  max_queue_size = 16,
                  use_multiprocessing = True,
                  validation_steps = 1,
@@ -27,6 +27,7 @@ class TrainParamsBase():
                  mode = 'auto'
                  ):
         # general model params
+        self.model_name         = model_name
         self.size               = size
         self.in_shape           = in_shape
         self.out_shape          = out_shape
@@ -58,10 +59,16 @@ class TrainParams(TrainParamsBase):
     """ training parameters setup based on given model name. """
     def __init__(self, model_name):
         if model_name == 'sobel_2d':
-            TrainParamsBase.__init__(self, model_name)
-        if model_name == 'histogram256':
+            TrainParamsBase.__init__(self, model_name, optimizer=keras.optimizers.Adam(learning_rate=0.01))
+        elif model_name == 'mean_2d':
+            TrainParamsBase.__init__(self, model_name, optimizer=keras.optimizers.Adam(learning_rate=0.002), patience=20)
+        elif model_name == 'laplacian_2d':
+            TrainParamsBase.__init__(self, model_name, optimizer=keras.optimizers.Adam(learning_rate=0.02))
+        elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, model_name, in_shape=(2048,), out_shape=(256*4,), num_train=10000)
- 
+        else: # use default params
+            TrainParamsBase.__init__(self, model_name)
+
         # callbacks - checkpoint params
         model_path_base = get_gittop() + "/models/" + model_name + "_" + 'x'.join([str(i) for i in self.in_shape])
         os.system("mkdir -p " + model_path_base)

@@ -2,15 +2,17 @@ import os
 assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
 import keras
+import random
 import argparse
 import cv2 as cv
 import subprocess
 import numpy as np
 import tensorflow as tf
+from scipy.stats import binom
 from utils.params_base import TrainParams
 from utils.utils import (
         get_imgs_count, 
-        get_img_paths_list
+        get_img_paths_list,
 )
 from keras.callbacks import (
         ModelCheckpoint, 
@@ -31,15 +33,21 @@ class MyDataGen():
         self.out_shape          = params.out_shape
         self.num_samples        = params.num_train
         self.num_representative = params.num_representative
+        self.model_name         = params.model_name
         # The ground truth function callable
-        self.func        = target_func
+        self.func               = target_func
     
     def random_input_gen(self):
         """ This function generates random samples for training input. """
         x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
         y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         for j in range(self.num_samples):
-            x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
+            if self.model_name == 'histogram256':
+                x_slice = np.full(self.in_shape[0], binom.pmf(list(range(self.in_shape[0])), 255, random.uniform(0, 1)))    
+                x_slice = (x_slice / max(x_slice)) * 255
+                x_slice = x_slice.astype("uint8")
+            else:
+                x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
 #            print("x_slice.shape: ", x_slice.shape)
             y_slice = self.func(x_slice)
 #            print("y_slice.shape: ", y_slice.shape)
@@ -72,6 +80,12 @@ def get_funcs(model_name):
     return app, model
 
 
+def model_lr(epoch, lr):
+    if epoch < 10:
+        return lr
+    else:
+        return lr * 0.995
+
 def train(params, kernel_model, random_input_gen):
     """ The main training script """
     gpu_setup()
@@ -95,6 +109,8 @@ def train(params, kernel_model, random_input_gen):
                                               save_best_only=params.save_best_only,
                                               verbose=params.verbose)
 
+    lr_scheduler = keras.callbacks.LearningRateScheduler(model_lr)
+
     print("model.fit starting...")
     hist = model.fit(X_train,
                      Y_train,
@@ -107,7 +123,7 @@ def train(params, kernel_model, random_input_gen):
                  use_multiprocessing=params.use_multiprocessing,
                  workers=params.workers,
                  verbose=params.verbose,
-                 callbacks=[early, cp_callback])
+                 callbacks=[early, cp_callback, lr_scheduler])
 
     tf.saved_model.save(model, params.saved_model_dir)
     print(f"model \"{args.model}\" saved at {params.saved_model_dir}.")
@@ -132,11 +148,8 @@ def main(args):
     params = TrainParams(args.model)
     assert (args.model in dir(KernelModels) and args.model in dir(Applications)), \
         f" Given model name \"{args.model}\" is not supported. Check for available kernel and application implementations."
-
     for k, v in vars(params).items():
         print(k, ": ", v)
-
-
     target_func, kernel_model = get_funcs(args.model)
     my_data_gen = MyDataGen(params, target_func)
     if args.skip_train == False:
