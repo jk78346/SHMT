@@ -363,8 +363,9 @@ float RMSE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double mean = 0;
         for(int i = 0; i < w ; i++){
 	        for(int j = 0 ; j < h ; j++){
-		        MSE  = (MSE * i + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (i+1);
-		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+		        int cnt = i*h+j;
+                MSE  = (MSE * cnt + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (cnt+1);
+		        mean = (mean * cnt + buf1[i*ldn+j]) / (cnt+1);
 	        }
         }
 	return (sqrt(MSE)/mean)*100;
@@ -375,14 +376,9 @@ float ERROR_RATE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double mean = 0;
         for(int i = 0 ; i < w ; i++){
 	        for(int j = 0 ; j < h ; j++){
-		        if(verbose > 0){
-//                    if(fabs(buf1[i*ldn+j] - buf2[i*ldn+j]) > 1e-5){
-//                        std::cout << "buf1[" << i << ", " << j << "] = " << buf1[i*ldn+j] << ", buf2[" << i << ", " << j << "] = " << buf2[i*ldn+j] << std::endl;
-//                        exit(0);
-//                    }
-                }
-                mean = (mean * i + buf1[i*ldn+j]) / (i+1);
-		        rate = (rate * i + fabs(buf1[i*ldn+j] - buf2[i*ldn+j])) / (i+1); 
+                int cnt = i*h+j;
+                mean = (mean * cnt + buf1[i*ldn+j]) / (cnt+1);
+		        rate = (rate * cnt + fabs(buf1[i*ldn+j] - buf2[i*ldn+j])) / (cnt+1); 
 	        }
         }
 	return (rate/mean)*100;
@@ -474,9 +470,10 @@ float PSNR(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	float  max_v = FLT_MIN;
         for(int i = 0 ; i < w ; i++){
         	for(int j = 0 ; j < h ; j++){
+                int cnt = i*h+j;
         		if(buf2[i*ldn+j] > max_v){ max_v = buf2[i*ldn+j]; }
-        		MSE  = (MSE * i + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (i+1);
-		        mean = (mean * i + buf1[i*ldn+j]) / (i+1);
+        		MSE  = (MSE * cnt + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (cnt+1);
+		        mean = (mean * cnt + buf1[i*ldn+j]) / (cnt+1);
 	        }
         }
 	return 20*log10(max_v) - 10*log10(MSE/mean);
@@ -527,7 +524,7 @@ void array2Mat(Mat& img, float* data, int CV_type, int rows, int cols){
 
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, Mat& out_img, float* h_C){
 	printf("calling conv_CPU...\n");
-   
+ 
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
@@ -540,11 +537,14 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
 
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 
+    //medianBlur(img, out_img, 3);
+    //Laplacian(img, out_img, ddepth, 3, 1, 0, BORDER_DEFAULT);
+
     Mat2array(out_img, h_C);
     return 0;
 }
 
-void reverse_crop(sMatrixSize matrix_size, Mat& out_img, float* h_C, float** h_C_partial, std::string partition_mode){
+void reverse_crop(sMatrixSize matrix_size, Mat& out_img, std::string partition_mode){
 //    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
 //        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
 //            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
@@ -569,6 +569,7 @@ void reverse_crop(sMatrixSize matrix_size, Mat& out_img, float* h_C, float** h_C
         exit(0);
     }
     std::cout << "reverse cropping..." << std::endl;
+    std::cout << "out_img.size(): " << out_img.size() << std::endl;
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             Rect roi(i*matrix_size.OUT_BLK_W, j*matrix_size.OUT_BLK_H, matrix_size.OUT_BLK_W, matrix_size.OUT_BLK_H);
@@ -587,7 +588,7 @@ float conv_CPU_TILES(int nIter, sMatrixSize matrix_size, const float alpha, floa
         }
     }
     // combine partial to one
-    reverse_crop(matrix_size, out_img, h_C, h_C_partial, "CPU");
+    reverse_crop(matrix_size, out_img, "CPU");
     Mat2array(out_img, h_C);
     return 0;
 }
@@ -598,39 +599,19 @@ float conv_TPU(int nIter, int argc, char** argv, int in_w, int in_h, int out_w, 
     int in_size  =  in_w *  in_h;
     int out_size = out_w * out_h;
     int* in  = (int*) malloc(in_size * sizeof(int));
-    int* Gx_out = (int*) calloc(out_size, sizeof(int));
-    int* Gy_out = (int*) calloc(out_size, sizeof(int));
-    float* Gx_fout = (float*) malloc(out_size * sizeof(float));
-    float* Gy_fout = (float*) malloc(out_size * sizeof(float));
+    int* out = (int*) calloc(out_size, sizeof(int));
     for(int i = 0 ; i < in_size ; i++){
-        in[i] = h_in[i]; // float to int conversion
+        in[i] = h_in[i] - 128; // float to int conversion
     }
-    std::string Gx_model_path = "Sobel_Scharr_Gx_2Kx2Kx1_3x3x1x1_SAME_int8_scale_0.1_edgetpu.tflite";
-    std::string Gy_model_path = "Sobel_Scharr_Gy_2Kx2Kx1_3x3x1x1_SAME_int8_scale_0.1_edgetpu.tflite";
-    
-    Mat grad_x, grad_y;
-    Mat abs_grad_x, abs_grad_y;
+    std::string sobel_2d_path = "./sobel_2d_edgetpu.tflite";    
+    printf("in_size : %d * %d = %d\n", in_w, in_h, in_size);
+    printf("out_size: %d * %d = %d\n", out_w, out_h, out_size);
+    // =====GPTPU calling==============================================================
+    run_a_model(sobel_2d_path, nIter, in, in_size, out, out_size, 1);
     // ================================================================================
-    // reversed unit test passed by the commented section.
-//    Mat img;
-//    array2Mat(img, h_in, CV_32F, in_w, in_h);
-//    int ddepth = CV_8U;
-//    Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
-//    Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
-    run_a_model(Gx_model_path, nIter, in, in_size, Gx_out, out_size, 1);
-    run_a_model(Gy_model_path, nIter, in, in_size, Gy_out, out_size, 1);
     for(int i = 0 ; i < out_size ; i++){
-        Gx_fout[i] = (float)Gx_out[i]*10;
-        Gx_fout[i] = (float)Gx_out[i]*10;
+        h_TPU[i] = out[i]; // int to float conversion
     }
-    array2Mat(grad_x, Gx_fout, CV_32F, out_w, out_h);
-    array2Mat(grad_y, Gy_fout, CV_32F, out_w, out_h);
-    // ================================================================================
-    convertScaleAbs(grad_x, abs_grad_x);
-    convertScaleAbs(grad_y, abs_grad_y);
-
-    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
-    Mat2array(out_img, h_TPU);
 }
 
 void ChooseQuantizationParams(float max, float min, double& scale, int& mean){
@@ -686,13 +667,11 @@ float conv_TPU_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, 
     for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
         for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
             int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
-            std::cout << "i: " << i << ", j: " << j << std::endl;
         	conv_TPU(nIter, argc, argv, matrix_size.IN_BLK_W, matrix_size.IN_BLK_H, matrix_size.OUT_BLK_W, matrix_size.OUT_BLK_H, h_partial_in[idx], h_filter, TPU_out_pars[idx], h_partial_c[idx]);
-            //conv_CPU(nIter, matrix_size, alpha, in_pars[idx], h_partial_in[idx], h_filter, beta, h_C_partial[idx]);
         }
     }
     // combine partial to one
-    reverse_crop(matrix_size, out_img, h_TPU, h_partial_c, "TPU");
+    reverse_crop(matrix_size, out_img, "TPU");
     Mat2array(out_img, h_TPU);
     return 0;
 	
@@ -854,8 +833,23 @@ bool weighted_RR_on_GPU(int idx){
 	return idx%2; // default: fair RR
 }
 
-float conv_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float* h_in, float* h_filter, float* h_C, const float alpha, const float beta){
+float conv_MIX_TILES(int nIter, int argc, char** argv, sMatrixSize matrix_size, float** h_partial_in, float* h_filter, float* h_C, const float alpha, const float beta, Mat& out_img, float** h_partial_c){
 	printf("calling conv_MIX_TILES...\n");
+    
+    for(int i = 0 ; i < matrix_size.OUT_W_BLK_CNT ; i++){
+        for(int j = 0 ; j < matrix_size.OUT_H_BLK_CNT ; j++){
+            int idx = i*(matrix_size.OUT_H_BLK_CNT)+j;
+    		if(weighted_RR_on_GPU(idx)){ // (weighted) Round-Robin between GPU and TPU
+                conv_CPU(nIter, matrix_size, alpha, in_pars[idx], h_partial_in[idx], h_filter, beta, MIX_out_pars[idx], h_partial_c[idx]);
+            }else{
+                conv_TPU(nIter, argc, argv, matrix_size.IN_BLK_W, matrix_size.IN_BLK_H, matrix_size.OUT_BLK_W, matrix_size.OUT_BLK_H, h_partial_in[idx], h_filter, MIX_out_pars[idx], h_partial_c[idx]);
+            }            
+        }
+    }
+    // combine partial to one
+    reverse_crop(matrix_size, out_img, "MIX");
+    Mat2array(out_img, h_C);
+    return 0;
 //	timing b_s = clk::now();
 //    
 //	cudaDeviceProp deviceProp;
@@ -1115,6 +1109,14 @@ void assign_mix_p(int argc, char** argv){
 	printf("weighted RR: %4.1f%% sub-tasks on GPU\n", mix_p*100);
 }
 
+void preprocessing_img(sMatrixSize matrix_size, Mat& img){
+    for(int i = 0 ; i < matrix_size.IN_W ; i++){
+        for(int j = 0 ; j < matrix_size.IN_H ; j++){
+            img.at<uchar>(i, j, 0) -= 128;
+        }
+    }
+}
+
 void read_img(const std::string file_name, sMatrixSize matrix_size, Mat& img){
     Mat raw = imread(file_name);
     assert(!raw.empty());
@@ -1154,7 +1156,7 @@ float run_conv(int _mode, int argc, char** argv, int nIter, sMatrixSize matrix_s
         kernel_ms = conv_TPU_TILES(nIter, argc, argv, matrix_size, h_partial_in, h_filter, out_img, h_C, h_partial_C);
 	}else if(_mode == 4){ // mix tiling algorithm mode
 		assign_mix_p(argc, argv);
-        kernel_ms = conv_MIX_TILES(nIter, argc, argv, matrix_size, h_in, h_filter, h_C, alpha, beta);
+        kernel_ms = conv_MIX_TILES(nIter, argc, argv, matrix_size, h_partial_in, h_filter, h_C, alpha, beta, out_img, h_partial_C);
 	}else if(_mode == -1){ // skip
 		printf("skip, no run\n");
 	}else{
@@ -1278,8 +1280,9 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
     print_matrix(matrix_size);
     // Using opencv to partition input image and populate to h_in and h_partial_in
     Mat img;
-    Mat out_img;
+    Mat out_img(matrix_size.OUT_W, matrix_size.OUT_H, CV_32F);
     read_img(file_name, matrix_size, img);
+    //preprocessing_img(matrix_size, img);
     Mat2array(img, h_in);
     
     //in_pars = (Mat*) malloc(matrix_size.OUT_W_BLK_CNT * matrix_size.OUT_H_BLK_CNT * sizeof(Mat));
@@ -1296,6 +1299,9 @@ int conv(int argc, char **argv, sMatrixSize &matrix_size)
         }
     }
     int _mode;
+
+    assert(atoi(argv[5]) != atoi(argv[6])); // To separate out XXX_out_pars usage, or need to redesign this for smae type comparison.
+
     _mode = atoi(argv[5]); // baseline
     _start = clk::now();
     baseline_kernel_ms = run_conv(_mode, argc, argv, nIter, matrix_size, file_name, alpha, beta, img, h_in, h_partial_in, h_filter, out_img, h_C_baseline, h_C_baseline_partial);
