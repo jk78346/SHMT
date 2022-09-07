@@ -134,8 +134,8 @@ def convert_to_tflite(params, representative_gen):
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = representative_gen
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.int8
-    converter.inference_output_type = tf.int8
+    converter.inference_input_type = tf.uint8
+    converter.inference_output_type = tf.uint8
     print("converter starts converting...")
     tflite_model = converter.convert()
     with open(params.tflite_model_path, "wb") as f:
