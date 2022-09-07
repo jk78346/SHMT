@@ -18,8 +18,8 @@ class KernelModels:
         """ This function returns a NN-based Sobel model that simulates Sobel edge detection behavior. """
         encoded_dim = 16
         inputs = keras.Input(shape=in_shape+(1,))
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu')(inputs)
-        x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='relu')(x)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', use_bias=False)(inputs)
+        x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='relu', use_bias=False)(x)
         outputs = x
         return keras.Model(inputs, outputs)
     

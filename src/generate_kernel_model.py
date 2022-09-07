@@ -62,7 +62,7 @@ class MyDataGen():
         for j in range(self.num_representative):
             x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
             x_slice = np.expand_dims(x_slice, axis=-1)
-            x = x_slice.astype('float32') / 255.
+            x = x_slice.astype('float32') #/ 255.
             yield [x]
 
 def gpu_setup():
