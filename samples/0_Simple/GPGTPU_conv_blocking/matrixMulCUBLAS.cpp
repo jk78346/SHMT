@@ -361,12 +361,14 @@ float covariance(int m, int n, int ldn, float* x, float* y, float ux, float uy){
 float RMSE(int w, int h, int ldn, float* buf1, float* buf2, int verbose){
 	double  MSE = 0;
 	double mean = 0;
+    int cnt = 0;
         for(int i = 0; i < w ; i++){
 	        for(int j = 0 ; j < h ; j++){
-		        int cnt = i*h+j;
+		        //int cnt = i*h+j;
                 MSE  = (MSE * cnt + pow(buf1[i*ldn+j] - buf2[i*ldn+j], 2)) / (cnt+1);
 		        mean = (mean * cnt + buf1[i*ldn+j]) / (cnt+1);
-	        }
+	            cnt++;
+            }
         }
 	return (sqrt(MSE)/mean)*100;
 }
@@ -537,6 +539,7 @@ float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, 
 
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 
+    blur(img, out_img, Size(3, 3));
     //medianBlur(img, out_img, 3);
     //Laplacian(img, out_img, ddepth, 3, 1, 0, BORDER_DEFAULT);
 
@@ -601,9 +604,9 @@ float conv_TPU(int nIter, int argc, char** argv, int in_w, int in_h, int out_w, 
     int* in  = (int*) malloc(in_size * sizeof(int));
     int* out = (int*) calloc(out_size, sizeof(int));
     for(int i = 0 ; i < in_size ; i++){
-        in[i] = h_in[i] - 128; // float to int conversion
+        in[i] = ((int)(h_in[i] + 128)) % 256; // float to int conversion
     }
-    std::string sobel_2d_path = "./sobel_2d_edgetpu.tflite";    
+    std::string sobel_2d_path = "./mean_2d_edgetpu.tflite";    
     printf("in_size : %d * %d = %d\n", in_w, in_h, in_size);
     printf("out_size: %d * %d = %d\n", out_w, out_h, out_size);
     // =====GPTPU calling==============================================================
@@ -1112,7 +1115,7 @@ void assign_mix_p(int argc, char** argv){
 void preprocessing_img(sMatrixSize matrix_size, Mat& img){
     for(int i = 0 ; i < matrix_size.IN_W ; i++){
         for(int j = 0 ; j < matrix_size.IN_H ; j++){
-            img.at<uchar>(i, j, 0) -= 128;
+            img.at<uchar>(i, j, 0) /= 2;
         }
     }
 }
