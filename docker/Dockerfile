@@ -26,7 +26,8 @@ RUN apt update && apt install -y libopencv-dev python3-opencv
 FROM BUILD2 AS BUILD3
 RUN apt-get -y install vim && \
         apt-get install -y git && \
-        python -m pip install scipy 
+        python -m pip install scipy && \
+        pip install Pillow scikit-image
 
 # convention setup
 FROM BUILD3 AS BUILD4

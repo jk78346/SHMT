@@ -32,7 +32,9 @@ class Applications:
         """ mean filter on 2D image """
         assert(len(src.shape) == 2), \
             f" mean_2d: # of dims of input != 2, found {len(src.shape)}. "
-        blur = cv.blur(src, (3, 3))
+        tmp  = cv.copyMakeBorder(src, 1, 1, 1, 1, cv.BORDER_CONSTANT, value=[0])
+        blur = cv.blur(tmp, (3, 3), borderType = cv.BORDER_ISOLATED)
+        blur = blur[1:1+src.shape[0],1:1+src.shape[1]]
         return blur
 
     @staticmethod
