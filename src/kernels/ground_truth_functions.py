@@ -44,6 +44,7 @@ class Applications:
             f" mean_2d: # of dims of input != 2, found {len(src.shape)}. "
         ddepth = cv.CV_32F
         ret = cv.Laplacian(src, ddepth, ksize=3)
+        ret = cv.convertScaleAbs(ret)
         return ret
 
     @staticmethod

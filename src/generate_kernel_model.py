@@ -56,17 +56,14 @@ class MyDataGen():
                 x_slice = (x_slice / max(x_slice)) * 255
                 x_slice = x_slice.astype("uint8")
             else:
-                #np.random.seed()
-                #x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
-                idx = j%30
-                print("idx: ", idx)
-                x_slice = np.load(self.input_img_paths[idx])
+                np.random.seed()
+                x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
             
             y_slice = self.func(x_slice)
             x_slice = np.expand_dims(x_slice, axis=-1)
             y_slice = np.expand_dims(y_slice, axis=-1)
             x[j] = (x_slice.astype('float32') / 255.) 
-            y[j] = (y_slice.astype('float32') / (y_slice.max() - y_slice.min())) 
+            y[j] = (y_slice.astype('float32') / 255.)
         return x, y
     
     def representative_gen(self):

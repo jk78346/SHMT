@@ -72,7 +72,7 @@ class TrainParams(TrainParamsBase):
         elif model_name == 'laplacian_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
-                                     optimizer=keras.optimizers.Adam(learning_rate=0.02), 
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.005), 
                                      patience=5)
         elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, 
