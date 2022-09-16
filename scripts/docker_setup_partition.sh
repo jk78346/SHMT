@@ -1,13 +1,13 @@
 #!/bin/sh
 
-PROJ=gpgtpu
 GITTOP="$(git rev-parse --show-toplevel 2>&1)"
 
 # source configure file
 . "${GITTOP}/configure.cfg"
+PROJ=${GPGTPU_PARTITION}
 
 # paths setup
-DOCKERFILE_PATH="${GITTOP}/docker/kernel_model_training"
+DOCKERFILE_PATH="${GITTOP}/docker/partition_scheme"
 IMAGE_NAME=${PROJ}_image
 CONTAINER_NAME=${PROJ}_container
 DATASET_DIR="${DATASET_HOST_ROOT}"
