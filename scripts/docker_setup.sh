@@ -10,9 +10,9 @@ GITTOP="$(git rev-parse --show-toplevel 2>&1)"
 DOCKERFILE_PATH="${GITTOP}/docker"
 IMAGE_NAME=${PROJ}_image
 CONTAINER_NAME=${PROJ}_container
-#DATASET_DIR="${DATASET_HOST_ROOT}"
+DATASET_DIR="${DATASET_HOST_ROOT}"
 SRC_DIR="${GITTOP}"
-#DATASET_TARGET_DIR="${DATASET_MOUNT}" # the dataset mount point within container
+DATASET_TARGET_DIR="${DATASET_MOUNT}" # the dataset mount point within container
 SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
@@ -31,11 +31,11 @@ sudo docker run -d \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
          --gpus all \
+         --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
          ${IMAGE_NAME} \
          bash
          
-#         --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
 
 
 
