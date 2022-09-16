@@ -527,24 +527,27 @@ void array2Mat(Mat& img, float* data, int CV_type, int rows, int cols){
 float conv_CPU(int nIter, sMatrixSize matrix_size, const float alpha, Mat& img, float* h_in, float* h_filter, const float beta, Mat& out_img, float* h_C){
 	printf("calling conv_CPU...\n");
  
+	timing s = clk::now();
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
-    int ddepth = CV_8U; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
-    Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
-    Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_CONSTANT);
+    int ddepth = CV_32F; // CV_8U, CV_16S, CV_16U, CV_32F, CV_64F
+    Sobel(img, grad_x, ddepth, 1, 0, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
+    Sobel(img, grad_y, ddepth, 0, 1, 3/*ksize*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
 
     convertScaleAbs(grad_x, abs_grad_x);
     convertScaleAbs(grad_y, abs_grad_y);
 
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 
-    blur(img, out_img, Size(3, 3));
-    //medianBlur(img, out_img, 3);
+    //blur(img, out_img, Size(3, 3));
     //Laplacian(img, out_img, ddepth, 3, 1, 0, BORDER_DEFAULT);
+    //convertScaleAbs(out_img, out_img);
 
     Mat2array(out_img, h_C);
-    return 0;
+	timing e = clk::now();
+    double bms = get_time_ms(e, s);
+    return bms;
 }
 
 void reverse_crop(sMatrixSize matrix_size, Mat& out_img, std::string partition_mode){
@@ -606,7 +609,7 @@ float conv_TPU(int nIter, int argc, char** argv, int in_w, int in_h, int out_w, 
     for(int i = 0 ; i < in_size ; i++){
         in[i] = ((int)(h_in[i] + 128)) % 256; // float to int conversion
     }
-    std::string sobel_2d_path = "./mean_2d_edgetpu.tflite";    
+    std::string sobel_2d_path = "./sobel_2d_edgetpu.tflite";    
     printf("in_size : %d * %d = %d\n", in_w, in_h, in_size);
     printf("out_size: %d * %d = %d\n", out_w, out_h, out_size);
     // =====GPTPU calling==============================================================
