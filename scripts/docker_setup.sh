@@ -7,7 +7,7 @@ GITTOP="$(git rev-parse --show-toplevel 2>&1)"
 . "${GITTOP}/configure.cfg"
 
 # paths setup
-DOCKERFILE_PATH="${GITTOP}/docker"
+DOCKERFILE_PATH="${GITTOP}/docker/kernel_model_training"
 IMAGE_NAME=${PROJ}_image
 CONTAINER_NAME=${PROJ}_container
 DATASET_DIR="${DATASET_HOST_ROOT}"
