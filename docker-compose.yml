@@ -1,7 +1,0 @@
-version: "2"
-services:
-    kernel_model_training:
-        build: ./docker/kernel_model_training
-    partition_scheme:
-        build: ./docker/partition_scheme
-    
