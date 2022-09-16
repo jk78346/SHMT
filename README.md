@@ -24,12 +24,7 @@ Run docker hello-world
 sudo docker run hello-world
 ```
 
-## 2. Install docker-compose
-```
-sudo apt-get install docker-compose
-```
-
-## 3. Install NVIDIA Container Toolkit 
+## 2. Install NVIDIA Container Toolkit 
 Please refer to: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker
 
 1. install ```curl```
