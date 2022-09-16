@@ -1,0 +1,1 @@
+FROM ubunt:18.04 AS BASIC_BUILD
