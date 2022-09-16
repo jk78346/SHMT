@@ -24,7 +24,12 @@ Run docker hello-world
 sudo docker run hello-world
 ```
 
-## 2. Install NVIDIA Container Toolkit 
+## 2. Install docker-compose
+```
+sudo apt-get install docker-compose
+```
+
+## 3. Install NVIDIA Container Toolkit 
 Please refer to: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker
 
 1. install ```curl```
@@ -51,3 +56,10 @@ sudo systemctl restart docker
 2. Make sure the following command gives good ```nvidia-smi``` output: \
 ```sudo docker run --rm --gpus all nvidia/cuda:11.7.0-devel-ubuntu20.04 nvidia-smi``` \
 (Replace version numbers accordingly if cuda and Ubuntu versions vary.)
+
+## 2. ```scripts/docker_setup.sh: 7: .: Can't open fatal: unsafe repository ('/home/kuanchiehhsu/GPGTPU' is owned by someone else)```
+To add an exception for this directory, call:
+```
+git config --global --add safe.directory '*'
+```
+reference: https://stackoverflow.com/questions/71901632/fatal-error-unsafe-repository-home-repon-is-owned-by-someone-else
