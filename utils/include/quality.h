@@ -1,23 +1,24 @@
 class Quality{
     public:
-	Quality(int m, int n, int ldn, float* x, float* y); // default constructor
+	// default constructor
+        Quality(int row, int col, int ldn, float* target_mat, float* baseline_mat);
 
-        float average(int m, int n, int ldn, float* x);
-        float sdev(int m, int n, int ldn, float* x, float ux);
-        float covariance(int m, int n, int ldn, float* x, float* y, float ux, float uy);
-        float rmse(int m, int n, int ldn, float* x, float* y, int verbose);
-        float error_rate(int m, int n, int ldn, float* x, float* y, int verbose);
-        float error_percentage(int m, int n, int ldn, float* x, float* y, int verbose);
-        float ssim(int m, int n, int ldn, float* x, float* y, int verbose);
-        float pnsr(int m, int n, int ldn, float* x, float* y, int verbose);
-	
+	void get_minmax(float* x, float& max, float& min);
+        float average(float* mat);
+        float sdev(float* mat);
+        float covariance();
+
+	// main APIs
+	float rmse(int verbose);
+        float error_rate(int verbose);
+        float error_percentage(int verbose);
+        float ssim(int verbose);
+        float pnsr(int verbose);
+
     private:
-	int m;
-	int n;
+	int row;
+	int col;
 	int ldn;
-	float* x;
-	float* y;
-	
-	float ux;
-	float uy;
+	float* target_mat;
+	float* baseline_mat;
 };
