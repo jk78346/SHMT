@@ -26,13 +26,16 @@ docker rm ${CONTAINER_NAME}
 # mount dataset dir (ImageNet)/src  from host fs to container fs
 # get the container running
 echo "[${PROJ}] - build docker container..."
+# Use 'priviledged' flag to enable edgetpu access
 sudo docker run -d \
          -it \
+         --privileged \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
          --gpus all \
          --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
+         --mount type=bind,source=${GPTPU_LIB_BASE},target=${GPTPU_LIB_MOUNT} \
          ${IMAGE_NAME} \
          bash
          
