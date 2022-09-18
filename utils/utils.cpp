@@ -1,21 +1,34 @@
 #include "utils.h"
 
-void Utils::mat2array(Mat& img, float* data){
-	// data has to be pre-allocated with proper size
-	if(! img.isContinuous()){
-		img = img.clone();
-	}
-	// row-major
-	for(int i = 0 ; i < img.rows ; i++){
-		for(int j = 0 ; j < img.cols ; j++){
-			int idx = i*(img.cols)+j;
-			data[idx] = img.data[idx]; // uint8_t to float conversion
-		}
-	}
+double get_time_ms(timing end, timing start){
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000.0;
 }
 
-void Utils::array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
-	Mat tmp = Mat(rows, cols, CV_type, data);
-	tmp.copyTo(img);
+void read_img(const std::string file_name, int rows, int cols, Mat& img){
+    Mat raw = imread(file_name);
+    assert(!raw.empty());
+    cvtColor(raw, img, COLOR_BGR2GRAY);
+    resize(img, img, Size(rows, cols), 0, 0, INTER_AREA);
+    assert(img.size().width * img.size().height == rows * cols);
 }
+
+void mat2array(Mat& img, float* data){
+    // data has to be pre-allocated with proper size
+    if(!img.isContinuous()){
+        img = img.clone();
+    }
+    // row-major
+    for(int i = 0 ; i < img.rows ; i++){
+        for(int j = 0 ; j < img.cols ; j++){
+            int idx = i*(img.cols)+j;
+            data[idx] = img.data[idx]; // uint8_t to float conversion
+        }
+    }
+}
+
+void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_type, data);
+    tmp.copyTo(img);
+}
+
 
