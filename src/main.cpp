@@ -9,11 +9,23 @@
 
 using namespace cv;
 
-float run_kernel_on_cpu(Mat& img, float* output_array){
+extern std::unordered_map<std::string, func_ptr> cpu_func_table; 
+
+float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
+    // kernel existence checking
+    if(cpu_func_table.find(app_name) == cpu_func_table.end()){
+        std::cout << "app_name: " << app_name << " not found" << std::endl;
+        std::cout << "supported app: " << std::endl;
+        for(auto const &pair: cpu_func_table){
+            std::cout << "{" << pair.first << ": " << pair.second << "}" << std::endl;
+        }
+        exit(0);
+    }
+
     timing start = clk::now();
-    
+    // Actual kernel call
     Mat out_img;
-    sobel_2d_cpu(img, out_img);
+    cpu_func_table[app_name](img, out_img);
     mat2array(out_img, output_array);
 
     timing end   = clk::now(); 
@@ -25,7 +37,7 @@ float run_kernel(const std::string& mode, Params& params, float* input_array, fl
     if(mode == "cpu"){
         Mat img;
         array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
-        kernel_ms = run_kernel_on_cpu(img, output_array);        
+        kernel_ms = run_kernel_on_cpu(params.app_name, img, output_array);        
     }else if(mode == "tpu"){
         int in_size  = params.problem_size * params.problem_size;
         int out_size = params.problem_size * params.problem_size;
@@ -34,20 +46,28 @@ float run_kernel(const std::string& mode, Params& params, float* input_array, fl
         for(int i = 0 ; i < in_size ; i++){
             in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
         }
-        std::string kernel_path = "../models/sobel_2d_2048x2048/sobel_2d_edgetpu.tflite";
-        run_a_model(kernel_path, 1, in, in_size, out, out_size, 1);
+        std::string kernel_path = get_edgetpu_kernel_path(params.app_name, params.problem_size, params.problem_size);
+        run_a_model(kernel_path, params.iter, in, in_size, out, out_size, 1);
         for(int i = 0 ; i < out_size ; i++){
             output_array[i] = out[i]; // int to float conversion
         }
         openctpu_clean_up();
     }
-    
-
     return kernel_ms;
 }
 
-int main(){
-    Params params;
+int main(int argc, char* argv[]){
+    if(argc != 4){
+        std::cout << "Usage: " << argv[0] << " <application name> <problem_size> <iter>" << std::endl;
+        return 0;
+    }
+    std::string app_name = argv[1];
+    int problem_size     = atoi(argv[2]);
+    int iter             = atoi(argv[3]);
+    Params params(app_name, 
+                  problem_size, 
+                  problem_size/*block size*/, 
+                  iter);
 
     int rows = params.problem_size;
     int cols = params.problem_size;
@@ -60,30 +80,30 @@ int main(){
 
     Mat in_img;
     Mat out_img;
-
-    std::string file_name = "../data/lena_gray_2Kx2K.bmp";
     
-    read_img(file_name, rows, cols, in_img);
+    read_img(params.input_data_path, 
+             rows, 
+             cols, 
+             in_img);
     mat2array(in_img, input_array);
 
     float proposed_kernel_ms = 0;
     float baseline_kernel_ms = 0;
-    baseline_kernel_ms = run_kernel(params.baseline_mode, params, input_array, output_array_baseline);
-    proposed_kernel_ms = run_kernel(params.target_mode,   params, input_array, output_array_proposed);
+    baseline_kernel_ms = run_kernel(params.baseline_mode, 
+                                    params, 
+                                    input_array, 
+                                    output_array_baseline);
+    proposed_kernel_ms = run_kernel(params.target_mode,   
+                                    params, 
+                                    input_array, 
+                                    output_array_proposed);
 
-    Quality quality(params.problem_size, params.problem_size, params.problem_size, output_array_proposed, output_array_baseline);
-
-    float rmse             = quality.rmse(0);
-    float error_rate       = quality.error_rate(0);
-    float error_percentage = quality.error_percentage(0);
-    float ssim             = quality.ssim(0);
-    float pnsr             = quality.pnsr(0);
-
-    printf("rmse: %f %%\n", rmse);
-    printf("error rate: %f %%\n", error_rate);
-    printf("error percentage: %f %%\n", error_percentage);
-    printf("ssim: %f\n", ssim);
-    printf("pnsr: %f dB\n", pnsr);
+    Quality quality(params.problem_size, // m
+                    params.problem_size, // n
+                    params.problem_size, // ldn
+                    output_array_proposed, 
+                    output_array_baseline);
+    quality.print_results(0);
 
     printf("baseline kernel: %f (ms)\n", baseline_kernel_ms);
     printf("proposed kernel: %f (ms)\n", proposed_kernel_ms);

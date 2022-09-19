@@ -31,4 +31,10 @@ void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
     tmp.copyTo(img);
 }
 
+std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1){
+    return "../models/"+ 
+           app_name+"_"+std::to_string(shape0)+"x"+std::to_string(shape1)+"/"+
+           app_name+"_edgetpu.tflite";
+}
+
 
