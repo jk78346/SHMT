@@ -22,15 +22,16 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
         exit(0);
     }
 
+    Mat out_img;
+    
     timing start = clk::now();
     // Actual kernel call
-    Mat out_img;
     cpu_func_table[app_name](img, out_img);
+    timing end   = clk::now(); 
     
     out_img.convertTo(out_img, CV_8U);
     mat2array(out_img, output_array);
 
-    timing end   = clk::now(); 
     return get_time_ms(end, start);
 }
 
