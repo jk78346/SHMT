@@ -6,7 +6,8 @@ RUN apt-get update && \
 FROM BASIC_BUILD AS BUILD1
 RUN apt-get update && \
     apt-get install -y build-essential apt-utils && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -yq libopencv-dev
+    DEBIAN_FRONTEND=noninteractive apt-get install -yq libopencv-dev && \
+    apt-get install -y libatlas-base-dev
 
 # install libedgetpu
 FROM BUILD1 AS BUILD2

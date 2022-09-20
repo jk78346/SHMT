@@ -1,6 +1,7 @@
 #include "quality.h"
 #include "math.h"
 #include <float.h>
+#include <stdio.h>
 
 Quality::Quality(int m, int n, int ldn, float* x, float* y){
 	this->row          = m;
@@ -146,3 +147,21 @@ float Quality::pnsr(int verbose){
 	}
 	return 20*log10(baseline_max) - 10*log10(mse/mean);
 }
+
+void Quality::print_results(int verbose){
+    float rmse             = this->rmse(verbose);
+    float error_rate       = this->error_rate(verbose);
+    float error_percentage = this->error_percentage(verbose);
+    float ssim             = this->ssim(verbose);
+    float pnsr             = this->pnsr(verbose);
+
+    printf("=============================================\n");
+    printf("Quality results\n");
+    printf("=============================================\n");
+    printf("rmse: %f %%\n", rmse);
+    printf("error rate: %f %%\n", error_rate);
+    printf("error percentage: %f %%\n", error_percentage);
+    printf("ssim: %f\n", ssim);
+    printf("pnsr: %f dB\n", pnsr);
+}
+
