@@ -67,7 +67,6 @@ class TrainParams(TrainParamsBase):
             TrainParamsBase.__init__(self, 
                                      model_name, 
                                      optimizer=keras.optimizers.Adam(learning_rate=0.02), 
-                                     #loss=keras.losses.BinaryCrossentropy(from_logits=True),
                                      patience=5)
         elif model_name == 'laplacian_2d':
             TrainParamsBase.__init__(self, 

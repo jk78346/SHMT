@@ -95,8 +95,7 @@ def model_lr(epoch, lr):
     if epoch < 10:
         return lr
     else:
-        return lr * 0.995 # mean_2d
-        #return lr * tf.math.exp(-0.1)
+        return lr * 0.995 
 
 def train(params, kernel_model, random_input_gen):
     """ The main training script """
@@ -128,8 +127,6 @@ def train(params, kernel_model, random_input_gen):
                  epochs=params.epochs, 
                  batch_size=params.batch_size,
                  validation_split=0.1,
-#                 validation_data=val_gen, 
-#                 validation_steps=params.validation_steps,
                  max_queue_size=params.max_queue_size,
                  use_multiprocessing=params.use_multiprocessing,
                  workers=params.workers,
