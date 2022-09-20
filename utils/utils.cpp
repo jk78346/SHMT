@@ -1,3 +1,6 @@
+#include <fstream>
+#include <iostream>
+#include <assert.h>
 #include "utils.h"
 
 double get_time_ms(timing end, timing start){
@@ -32,9 +35,13 @@ void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
 }
 
 std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1){
-    return "../models/"+ 
-           app_name+"_"+std::to_string(shape0)+"x"+std::to_string(shape1)+"/"+
-           app_name+"_edgetpu.tflite";
+    std::string path =  "../models/"+ 
+                        app_name+"_"+std::to_string(shape0)+"x"+std::to_string(shape1)+"/"+
+                        app_name+"_edgetpu.tflite";
+    std::ifstream ifile(path);
+    assert(ifile);
+    return path;
 }
+
 
 
