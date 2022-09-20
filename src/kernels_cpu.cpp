@@ -23,7 +23,7 @@ void sobel_2d_cpu(Mat& in_img, Mat& out_img){
 }
 
 void mean_2d_cpu(Mat& in_img, Mat& out_img){
-    blur(out_img, out_img, Size(3, 3), Point(-1, -1), BORDER_DEFUALT);
+    blur(in_img, out_img, Size(3, 3), Point(-1, -1), BORDER_DEFAULT);
 }
 
 void laplacian_2d_cpu(Mat& in_img, Mat& out_img){
