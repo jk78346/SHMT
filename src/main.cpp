@@ -26,6 +26,8 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
     // Actual kernel call
     Mat out_img;
     cpu_func_table[app_name](img, out_img);
+    
+    out_img.convertTo(out_img, CV_8U);
     mat2array(out_img, output_array);
 
     timing end   = clk::now(); 
@@ -103,7 +105,7 @@ int main(int argc, char* argv[]){
                     params.problem_size, // ldn
                     output_array_proposed, 
                     output_array_baseline);
-    quality.print_results(0);
+    quality.print_results(1);
 
     printf("baseline kernel: %f (ms)\n", baseline_kernel_ms);
     printf("proposed kernel: %f (ms)\n", proposed_kernel_ms);
