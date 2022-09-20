@@ -57,31 +57,43 @@ class TrainParamsBase():
     
 class TrainParams(TrainParamsBase):
     """ training parameters setup based on given model name. """
-    def __init__(self, model_name):
+    def __init__(self, model_name, size):
         if model_name == 'sobel_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
                                      optimizer=keras.optimizers.Adam(learning_rate=0.02), 
                                      patience=5)
         elif model_name == 'mean_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
                                      optimizer=keras.optimizers.Adam(learning_rate=0.02), 
                                      patience=5)
         elif model_name == 'laplacian_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
                                      optimizer=keras.optimizers.Adam(learning_rate=0.005), 
                                      patience=5)
         elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, 
                                      model_name, 
-                                     in_shape=(2048,), 
+                                     in_shape=(size,), 
                                      out_shape=(256*4,), 
                                      num_train=10000, 
                                      min_delta=0.00001)
         else: # use default params
-            TrainParamsBase.__init__(self, model_name)
+            TrainParamsBase.__init__(self, model_name,
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size))
 
         # callbacks - checkpoint params
         model_path_base = get_gittop() + "/models/" + model_name + "_" + 'x'.join([str(i) for i in self.in_shape])

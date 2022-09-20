@@ -202,7 +202,7 @@ def convert_to_tflite(params, representative_gen):
 
 def main(args):
     """ The main script """
-    params = TrainParams(args.model)
+    params = TrainParams(args.model, args.size)
     assert (args.model in dir(KernelModels) and args.model in dir(Applications)), \
         f" Given model name \"{args.model}\" is not supported. Check for available kernel and application implementations."
     for k, v in vars(params).items():
@@ -223,6 +223,10 @@ if __name__ == "__main__":
     parser.add_argument('--skip_train', dest='skip_train', action='store_true', help='To skip kernel model training if saved model already exists.')
     parser.add_argument('--skip_pre_test', dest='skip_pre_test', action='store_true', help='To skip testing on trained fp32 model (before quantization).')
     parser.add_argument('--skip_tflite', dest='skip_tflite', action='store_true', help='To skip tflite converting.')
+    parser.add_argument('--size', dest='size', action='store', type=int, help='problem size.')
+   
+    parser.set_defaults(model="mean_2d")
+    parser.set_defaults(size=2048)
     parser.set_defaults(skip_train=False)
     parser.set_defaults(skip_tflite=False)
     args = parser.parse_args()
