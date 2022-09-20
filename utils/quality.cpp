@@ -95,7 +95,7 @@ float Quality::error_percentage(int verbose){
 	for(int i = 0 ; i < this->row ; i++){
 		for(int j = 0 ; j < this->col ; j++){
 			int idx = i*this->ldn+j;
-			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) < 1e-8){
+			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
 				cnt++;
 			}
 		}
