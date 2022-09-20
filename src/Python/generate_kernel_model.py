@@ -56,7 +56,7 @@ class MyDataGen():
                 x_slice = (x_slice / max(x_slice)) * 255
                 x_slice = x_slice.astype("uint8")
             else:
-                np.random.seed()
+                np.random.seed(j)
                 x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
             
             y_slice = self.func(x_slice)
@@ -71,7 +71,7 @@ class MyDataGen():
         for j in range(self.num_representative):
 #            x_slice = np.load(self.input_img_paths[j])
 #            x_slice = np.expand_dims(x_slice, axis=0)
-            random.seed(time.time())
+            np.random.seed(j)
             x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32')
@@ -127,6 +127,7 @@ def train(params, kernel_model, random_input_gen):
                  epochs=params.epochs, 
                  batch_size=params.batch_size,
                  validation_split=0.1,
+                 shuffle=False,
                  max_queue_size=params.max_queue_size,
                  use_multiprocessing=params.use_multiprocessing,
                  workers=params.workers,
@@ -161,7 +162,7 @@ def pre_quantize_test(params, target_func):
 
     print(model.get_weights())
 
-    X_test = np.expand_dims(X_test, axis=(0, 3))
+    X_test = np.expand_dims(X_test, axis=(0, len(params.in_shape)+1))
 
     print("start to evaluate...")
     # get model prediction

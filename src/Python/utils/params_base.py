@@ -23,7 +23,7 @@ class TrainParamsBase():
                  workers = 2,
                  verbose = 1,
                  min_delta = 0,
-                 patience = 4,
+                 patience = 10,
                  mode = 'auto'
                  ):
         # general model params
@@ -64,24 +64,21 @@ class TrainParams(TrainParamsBase):
                                      size=size,
                                      in_shape=(size, size),
                                      out_shape=(size, size),
-                                     optimizer=keras.optimizers.Adam(learning_rate=0.02), 
-                                     patience=5)
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.01))
         elif model_name == 'mean_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
                                      size=size,
                                      in_shape=(size, size),
                                      out_shape=(size, size),
-                                     optimizer=keras.optimizers.Adam(learning_rate=0.02), 
-                                     patience=5)
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.02))
         elif model_name == 'laplacian_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
                                      size=size,
                                      in_shape=(size, size),
                                      out_shape=(size, size),
-                                     optimizer=keras.optimizers.Adam(learning_rate=0.005), 
-                                     patience=5)
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.005))
         elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, 
                                      model_name, 

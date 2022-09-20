@@ -45,7 +45,7 @@ class Quality:
     #    return np.mean(np.abs((self.true - self.pred) / self.true)) * 100.0
 
     def error_percentage(self):
-        return np.mean(np.fabs(np.subtract(self.pred, self.true)) < 10e-8) * 100.0
+        return np.mean(np.fabs(np.subtract(self.pred, self.true)) > 10e-8) * 100.0
 
     def ssim(self):
         """ Structural Similarity Index """
