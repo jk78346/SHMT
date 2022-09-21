@@ -4,10 +4,15 @@
 #include <unordered_map>
 
 std::unordered_map<std::string, func_ptr> cpu_func_table = {
+    {"minimum_2d", minimum_2d_cpu},
     {"sobel_2d", sobel_2d_cpu},
     {"mean_2d", mean_2d_cpu},
     {"laplacian_2d", laplacian_2d_cpu}
 };
+
+void minimum_2d_cpu(Mat& in_img, Mat& out_img){
+    out_img = in_img;
+}
 
 void sobel_2d_cpu(Mat& in_img, Mat& out_img){
     Mat grad_x, grad_y;

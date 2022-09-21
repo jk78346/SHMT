@@ -90,6 +90,13 @@ int main(int argc, char* argv[]){
              in_img);
     mat2array(in_img, input_array);
 
+    for(int i = 0 ; i < 5 ; i++){
+        for(int j = 0 ; j < 5 ; j++){
+            std::cout << input_array[i*params.problem_size+j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
     float proposed_kernel_ms = 0;
     float baseline_kernel_ms = 0;
     
