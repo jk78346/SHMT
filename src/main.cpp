@@ -92,14 +92,19 @@ int main(int argc, char* argv[]){
 
     float proposed_kernel_ms = 0;
     float baseline_kernel_ms = 0;
+    
+    timing baseline_start = clk::now();
     baseline_kernel_ms = run_kernel(params.baseline_mode, 
                                     params, 
                                     input_array, 
                                     output_array_baseline);
+    timing baseline_end = clk::now();
+    timing proposed_start = clk::now();
     proposed_kernel_ms = run_kernel(params.target_mode,   
                                     params, 
                                     input_array, 
                                     output_array_proposed);
+    timing proposed_end = clk::now();
 
     Quality quality(params.problem_size, // m
                     params.problem_size, // n
@@ -108,8 +113,14 @@ int main(int argc, char* argv[]){
                     output_array_baseline);
     quality.print_results(1);
 
+    printf("===== Latency =====\n");
     printf("baseline kernel: %f (ms)\n", baseline_kernel_ms);
     printf("proposed kernel: %f (ms)\n", proposed_kernel_ms);
+    double baseline_e2e = get_time_ms(baseline_end, baseline_start);
+    double proposed_e2e = get_time_ms(proposed_end, proposed_start);
+
+    printf("baseline e2e: %f (ms)\n", baseline_e2e);
+    printf("proposed e2e: %f (ms)\n", proposed_e2e);
 
     return 0;
 }
