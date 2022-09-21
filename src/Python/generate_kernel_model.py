@@ -14,7 +14,6 @@ import argparse
 import cv2 as cv
 import subprocess
 import numpy as np
-from pathlib import Path
 from PIL import Image
 from scipy.stats import binom
 from utils.params_base import TrainParams
@@ -109,8 +108,7 @@ def train(params, train_from_scratch, kernel_model, random_input_gen):
     """ The main training script """
     gpu_setup()
 
-    path = Path(params.saved_model_dir)
-    if not path.is_dir() or train_from_scratch:
+    if not os.path.exists(params.saved_model_dir+"/saved_model.pb") or train_from_scratch:
         print("===== Train from scratch... =====")
         model = kernel_model(params.in_shape, params.out_shape)
     else:
