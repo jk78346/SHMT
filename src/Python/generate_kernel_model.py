@@ -9,6 +9,7 @@ import cv2 as cv
 import subprocess
 import numpy as np
 import tensorflow as tf
+from pathlib import Path
 from PIL import Image
 from scipy.stats import binom
 from utils.params_base import TrainParams
@@ -97,10 +98,18 @@ def model_lr(epoch, lr):
     else:
         return lr * 0.995 
 
-def train(params, kernel_model, random_input_gen):
+def train(params, train_from_scratch, kernel_model, random_input_gen):
     """ The main training script """
     gpu_setup()
-    model = kernel_model(params.in_shape, params.out_shape)
+
+    path = Path(params.saved_model_dir)
+    if not path.is_file() or train_from_scratch:
+        model = kernel_model(params.in_shape, params.out_shape)
+        print("===== Start from pre-trained weights. =====")
+    else:
+        model = tf.keras.models.load_model(params.saved_model_dir)
+        print("===== Train from scratch... =====")
+
     model.summary()
 
     X_train, Y_train = random_input_gen()
@@ -211,7 +220,7 @@ def main(args):
     target_func, kernel_model = get_funcs(args.model)
     my_data_gen = MyDataGen(params, target_func)
     if args.skip_train == False:
-        train(params, kernel_model, my_data_gen.random_input_gen)
+        train(params, args.train_from_scratch, kernel_model, my_data_gen.random_input_gen)
     if args.skip_pre_test == False:
         pre_quantize_test(params, target_func)
     if args.skip_tflite == False:
@@ -222,6 +231,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This Python script generates NN-based tflite model that simulates target function kernel.')
     parser.add_argument('--model', action='store', type=str, help='name of the kernel model for training')
     parser.add_argument('--skip_train', dest='skip_train', action='store_true', help='To skip kernel model training if saved model already exists.')
+    parser.add_argument('--train_from_scratch', dest='train_from_scratch', action='store_true', help='Train from scratch flag when train is enabled.')
     parser.add_argument('--skip_pre_test', dest='skip_pre_test', action='store_true', help='To skip testing on trained fp32 model (before quantization).')
     parser.add_argument('--skip_tflite', dest='skip_tflite', action='store_true', help='To skip tflite converting.')
     parser.add_argument('--size', dest='size', action='store', type=int, help='problem size.')
@@ -229,6 +239,7 @@ if __name__ == "__main__":
     parser.set_defaults(model="mean_2d")
     parser.set_defaults(size=2048)
     parser.set_defaults(skip_train=False)
+    parser.set_defaults(train_from_scratch=False)
     parser.set_defaults(skip_tflite=False)
     args = parser.parse_args()
     main(args)
