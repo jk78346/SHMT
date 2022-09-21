@@ -1,4 +1,10 @@
 import os
+seed=2022
+os.environ['PYTHONHASHSEED'] = str(seed)
+import tensorflow as tf
+tf.keras.utils.set_random_seed(seed)
+tf.config.experimental.enable_op_determinism()
+
 assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
 import time
@@ -8,7 +14,6 @@ import argparse
 import cv2 as cv
 import subprocess
 import numpy as np
-import tensorflow as tf
 from pathlib import Path
 from PIL import Image
 from scipy.stats import binom
@@ -59,6 +64,7 @@ class MyDataGen():
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
+                tf.keras.utils.set_random_seed(seed)
             
             y_slice = self.func(x_slice)
             x_slice = np.expand_dims(x_slice, axis=-1)
@@ -74,6 +80,7 @@ class MyDataGen():
 #            x_slice = np.expand_dims(x_slice, axis=0)
             np.random.seed(j)
             x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
+            tf.keras.utils.set_random_seed(seed)
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32')
             yield [x]
@@ -103,12 +110,18 @@ def train(params, train_from_scratch, kernel_model, random_input_gen):
     gpu_setup()
 
     path = Path(params.saved_model_dir)
-    if not path.is_file() or train_from_scratch:
-        model = kernel_model(params.in_shape, params.out_shape)
-        print("===== Start from pre-trained weights. =====")
-    else:
-        model = tf.keras.models.load_model(params.saved_model_dir)
+    if not path.is_dir() or train_from_scratch:
         print("===== Train from scratch... =====")
+        model = kernel_model(params.in_shape, params.out_shape)
+    else:
+        loaded_model = tf.keras.models.load_model(params.saved_model_dir)
+        target_model = kernel_model(params.in_shape, params.out_shape)
+        if target_model.get_config() != loaded_model.get_config():
+            print("===== WARNING: loaded pre-train weight is different from model config of the target model. Fall back to train from scratch. =====")
+            model = target_model
+        else:
+            print("===== Start from pre-trained weights. =====")
+            model = loaded_model
 
     model.summary()
 
