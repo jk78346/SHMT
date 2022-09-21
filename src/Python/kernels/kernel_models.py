@@ -14,6 +14,15 @@ class KernelModels:
         return func
 
     @staticmethod
+    def minimum_2d(in_shape, out_shape):
+        """ This function return s minimum kernel model for latency testing purpose only. """
+        inputs = keras.Input(shape=in_shape+(1,))
+        x = layers.Conv2D(filters=1, kernel_size=1, padding='same', use_bias=False)(inputs)
+        outputs = x
+        return keras.Model(inputs, outputs)
+        
+
+    @staticmethod
     def sobel_2d(in_shape, out_shape):
         """ This function returns a NN-based Sobel model that simulates Sobel edge detection behavior. """
         encoded_dim = 16

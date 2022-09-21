@@ -15,6 +15,14 @@ class Applications:
         return func
 
     @staticmethod
+    def minimum_2d(src):
+        """ This function returns a minimum kernel of given input shape. """
+        assert(len(src.shape) == 2) ,\
+                f" minimum_2d: # of dims of input != 2, found {len(src.shape)}. "
+        # quality result can be ignored, this kernel is latency unity test only
+        return src 
+
+    @staticmethod
     def sobel_2d(src):
         """ This function returns edge detected 2D image utilizing OpenCV Sobel filters. """
         assert(len(src.shape) == 2) ,\

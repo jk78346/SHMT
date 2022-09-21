@@ -58,7 +58,14 @@ class TrainParamsBase():
 class TrainParams(TrainParamsBase):
     """ training parameters setup based on given model name. """
     def __init__(self, model_name, size):
-        if model_name == 'sobel_2d':
+        if model_name == 'minimum_2d':
+            TrainParamsBase.__init__(self, 
+                                     model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
+                                     epochs=1)
+        elif model_name == 'sobel_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
                                      size=size,
