@@ -2,6 +2,7 @@
 #include "math.h"
 #include <float.h>
 #include <stdio.h>
+#include <iostream>
 
 Quality::Quality(int m, int n, int ldn, float* x, float* y){
 	this->row          = m;
@@ -95,7 +96,7 @@ float Quality::error_percentage(int verbose){
 	for(int i = 0 ; i < this->row ; i++){
 		for(int j = 0 ; j < this->col ; j++){
 			int idx = i*this->ldn+j;
-			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) < 1e-8){
+			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
 				cnt++;
 			}
 		}
@@ -154,6 +155,23 @@ void Quality::print_results(int verbose){
     float error_percentage = this->error_percentage(verbose);
     float ssim             = this->ssim(verbose);
     float pnsr             = this->pnsr(verbose);
+
+    if(verbose){
+        std::cout << "baseline result:" << std::endl;
+        for(int i = 0 ; i < 5 ; i++){
+            for(int j = 0 ; j < 5 ; j++){
+                std::cout << baseline_mat[i*this->ldn+j] << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "proposed result:" << std::endl;
+        for(int i = 0 ; i < 5 ; i++){
+            for(int j = 0 ; j < 5 ; j++){
+                std::cout << target_mat[i*this->ldn+j] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
 
     printf("=============================================\n");
     printf("Quality results\n");
