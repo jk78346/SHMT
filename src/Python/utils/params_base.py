@@ -17,10 +17,10 @@ class TrainParamsBase():
                  optimizer = keras.optimizers.Adam(learning_rate=0.01),
                  loss = keras.losses.MeanSquaredError(),
                  metrics = [keras.metrics.RootMeanSquaredError()],
-                 max_queue_size = 16,
-                 use_multiprocessing = True,
+                 max_queue_size = 1,
+                 use_multiprocessing = False,
                  validation_steps = 1,
-                 workers = 2,
+                 workers = 1,
                  verbose = 1,
                  min_delta = 0,
                  patience = 10,
@@ -58,7 +58,14 @@ class TrainParamsBase():
 class TrainParams(TrainParamsBase):
     """ training parameters setup based on given model name. """
     def __init__(self, model_name, size):
-        if model_name == 'sobel_2d':
+        if model_name == 'minimum_2d':
+            TrainParamsBase.__init__(self, 
+                                     model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
+                                     epochs=1)
+        elif model_name == 'sobel_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
                                      size=size,
