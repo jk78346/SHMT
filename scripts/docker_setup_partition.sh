@@ -33,6 +33,9 @@ docker run -d \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
          --gpus all \
+         --mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly \
+         --mount type=bind,source=/etc/group,target=/etc/group,readonly \
+         -u $(id -u $USER):$(id -g $USER) \
          --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
          --mount type=bind,source=${GPTPU_LIB_BASE},target=${GPTPU_LIB_MOUNT} \
