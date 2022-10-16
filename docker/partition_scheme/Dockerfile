@@ -1,25 +1,62 @@
-FROM ubuntu:18.04 AS BASIC_BUILD
-RUN apt-get update && \
-    apt-get install -y vim cmake g++ git 
+FROM ubuntu:20.04 AS BASIC_BUILD
+RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONTAINER_TIMEZONE > /etc/timezone && \
+    apt-get update && \
+    apt-get install -y vim cmake g++
 
-#install opencv
+# install opencv
 FROM BASIC_BUILD AS BUILD1
 RUN apt-get update && \
     apt-get install -y build-essential apt-utils && \
     DEBIAN_FRONTEND=noninteractive apt-get install -yq libopencv-dev && \
     apt-get install -y libatlas-base-dev
 
-# install libedgetpu
+# install libedgetpu, reference: google-coral/libedgetpu/docker/Dockerfile
 FROM BUILD1 AS BUILD2
-RUN apt-get update && \
-    apt-get install -y python3-pip python-dev pkg-config wget usbutils curl && \
-    echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" \
-    | tee /etc/apt/sources.list.d/coral-edgetpu.list && \
-    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    apt-get update
-#    git clone https://github.com/google-coral/pycoral.git && \
-#    git clone https://github.com/google-coral/test_data.git && \
-#    apt install -y python3-pycoral
+COPY update_sources.sh /
+RUN /update_sources.sh
+RUN dpkg --add-architecture armhf
+RUN dpkg --add-architecture arm64
+ 
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    libc6-dev:arm64 
+#    libc6-dev:armhf 
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    python3-all \
+    python3-numpy \
+    build-essential \ 
+#    crossbuild-essential-armhf \
+    crossbuild-essential-arm64 \
+    libusb-1.0-0-dev \
+    libusb-1.0-0-dev:arm64 \
+#    libusb-1.0-0-dev:armhf \
+    zlib1g-dev \
+#    zlib1g-dev:armhf \
+    zlib1g-dev:arm64 \
+    sudo \
+    debhelper \
+    pkg-config \
+    zip \
+    unzip \
+    curl \
+    wget \
+    git \
+    tree \
+    software-properties-common \
+    $(grep Ubuntu /etc/os-release > /dev/null && echo vim-common || echo xxd)
+
+ARG BAZEL_VERSION=4.2.2
+RUN wget -O /bazel https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh && \
+    bash /bazel && \
+    rm -f /bazel && \
+    echo "source /usr/local/lib/bazel/bin/bazel-complete.bash" >> ~/.bashrc
+RUN apt-get install -y libeigen3-dev && \
+    sudo ln -s /usr/include/engin3/Eigen /usr/include/Eigen
 
 FROM BUILD2 AS FINAL 
+# setup LD_LIBRARY_PATH
+RUN ln -s $(which python3) /usr/bin/python && \
+    useradd -ms /bin/bash gpgtpu_user && \
+    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc
+USER gpgtpu_user
 WORKDIR /home
+

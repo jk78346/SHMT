@@ -17,7 +17,7 @@ SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
 echo "[${PROJ}] - building docker image from dockerfile..."
-sudo docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
+docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
 
 docker stop ${CONTAINER_NAME}
 docker rm ${CONTAINER_NAME}
@@ -27,7 +27,7 @@ docker rm ${CONTAINER_NAME}
 # get the container running
 echo "[${PROJ}] - build docker container..."
 # Use 'priviledged' flag to enable edgetpu access
-sudo docker run -d \
+docker run -d \
          -it \
          --privileged \
          -e IS_GPGTPU_CONTAINER='true' \
@@ -39,9 +39,3 @@ sudo docker run -d \
          ${IMAGE_NAME} \
          bash
          
-
-
-
-
-
-
