@@ -35,6 +35,23 @@ class KernelModels:
         return keras.Model(inputs, outputs)
     
     @staticmethod
+    def npu_sobel_2d(in_shape, out_shape):
+        """ This function returns the NPU sobel model that simulates Sobel edge detection behavior. """
+        init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+        inputs = keras.Input(shape=in_shape+(1,))
+        x = layers.Conv2D(filters=8, 
+                          kernel_size=3, 
+                          padding='same', 
+                          activation='linear', 
+                          use_bias=False, 
+                          kernel_initializer=init)(inputs)
+        x = layers.Dense(1,
+                         use_bias=False,
+                         kernel_initializer=init)(x)
+        outputs = x
+        return keras.Model(inputs, outputs)
+    
+    @staticmethod
     def mean_2d(in_shape, out_shape):
         """ This functions returns a NN-based mean filter model. """
         inputs = keras.Input(shape=in_shape+(1,))

@@ -34,6 +34,19 @@ class Applications:
         abs_grad_y = cv.convertScaleAbs(grad_y)
         grad = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
         return np.asarray(grad)
+    
+    @staticmethod
+    def npu_sobel_2d(src):
+        """ This function returns edge detected 2D image utilizing OpenCV Sobel filters. """
+        assert(len(src.shape) == 2) ,\
+                f" sobel_2d: # of dims of input != 2, found {len(src.shape)}. "
+        ddepth = cv.CV_32F
+        grad_x = cv.Sobel(src, ddepth, 1, 0, ksize=3, scale=1, delta=0, borderType=cv.BORDER_DEFAULT)
+        grad_y = cv.Sobel(src, ddepth, 0, 1, ksize=3, scale=1, delta=0, borderType=cv.BORDER_DEFAULT)
+        abs_grad_x = cv.convertScaleAbs(grad_x)
+        abs_grad_y = cv.convertScaleAbs(grad_y)
+        grad = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
+        return np.asarray(grad)
 
     @staticmethod
     def mean_2d(src):

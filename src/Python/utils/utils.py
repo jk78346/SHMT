@@ -49,6 +49,10 @@ class Quality:
 
     def ssim(self):
         """ Structural Similarity Index """
+        for i in range(len(self.true.shape)):
+            if self.true.shape[i] < 7:
+                print(__file__, " : small shape[", i, "] = ", self.true.shape[i], " will cause ValueError inside the skimage structural_similarity API call, so ssim measurement is skipped for now.")
+            return
         return structural_similarity(self.true, self.pred)
 
     def pnsr(self):
