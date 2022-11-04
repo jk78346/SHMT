@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 AS BASIC_BUILD
+FROM ubuntu:18.04 AS BASIC_BUILD
 RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONTAINER_TIMEZONE > /etc/timezone && \
     apt-get update && \
     apt-get install -y vim cmake g++
@@ -17,21 +17,21 @@ RUN /update_sources.sh
 RUN dpkg --add-architecture armhf
 RUN dpkg --add-architecture arm64
  
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    libc6-dev:arm64 
+#RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+#    libc6-dev:arm64 
 #    libc6-dev:armhf 
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
     python3-all \
     python3-numpy \
     build-essential \ 
 #    crossbuild-essential-armhf \
-    crossbuild-essential-arm64 \
+#    crossbuild-essential-arm64 \
     libusb-1.0-0-dev \
-    libusb-1.0-0-dev:arm64 \
+#    libusb-1.0-0-dev:arm64 \
 #    libusb-1.0-0-dev:armhf \
     zlib1g-dev \
 #    zlib1g-dev:armhf \
-    zlib1g-dev:arm64 \
+#    zlib1g-dev:arm64 \
     sudo \
     debhelper \
     pkg-config \
@@ -44,19 +44,15 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
     software-properties-common \
     $(grep Ubuntu /etc/os-release > /dev/null && echo vim-common || echo xxd)
 
-ARG BAZEL_VERSION=4.2.2
-RUN wget -O /bazel https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh && \
-    bash /bazel && \
-    rm -f /bazel && \
-    echo "source /usr/local/lib/bazel/bin/bazel-complete.bash" >> ~/.bashrc
 RUN apt-get install -y libeigen3-dev && \
     sudo ln -s /usr/include/engin3/Eigen /usr/include/Eigen
 
 FROM BUILD2 AS FINAL 
 # setup LD_LIBRARY_PATH
 RUN ln -s $(which python3) /usr/bin/python && \
-    useradd -ms /bin/bash gpgtpu_user && \
-    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc
-USER gpgtpu_user
+    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc && \
+    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/aarch64" >> ~/.bashrc && \
+    ln -s /usr/lib/aarch64-linux-gnu/libIlmImf-2_3.so.24 /usr/lib/aarch64-linux-gnu/libIlmImf-2_3.so.22
+#RUN apt-get install libopenexr-dev
 WORKDIR /home
 

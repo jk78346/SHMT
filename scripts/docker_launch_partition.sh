@@ -8,4 +8,4 @@ PROJ=${GPGTPU_PARTITION}
 
 CONTAINER_NAME=${PROJ}_container
 # use "-u $(id -u):$(id -g)" to login the docker container with a tmp acount ID that is not sudo user.
-docker exec -it ${CONTAINER_NAME} bash
+docker exec -it --user root ${CONTAINER_NAME} bash

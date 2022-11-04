@@ -35,7 +35,7 @@ void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
 }
 
 std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1){
-    std::string path =  "/nfshome/khsu037/GPGTPU/models/"+ 
+    std::string path =  "../models/"+ 
                         app_name+"_"+std::to_string(shape0)+"x"+std::to_string(shape1)+"/"+
                         app_name+"_edgetpu.tflite";
     std::ifstream ifile(path);
