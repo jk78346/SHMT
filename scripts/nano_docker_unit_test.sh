@@ -10,4 +10,4 @@ cd ${BUILD_DIR}
 cmake ..
 make clean
 make
-./gpgtpu sobel_2d 1024 1
+./gpgtpu sobel_2d 1024 1 cpu tpu

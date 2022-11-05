@@ -1,3 +1,4 @@
+#FROM nvcr.io/nvidia/l4t-ml:r32.5.0-py3 AS BASIC_BUILD
 FROM ubuntu:18.04 AS BASIC_BUILD
 RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONTAINER_TIMEZONE > /etc/timezone && \
     apt-get update && \

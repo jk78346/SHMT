@@ -3,7 +3,7 @@
 #include <kernels.h>
 #include <unordered_map>
 
-std::unordered_map<std::string, func_ptr> cpu_func_table = {
+std::unordered_map<std::string, func_ptr_cpu> cpu_func_table = {
     {"minimum_2d", minimum_2d_cpu},
     {"sobel_2d", sobel_2d_cpu},
     {"mean_2d", mean_2d_cpu},
