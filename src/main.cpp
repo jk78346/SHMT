@@ -12,7 +12,7 @@ using namespace cv;
 extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
 extern std::unordered_map<std::string, func_ptr_gpu> gpu_func_table; 
 
-float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
+float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array, int iter){
     // kernel existence checking
     if(cpu_func_table.find(app_name) == cpu_func_table.end()){
         std::cout << "app_name: " << app_name << " not found" << std::endl;
@@ -27,7 +27,9 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
     
     timing start = clk::now();
     // Actual kernel call
-    cpu_func_table[app_name](img, out_img);
+    for(int i = 0 ; i < iter ; i ++){
+        cpu_func_table[app_name](img, out_img);
+    }
     timing end   = clk::now(); 
     
     out_img.convertTo(out_img, CV_8U);
@@ -36,7 +38,7 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array){
     return get_time_ms(end, start);
 }
 
-float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_array){
+float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_array, int iter){
     // kernel existence checking
     if(gpu_func_table.find(app_name) == gpu_func_table.end()){
         std::cout << "app_name: " << app_name << " not found" << std::endl;
@@ -51,7 +53,9 @@ float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_a
     
     timing start = clk::now();
     // Actual kernel call
-    gpu_func_table[app_name](img, out_img_gpu);
+    for(int i = 0 ; i < iter ; i++){
+        gpu_func_table[app_name](img, out_img_gpu);
+    }
     timing end   = clk::now(); 
     
     Mat out_img;
@@ -62,19 +66,20 @@ float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_a
     return get_time_ms(end, start);
 }
 
-float run_kernel(const std::string& mode, Params& params, float* input_array, float* output_array){
+float run_kernel(const std::string& mode, Params& params, float* input_array, float* output_array, int iter){
     float kernel_ms = 0.0;
-    std::cout << __func__ << ": start running kernel in " << mode << " mode." << std::endl;
+    std::cout << __func__ << ": start running kernel in " << mode << " mode" 
+              << " with iter = " << iter << std::endl;
     if(mode == "cpu"){
         Mat img;
         array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
-        kernel_ms = run_kernel_on_cpu(params.app_name, img, output_array);        
+        kernel_ms = run_kernel_on_cpu(params.app_name, img, output_array, iter);        
     }else if(mode == "gpu"){
-	Mat img_host;
+	    Mat img_host;
         array2mat(img_host, input_array, CV_32F, params.problem_size, params.problem_size);
-	cuda::GpuMat img;
-	img.upload(img_host); // convert from Mat to GpuMat
-	kernel_ms = run_kernel_on_gpu(params.app_name, img, output_array);        
+	    cuda::GpuMat img;
+	    img.upload(img_host); // convert from Mat to GpuMat
+	    kernel_ms = run_kernel_on_gpu(params.app_name, img, output_array, iter);        
     }else if(mode == "tpu"){
         int in_size  = params.problem_size * params.problem_size;
         int out_size = params.problem_size * params.problem_size;
@@ -84,11 +89,14 @@ float run_kernel(const std::string& mode, Params& params, float* input_array, fl
             in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
         }
         std::string kernel_path = get_edgetpu_kernel_path(params.app_name, params.problem_size, params.problem_size);
-        run_a_model(kernel_path, params.iter, in, in_size, out, out_size, 1);
+        run_a_model(kernel_path, params.iter, in, in_size, out, out_size, iter);
         for(int i = 0 ; i < out_size ; i++){
             output_array[i] = out[i]; // int to float conversion
         }
         openctpu_clean_up();
+    }else{
+        std::cout << "undefined execution mode: " << mode << ", program exits." << std::endl;
+        exit(0);
     }
     return kernel_ms;
 }
@@ -100,6 +108,12 @@ int main(int argc, char* argv[]){
                   << std::endl;
         return 0;
     }
+    // print program arguments
+    for(int i = 0 ; i < argc ; i++){
+        std::cout << argv[i] << " ";
+    }
+    std::cout << std::endl;
+
     std::string app_name = argv[1];
     int problem_size     = atoi(argv[2]);
     int iter             = atoi(argv[3]);
@@ -146,7 +160,8 @@ int main(int argc, char* argv[]){
     baseline_kernel_ms = run_kernel(baseline_mode, 
                                     params, 
                                     input_array, 
-                                    output_array_baseline);
+                                    output_array_baseline,
+                                    iter);
     timing baseline_end = clk::now();
     
     timing proposed_start = clk::now();
@@ -154,7 +169,8 @@ int main(int argc, char* argv[]){
     proposed_kernel_ms = run_kernel(proposed_mode, 
                                     params, 
                                     input_array, 
-                                    output_array_proposed);
+                                    output_array_proposed,
+                                    iter);
     timing proposed_end = clk::now();
     
     // Calculate end to end latency of each implementation
@@ -170,9 +186,11 @@ int main(int argc, char* argv[]){
     quality.print_results(1);
 
     std::cout << "===== Latency =====" << std::endl;
-    std::cout << baseline_mode << " kernel: " << baseline_kernel_ms << " (ms)" << std::endl;
-    std::cout << proposed_mode << " kernel: " << proposed_kernel_ms << " (ms)" << std::endl;
-    std::cout << baseline_mode << "    e2e: " << baseline_e2e_ms << " (ms)" << std::endl;
-    std::cout << proposed_mode << "    e2e: " << proposed_e2e_ms << " (ms)" << std::endl;
+    std::cout << baseline_mode << " kernel time: " << baseline_kernel_ms/iter 
+              << " (ms), averaged over " << iter << " time(s)." << std::endl;
+    std::cout << proposed_mode << " kernel time: " << proposed_kernel_ms/iter
+              << " (ms), averaged over " << iter << " time(s)." << std::endl;
+    std::cout << baseline_mode << "    e2e time: " << baseline_e2e_ms << " (ms)" << std::endl;
+    std::cout << proposed_mode << "    e2e time: " << proposed_e2e_ms << " (ms)" << std::endl;
     return 0;
 }
