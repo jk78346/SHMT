@@ -1,4 +1,6 @@
 import keras
+import tensorflow as tf
+from keras.backend import int_shape
 from tensorflow.keras import layers, backend
 
 class KernelModels:
@@ -38,6 +40,13 @@ class KernelModels:
     def npu_sobel_2d(in_shape, out_shape):
         """ This function returns the NPU sobel model that simulates Sobel edge detection behavior. """
         init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+        def expand_dims(x):
+            """ function callable wrapper for channel-wise dense. """
+            x = tf.expand_dims(x, -1)
+            w = tf.Variable(tf.shape(x))
+            r = tf.matmul(x, w)
+            return r
+
         inputs = keras.Input(shape=in_shape+(1,))
         x = layers.Conv2D(filters=8, 
                           kernel_size=3, 
@@ -45,9 +54,13 @@ class KernelModels:
                           activation='linear', 
                           use_bias=False, 
                           kernel_initializer=init)(inputs)
-        x = layers.Dense(1,
-                         use_bias=False,
-                         kernel_initializer=init)(x)
+        #x = layers.Lambda(expand_dims)(x)
+        x = layers.Conv2D(filters=1, 
+                          kernel_size=1, 
+                          padding='same', 
+                          activation='linear', 
+                          use_bias=False, 
+                          kernel_initializer=init)(x)
         outputs = x
         return keras.Model(inputs, outputs)
     
