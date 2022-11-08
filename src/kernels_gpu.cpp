@@ -27,7 +27,13 @@ void sobel_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img){
 
     sobel_dx->apply(in_img, grad_x);
     sobel_dy->apply(in_img, grad_y);
-    
+
+    cuda::abs(grad_x, grad_x);
+    cuda::abs(grad_y, grad_y);
+
+    grad_x.convertTo(grad_x, CV_8U);
+    grad_y.convertTo(grad_y, CV_8U);
+
     cuda::addWeighted(grad_x, 0.5, grad_y, 0.5, 0, out_img);
 }
 
@@ -37,11 +43,11 @@ void mean_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img){
 }
 
 void laplacian_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img){
-    int ddepth = CV_32F;
-//    Laplacian(in_img, out_img, ddepth, 3/*kernel size*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
-//    convertScaleAbs(out_img, out_img);
-    auto lap = cuda::createLaplacianFilter(in_img.type(), in_img.type(), 3/*kernel size*/, 1/*scale*/, BORDER_DEFAULT);
-    lap->apply(in_img, out_img);
+    auto laplacian = cuda::createLaplacianFilter(in_img.type(), in_img.type(), 3/*kernel size*/, 1/*scale*/, BORDER_DEFAULT);
+    laplacian->apply(in_img, out_img);
+
+    cuda::abs(out_img, out_img);
+    out_img.convertTo(out_img, CV_8U);
 }
 
 
