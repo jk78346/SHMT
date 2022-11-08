@@ -1,8 +1,8 @@
 #ifndef __KERNELS_H__
 #define __KERNELS_H__
 #include <opencv2/opencv.hpp>
-#include <opencv2/cudafilters.hpp> // createSobelFilter()
-#include <opencv2/cudaarithm.hpp> // addWeighted()
+//#include <opencv2/cudafilters.hpp> // createSobelFilter()
+//#include <opencv2/cudaarithm.hpp> // addWeighted()
 
 using namespace cv;
 
