@@ -72,6 +72,14 @@ class TrainParams(TrainParamsBase):
                                      in_shape=(size, size),
                                      out_shape=(size, size),
                                      optimizer=keras.optimizers.Adam(learning_rate=0.01))
+        elif model_name == 'npu_sobel_2d':
+            TrainParamsBase.__init__(self, 
+                                     model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
+                                     min_delta=1e-5,
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.01))
         elif model_name == 'mean_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 

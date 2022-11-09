@@ -28,7 +28,11 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array, int
     timing start = clk::now();
     // Actual kernel call
     for(int i = 0 ; i < iter ; i ++){
+        timing s = clk::now();
         cpu_func_table[app_name](img, out_img);
+        timing e = clk::now();
+        auto time = get_time_ms(e, s);
+        std::cout << "cpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
     }
     timing end   = clk::now(); 
     
@@ -54,7 +58,11 @@ float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_a
     timing start = clk::now();
     // Actual kernel call
     for(int i = 0 ; i < iter ; i++){
+        timing s = clk::now();
         gpu_func_table[app_name](img, out_img_gpu);
+        timing e = clk::now();
+        auto time = get_time_ms(e, s);
+        std::cout << "gpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
     }
     timing end   = clk::now(); 
     

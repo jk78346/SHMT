@@ -39,7 +39,8 @@ class KernelModels:
     @staticmethod
     def npu_sobel_2d(in_shape, out_shape):
         """ This function returns the NPU sobel model that simulates Sobel edge detection behavior. """
-        init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+        #init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+        init = keras.initializers.Constant(0.1)
         def expand_dims(x):
             """ function callable wrapper for channel-wise dense. """
             x = tf.expand_dims(x, -1)
@@ -48,19 +49,19 @@ class KernelModels:
             return r
 
         inputs = keras.Input(shape=in_shape+(1,))
-        x = layers.Conv2D(filters=8, 
+        x = inputs
+        for i in range(1):
+            x = layers.Conv2D(filters=8, 
                           kernel_size=3, 
                           padding='same', 
                           activation='linear', 
-                          use_bias=False, 
-                          kernel_initializer=init)(inputs)
+                          use_bias=False)(x)
         #x = layers.Lambda(expand_dims)(x)
         x = layers.Conv2D(filters=1, 
                           kernel_size=1, 
                           padding='same', 
                           activation='linear', 
-                          use_bias=False, 
-                          kernel_initializer=init)(x)
+                          use_bias=False)(x)
         outputs = x
         return keras.Model(inputs, outputs)
     

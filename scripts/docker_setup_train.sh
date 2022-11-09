@@ -17,7 +17,7 @@ SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
 echo "[${PROJ}] - building docker image from dockerfile..."
-sudo docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
+docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
 
 docker stop ${CONTAINER_NAME}
 docker rm ${CONTAINER_NAME}
@@ -26,7 +26,7 @@ docker rm ${CONTAINER_NAME}
 # mount dataset dir (ImageNet)/src  from host fs to container fs
 # get the container running
 echo "[${PROJ}] - build docker container..."
-sudo docker run -d \
+docker run -d \
          -it \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
