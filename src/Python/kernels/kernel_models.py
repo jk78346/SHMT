@@ -51,16 +51,16 @@ class KernelModels:
         inputs = keras.Input(shape=in_shape+(1,))
         x = inputs
         for i in range(1):
-            x = layers.Conv2D(filters=8, 
+            x = layers.Conv2D(filters=16, 
                           kernel_size=3, 
                           padding='same', 
-                          activation='linear', 
+                          activation='sigmoid', 
                           use_bias=False)(x)
         #x = layers.Lambda(expand_dims)(x)
         x = layers.Conv2D(filters=1, 
                           kernel_size=1, 
                           padding='same', 
-                          activation='linear', 
+                          activation='sigmoid', 
                           use_bias=False)(x)
         outputs = x
         return keras.Model(inputs, outputs)
