@@ -52,8 +52,6 @@ FROM BUILD2 AS FINAL
 # setup LD_LIBRARY_PATH
 RUN ln -s $(which python3) /usr/bin/python && \
     echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc && \
-    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/aarch64" >> ~/.bashrc && \
-    ln -s /usr/lib/aarch64-linux-gnu/libIlmImf-2_3.so.24 /usr/lib/aarch64-linux-gnu/libIlmImf-2_3.so.22
-#RUN apt-get install libopenexr-dev
+    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/aarch64" >> ~/.bashrc
 WORKDIR /home
 

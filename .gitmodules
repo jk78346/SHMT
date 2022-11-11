@@ -1,3 +1,6 @@
 [submodule "libedgetpu"]
 	path = libedgetpu
 	url = git@github.com:jk78346/libedgetpu.git
+[submodule "third_party/GPUJPEG"]
+	path = third_party/GPUJPEG
+	url = git@github.com:CESNET/GPUJPEG.git
