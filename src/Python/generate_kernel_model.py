@@ -32,7 +32,10 @@ from tensorflow.keras import (
         callbacks
 )
 from tensorflow.keras.optimizers import Adam
-from utils.params_base import TrainParamsBase
+from utils.params_base import (
+        TrainParamsBase,
+        fft_2d_kernel_array
+)
 from kernels.kernel_models import KernelModels
 from kernels.ground_truth_functions import Applications
 
@@ -60,12 +63,19 @@ class MyDataGen():
                 x_slice = np.full(self.in_shape[0], binom.pmf(list(range(self.in_shape[0])), 255, random.random()))    
                 x_slice = (x_slice / max(x_slice)) * 255
                 x_slice = x_slice.astype("uint8")
+                y_slice = self.func(x_slice)
+            elif self.model_name == 'fft_2d':
+                np.random.seed(j)
+                # use the same input data range 0 ~ 15 as samples/3_Imaging/convolutionFFT2D does
+                x_slice = np.random.randint(16, size=self.in_shape, dtype="uint8") 
+                tf.keras.utils.set_random_seed(seed)
+                y_slice = self.func(x_slice, fft_2d_kernel_array)
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
                 tf.keras.utils.set_random_seed(seed)
-            
-            y_slice = self.func(x_slice)
+                y_slice = self.func(x_slice)
+
             x_slice = np.expand_dims(x_slice, axis=-1)
             y_slice = np.expand_dims(y_slice, axis=-1)
             x[j] = (x_slice.astype('float32') / 255.) 
@@ -77,8 +87,9 @@ class MyDataGen():
         for j in range(self.num_representative):
 #            x_slice = np.load(self.input_img_paths[j])
 #            x_slice = np.expand_dims(x_slice, axis=0)
+            num_boundary = 16 if self.model_name == 'fft_2d' else 255
             np.random.seed(j)
-            x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
+            x_slice = np.random.randint(num_boundary, size=(1,) + self.in_shape, dtype="uint8")
             tf.keras.utils.set_random_seed(seed)
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32')
@@ -167,19 +178,23 @@ def calc_metrics(Y_ground_truth, Y_predict):
 
 def pre_quantize_test(params, target_func):
 # Now only image type of applications are supported now.
-    image = Image.open(params.lenna_path)
-    image = image.resize(params.in_shape)
-
-    X_test = np.asarray(image).astype('uint8') 
+    
+    # get ground truth
+    if params.model_name == 'fft_2d':
+        X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
+        Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
+    else:
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('uint8') 
+        Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
+    
     print("X.shape: ", X_test.shape, ", dtype: ", X_test.dtype, ", max: ", X_test.max(), ", min: ", X_test.min())
     print(X_test)
-    # get ground truth
-    Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
 
+    # get model and peek model weights
     np.set_printoptions(edgeitems=5, precision=3, linewidth=120)
-
     model = tf.keras.models.load_model(params.saved_model_dir)
-
     print(model.get_weights())
 
     X_test = np.expand_dims(X_test, axis=(0, len(params.in_shape)+1))

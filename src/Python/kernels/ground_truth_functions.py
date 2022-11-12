@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+import scipy
 
 class Applications:
     """ This class provides a series of application functions as ground truth. """
@@ -66,31 +67,30 @@ class Applications:
         return ret
 
     @staticmethod
-    def fft_2d(src, kernelH=7, kernelW=6, kernelY=3, kernelX=4):
+    def fft_2d(src, kernel, kernelY=3, kernelX=4):
         """ This function implements a R2c / C2R FFT-based convolution that \
             mimic the behavior as the example code in \
             GPGTPU/samples/3_Imaging/convolutionFFT2D """
         dataH, dataW = src.shape
-        kernel = np.random.randint(0, 16, (kernelH, kernelW))
-
-        result = np.empty(src.shape) 
-        for y in range(dataH):
-            for x in range(dataW):
-                _sum = 0
-                for ky in range(-1*(kernelH - kernelY - 1), kernelY+1, 1):
-                    for kx in range(-1*(kernelW - kernelX - 1), kernelX+1, 1):
-                        dy = y + ky
-                        dx = x + kx
-                        dy = 0 if dy < 0 else dy
-                        dx = 0 if dx < 0 else dx
-                        dy = dataH - 1 if dy >= dataH else dy
-                        dx = dataW - 1 if dx >= dataW else dx
-
-                        print("dy: ", dy, ", dx: ", dx, ", ky: ", ky, ", kx: ", kx)
-                        print("src offset: ", dy * dataW + dx, ", kernel offset: ", (kernelY - ky) * kernelW + (kernelX - kx))
-                        _sum += src[dy * dataW + dx] * kernel[(kernelY - ky) * kernelW + (kernelX - kx)]
-                result[y * dataW + x] = _sum
-        return result
+        kernelH, kenrelW = kernel.shape  # 7, 6
+        #kernel = np.random.randint(0, 16, (kernelH, kernelW))
+        ret = scipy.signal.fftconvolve(src, kernel, mode='same')
+        return ret
+        #result = np.empty(src.shape) 
+        #for y in range(dataH):
+        #    for x in range(dataW):
+        #        _sum = 0
+        #        for ky in range(-1*(kernelH - kernelY - 1), kernelY+1, 1):
+        #            for kx in range(-1*(kernelW - kernelX - 1), kernelX+1, 1):
+        #                dy = y + ky
+        #                dx = x + kx
+        #                dy = 0 if dy < 0 else dy
+        #                dx = 0 if dx < 0 else dx
+        #                dy = dataH - 1 if dy >= dataH else dy
+        #                dx = dataW - 1 if dx >= dataW else dx
+        #                _sum += src[dy][dx] * kernel[kernelY - ky][kernelX - kx]
+        #        result[y][x] = _sum
+        #return result
 
     @staticmethod
     def histogram256(src):

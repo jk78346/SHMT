@@ -1,6 +1,19 @@
 import os
 import keras
+import numpy as np
 from .utils import get_gittop
+
+# This is an example 2D 7x6 kernel array used for training the NN-based model to mimic fft_2d application.
+# Use the exact array to for future comparison.
+fft_2d_kernel_array = np.array(
+[[13, 12, 13,  0,  1,  1],
+ [ 0,  7,  8,  2,  8,  0],
+ [ 5,  9,  1, 11, 11,  3],
+ [14, 14,  8, 11,  0,  3],
+ [ 6,  8, 14, 13,  0, 10],
+ [10, 11, 14,  1,  2,  0],
+ [ 5, 15,  7,  5,  1,  7]]
+)
 
 class TrainParamsBase():
     """ All default parameter setting. """
@@ -94,6 +107,13 @@ class TrainParams(TrainParamsBase):
                                      in_shape=(size, size),
                                      out_shape=(size, size),
                                      optimizer=keras.optimizers.Adam(learning_rate=0.005))
+        elif model_name == 'fft_2d':
+            TrainParamsBase.__init__(self, 
+                                     model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.1))
         elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, 
                                      model_name, 
