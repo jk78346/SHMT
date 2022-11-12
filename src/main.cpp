@@ -12,7 +12,7 @@ using namespace cv;
 extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
 extern std::unordered_map<std::string, func_ptr_gpu> gpu_func_table; 
 
-float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array, int iter){
+float run_kernel_on_cpu(std::string app_name, Params params, void* input, void* output){
     // kernel existence checking
     if(cpu_func_table.find(app_name) == cpu_func_table.end()){
         std::cout << "app_name: " << app_name << " not found" << std::endl;
@@ -22,12 +22,15 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array, int
         }
         exit(0);
     }
-
-    Mat out_img;
+    
+    float* input_array  = reinterpret_cast<float*>(input);
+    float* output_array = reinterpret_cast<float*>(output);
+    Mat img, out_img;
+    array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
     
     timing start = clk::now();
     // Actual kernel call
-    for(int i = 0 ; i < iter ; i ++){
+    for(int i = 0 ; i < params.iter ; i ++){
         timing s = clk::now();
         cpu_func_table[app_name](img, out_img);
         timing e = clk::now();
@@ -42,7 +45,7 @@ float run_kernel_on_cpu(std::string app_name, Mat& img, float* output_array, int
     return get_time_ms(end, start);
 }
 
-float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_array, int iter){
+float run_kernel_on_gpu(std::string app_name, Params params, void* input, void* output){
     // kernel existence checking
     if(gpu_func_table.find(app_name) == gpu_func_table.end()){
         std::cout << "app_name: " << app_name << " not found" << std::endl;
@@ -53,11 +56,17 @@ float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_a
         exit(0);
     }
 
+    float* input_array  = reinterpret_cast<float*>(input);
+    float* output_array = reinterpret_cast<float*>(output);
+	Mat img_host;
+    array2mat(img_host, input_array, CV_32F, params.problem_size, params.problem_size);
+	cuda::GpuMat img;
+	img.upload(img_host); // convert from Mat to GpuMat
     cuda::GpuMat out_img_gpu;
     
     timing start = clk::now();
     // Actual kernel call
-    for(int i = 0 ; i < iter ; i++){
+    for(int i = 0 ; i < params.iter ; i++){
         timing s = clk::now();
         gpu_func_table[app_name](img, out_img_gpu);
         timing e = clk::now();
@@ -74,21 +83,18 @@ float run_kernel_on_gpu(std::string app_name, cuda::GpuMat& img, float* output_a
     return get_time_ms(end, start);
 }
 
-float run_kernel(const std::string& mode, Params& params, float* input_array, float* output_array){
+float run_kernel(const std::string& mode, Params& params, void* input, void* output){
     float kernel_ms = 0.0;
+    
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
     if(mode == "cpu"){
-        Mat img;
-        array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
-        kernel_ms = run_kernel_on_cpu(params.app_name, img, output_array, params.iter);        
+        kernel_ms = run_kernel_on_cpu(params.app_name, params, input, output);        
     }else if(mode == "gpu"){
-	    Mat img_host;
-        array2mat(img_host, input_array, CV_32F, params.problem_size, params.problem_size);
-	    cuda::GpuMat img;
-	    img.upload(img_host); // convert from Mat to GpuMat
-	    kernel_ms = run_kernel_on_gpu(params.app_name, img, output_array, params.iter);        
+	    kernel_ms = run_kernel_on_gpu(params.app_name, params, input, output);        
     }else if(mode == "tpu"){
+        float* input_array  = reinterpret_cast<float*>(input);
+        float* output_array = reinterpret_cast<float*>(output);
         int in_size  = params.problem_size * params.problem_size;
         int out_size = params.problem_size * params.problem_size;
         int* in  = (int*) malloc(in_size * sizeof(int));
@@ -110,12 +116,21 @@ float run_kernel(const std::string& mode, Params& params, float* input_array, fl
 }
 
 void data_initialization(Params params, 
-                         float** input_array,
-                         float** output_array_baseline,
-                         float** output_array_proposed){
+                         void** input_array,
+                         void** output_array_baseline,
+                         void** output_array_proposed){
     // TODO: choose cooresponding initial depends on app_name.
     //if(params.app_name == ""){
     //
+    //}
+    
+    // peak input image for a cropped section
+    //std::cout << __func__ << ": peaking input image data..." << std::endl; 
+    //for(int i = 0 ; i < 5 ; i++){
+    //    for(int j = 0 ; j < 5 ; j++){
+    //        std::cout << input_array[i*params.problem_size+j] << " ";
+    //    }
+    //    std::cout << std::endl;
     //}
     
     int rows = params.problem_size;
@@ -131,7 +146,7 @@ void data_initialization(Params params,
              rows, 
              cols, 
              in_img);
-    mat2array(in_img, *input_array);
+    mat2array(in_img, (float*)*input_array);
 }
     
 int main(int argc, char* argv[]){
@@ -160,24 +175,15 @@ int main(int argc, char* argv[]){
                   problem_size/*block size*/, 
                   iter);
 
-    float* input_array = NULL;
-    float* output_array_baseline = NULL;
-    float* output_array_proposed = NULL;
+    void* input_array = NULL;
+    void* output_array_baseline = NULL;
+    void* output_array_proposed = NULL;
 
-    // input/output array allocation
+    // input/output array allocation and inititalization
     data_initialization(params, 
                         &input_array,
                         &output_array_baseline,
                         &output_array_proposed);
-    
-    // peak input image for a cropped section
-    std::cout << __func__ << ": peaking input image data..." << std::endl; 
-    for(int i = 0 ; i < 5 ; i++){
-        for(int j = 0 ; j < 5 ; j++){
-            std::cout << input_array[i*params.problem_size+j] << " ";
-        }
-        std::cout << std::endl;
-    }
 
     float baseline_kernel_ms = 0;
     float proposed_kernel_ms = 0;
@@ -206,8 +212,8 @@ int main(int argc, char* argv[]){
     Quality quality(params.problem_size, // m
                     params.problem_size, // n
                     params.problem_size, // ldn
-                    output_array_proposed, 
-                    output_array_baseline);
+                    (float*)output_array_proposed, 
+                    (float*)output_array_baseline);
     quality.print_results(1);
 
     std::cout << "===== Latency =====" << std::endl;
