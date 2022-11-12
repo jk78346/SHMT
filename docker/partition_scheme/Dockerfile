@@ -47,6 +47,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 RUN apt-get install -y libeigen3-dev && \
     sudo ln -s /usr/include/engin3/Eigen /usr/include/Eigen
+# for quick scipy.signal.fftconvolve test in python2 only
+RUN apt-get install -y python-scipy 
 
 FROM BUILD2 AS FINAL 
 # setup LD_LIBRARY_PATH
