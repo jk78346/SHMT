@@ -76,7 +76,7 @@ float getRand(void)
     return (float)(rand() % 16);
 }
 
-bool test0(int iter)
+bool test0(int size, int iter)
 {
     float
     *h_Data,
@@ -107,8 +107,8 @@ bool test0(int iter)
     const int kernelW = 6;
     const int kernelY = 3;
     const int kernelX = 4;
-    const int   dataH = 2000;
-    const int   dataW = 2000;
+    const int   dataH = size;
+    const int   dataW = size;
     const int    fftH = snapTransformSize(dataH + kernelH - 1);
     const int    fftW = snapTransformSize(dataW + kernelW - 1);
 
@@ -661,12 +661,13 @@ bool test2(void)
 
 int main(int argc, char **argv)
 {
-    if(argc != 2){
-        printf("Usage: %s <iter>\n", argv[0]);
+    if(argc != 3){
+        printf("Usage: %s <problem size> <iter>\n", argv[0]);
         exit(0);
     }
     
-    int iter = atoi(argv[1]);
+    int size = atoi(argv[1]);
+    int iter = atoi(argv[2]);
     printf("[%s] - Starting...\n", argv[0]);
 
     //Use command-line specified CUDA device, otherwise use device with highest Gflops/s
@@ -674,7 +675,7 @@ int main(int argc, char **argv)
 
     int nFailures = 0;
 
-    if (!test0(iter))
+    if (!test0(size, iter))
     {
         nFailures++;
     }
