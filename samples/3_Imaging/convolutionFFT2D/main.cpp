@@ -32,6 +32,9 @@
 #include <helper_cuda.h>
 
 #include "convolutionFFT2D_common.h"
+#include <chrono>
+typedef std::chrono::time_point<std::chrono::high_resolution_clock> timing;
+typedef std::chrono::high_resolution_clock clk;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions
@@ -73,7 +76,7 @@ float getRand(void)
     return (float)(rand() % 16);
 }
 
-bool test0(void)
+bool test0(int iter)
 {
     float
     *h_Data,
@@ -148,6 +151,7 @@ bool test0(void)
     checkCudaErrors(cudaMemset(d_PaddedKernel, 0, fftH * fftW * sizeof(float)));
     checkCudaErrors(cudaMemset(d_PaddedData,   0, fftH * fftW * sizeof(float)));
 
+    timing pad_s = clk::now();
     padKernel(
         d_PaddedKernel,
         d_Kernel,
@@ -171,40 +175,51 @@ bool test0(void)
         kernelY,
         kernelX
     );
+    timing pad_e = clk::now();
+
 
     //Not including kernel transformation into time measurement,
     //since convolution kernel is not changed very frequently
     printf("...transforming convolution kernel\n");
+    timing kernel_fft_s = clk::now();
     checkCudaErrors(cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedKernel, (cufftComplex *)d_KernelSpectrum));
+    timing kernel_fft_e = clk::now();
 
     printf("...running GPU FFT convolution: ");
     checkCudaErrors(cudaDeviceSynchronize());
     sdkResetTimer(&hTimer);
     sdkStartTimer(&hTimer);
-    checkCudaErrors(cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum));
-    modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
-    checkCudaErrors(cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData));
+    
+    for(int i = 0 ; i < iter ; i++){
+        checkCudaErrors(cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum));
+        modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
+        checkCudaErrors(cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData));
 
-    checkCudaErrors(cudaDeviceSynchronize());
+        checkCudaErrors(cudaDeviceSynchronize());
+    }
     sdkStopTimer(&hTimer);
-    double gpuTime = sdkGetTimerValue(&hTimer);
-    printf("%f MPix/s (%f ms)\n", (double)dataH * (double)dataW * 1e-6 / (gpuTime * 0.001), gpuTime);
+    double gpuTime = sdkGetTimerValue(&hTimer)/iter;
+    printf("%f MPix/s (%f ms), averaged over %d time(s)\n", (double)dataH * (double)dataW * 1e-6 / (gpuTime * 0.001), gpuTime, iter);
 
     printf("...reading back GPU convolution results\n");
     checkCudaErrors(cudaMemcpy(h_ResultGPU, d_PaddedData, fftH * fftW * sizeof(float), cudaMemcpyDeviceToHost));
 
     printf("...running reference CPU convolution\n");
-    convolutionClampToBorderCPU(
-        h_ResultCPU,
-        h_Data,
-        h_Kernel,
-        dataH,
-        dataW,
-        kernelH,
-        kernelW,
-        kernelY,
-        kernelX
-    );
+    timing start = clk::now();
+    for(int i = 0 ; i < iter ; i++){
+        convolutionClampToBorderCPU(
+            h_ResultCPU,
+            h_Data,
+            h_Kernel,
+            dataH,
+            dataW,
+            kernelH,
+            kernelW,
+            kernelY,
+            kernelX
+        );
+    }
+    timing end = clk::now();
 
     printf("...comparing the results: ");
     double sum_delta2 = 0;
@@ -251,6 +266,21 @@ bool test0(void)
     free(h_Data);
     free(h_Kernel);
 
+    // GPU timing
+    double pad_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(pad_e - pad_s).count()/1000000.0;
+    double kernel_fft_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(kernel_fft_e - kernel_fft_s).count()/1000000.0;
+    
+    printf("===== Latency summary =====\n");
+    printf("GPU part:\n");
+    printf("Data padding time         : %f (ms)\n", pad_ms);
+    printf("FFT on kernelSpectrum time: %f (ms)\n", kernel_fft_ms);
+    printf("actualy GPU kernel time   : %f (ms), averaged over %d time(s)\n", gpuTime, iter);
+    
+    // CPU timing
+    double ms = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000.0;
+    printf("CPU part:\n");
+    printf("CPU kernel time           : %f (ms), averaged over %d time(s)\n", ms/iter, iter);
+    
     return bRetVal;
 }
 
@@ -631,6 +661,12 @@ bool test2(void)
 
 int main(int argc, char **argv)
 {
+    if(argc != 2){
+        printf("Usage: %s <iter>\n", argv[0]);
+        exit(0);
+    }
+    
+    int iter = atoi(argv[1]);
     printf("[%s] - Starting...\n", argv[0]);
 
     //Use command-line specified CUDA device, otherwise use device with highest Gflops/s
@@ -638,20 +674,20 @@ int main(int argc, char **argv)
 
     int nFailures = 0;
 
-    if (!test0())
+    if (!test0(iter))
     {
         nFailures++;
     }
+// Focus on built-in test now
+//    if (!test1())
+//    {
+//        nFailures++;
+//    }
 
-    if (!test1())
-    {
-        nFailures++;
-    }
-
-    if (!test2())
-    {
-        nFailures++;
-    }
+//    if (!test2())
+//    {
+//        nFailures++;
+//    }
 
     printf("Test Summary: %d errors\n", nFailures);
 
