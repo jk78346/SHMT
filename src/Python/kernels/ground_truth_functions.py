@@ -1,6 +1,5 @@
 import cv2 as cv
 import numpy as np
-from scipy.fftpack import fft
 
 class Applications:
     """ This class provides a series of application functions as ground truth. """
@@ -67,20 +66,31 @@ class Applications:
         return ret
 
     @staticmethod
-    def fft_1dr2c(src):
-        """ This function implements 1-D Real-to-Complex transforms. 
-            Inputs: numpy array such as  [1.0, 2.0, 1.0, -1.0, 1.5]
-            Outputs: numpy array such as [4.5       +0.j        ,
-                                          2.08155948-1.65109876j,
-                                          -1.83155948+1.60822041j, 
-                                          -1.83155948-1.60822041j,
-                                          2.08155948+1.65109876j]
+    def fft_2d(src, kernelH=7, kernelW=6, kernelY=3, kernelX=4):
+        """ This function implements a R2c / C2R FFT-based convolution that \
+            mimic the behavior as the example code in \
+            GPGTPU/samples/3_Imaging/convolutionFFT2D """
+        dataH, dataW = src.shape
+        kernel = np.random.randint(0, 16, (kernelH, kernelW))
 
+        result = np.empty(src.shape) 
+        for y in range(dataH):
+            for x in range(dataW):
+                _sum = 0
+                for ky in range(-1*(kernelH - kernelY - 1), kernelY+1, 1):
+                    for kx in range(-1*(kernelW - kernelX - 1), kernelX+1, 1):
+                        dy = y + ky
+                        dx = x + kx
+                        dy = 0 if dy < 0 else dy
+                        dx = 0 if dx < 0 else dx
+                        dy = dataH - 1 if dy >= dataH else dy
+                        dx = dataW - 1 if dx >= dataW else dx
 
-            How to partition?
-                Consider the case that multiple sine waves added up in frequency domain.
-        """
-        return fft(src)
+                        print("dy: ", dy, ", dx: ", dx, ", ky: ", ky, ", kx: ", kx)
+                        print("src offset: ", dy * dataW + dx, ", kernel offset: ", (kernelY - ky) * kernelW + (kernelX - kx))
+                        _sum += src[dy * dataW + dx] * kernel[(kernelY - ky) * kernelW + (kernelX - kx)]
+                result[y * dataW + x] = _sum
+        return result
 
     @staticmethod
     def histogram256(src):
