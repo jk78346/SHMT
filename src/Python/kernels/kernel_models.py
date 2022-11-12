@@ -86,13 +86,10 @@ class KernelModels:
 
     @staticmethod
     def fft_2d(in_shape, out_shape):
-        """ This function returns a NN-based FFT model. """
+        """ This function returns a NN-based convolveFFT2D model. """
         encoded_dim = 4
         inputs = keras.Input(shape=in_shape+(1,))
-        x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same', activation='relu')(inputs)
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3, 3), padding='same', activation='relu')(x)
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3, 3), padding='same', activation='relu')(x)
-        x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same', activation='relu')(x)
+        x = layers.Conv2D(filters=1, kernel_size=(7, 7), padding='same', use_bias=False)(inputs)
         outputs = x
         return keras.Model(inputs, outputs)
 

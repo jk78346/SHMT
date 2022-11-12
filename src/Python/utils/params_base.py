@@ -113,6 +113,7 @@ class TrainParams(TrainParamsBase):
                                      size=size,
                                      in_shape=(size, size),
                                      out_shape=(size, size),
+                                     min_delta=1e-12,
                                      optimizer=keras.optimizers.Adam(learning_rate=0.1))
         elif model_name == 'histogram256':
             TrainParamsBase.__init__(self, 
