@@ -28,16 +28,18 @@ float run_kernel_on_cpu(std::string app_name, Params params, void* input, void* 
     Mat img, out_img;
     array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
     
+    printf("CPU kernel starts.\n");
     timing start = clk::now();
     // Actual kernel call
     for(int i = 0 ; i < params.iter ; i ++){
-        timing s = clk::now();
+//        timing s = clk::now();
         cpu_func_table[app_name](img, out_img);
-        timing e = clk::now();
-        auto time = get_time_ms(e, s);
-        std::cout << "cpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
+//        timing e = clk::now();
+//        auto time = get_time_ms(e, s);
+//        std::cout << "cpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
     }
     timing end   = clk::now(); 
+    printf("CPU kernel ends.\n");
     
     out_img.convertTo(out_img, CV_8U);
     mat2array(out_img, output_array);
@@ -64,16 +66,18 @@ float run_kernel_on_gpu(std::string app_name, Params params, void* input, void* 
 	img.upload(img_host); // convert from Mat to GpuMat
     cuda::GpuMat out_img_gpu;
     
+    printf("GPU kernel starts.\n");
     timing start = clk::now();
     // Actual kernel call
     for(int i = 0 ; i < params.iter ; i++){
-        timing s = clk::now();
+//        timing s = clk::now();
         gpu_func_table[app_name](img, out_img_gpu);
-        timing e = clk::now();
-        auto time = get_time_ms(e, s);
-        std::cout << "gpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
+//        timing e = clk::now();
+//        auto time = get_time_ms(e, s);
+//        std::cout << "gpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
     }
     timing end   = clk::now(); 
+    printf("GPU kernel ends.\n");
     
     Mat out_img;
     out_img_gpu.download(out_img); // convert GpuMat to Mat
@@ -83,9 +87,31 @@ float run_kernel_on_gpu(std::string app_name, Params params, void* input, void* 
     return get_time_ms(end, start);
 }
 
+float run_kernel_on_tpu(std::string app_name, Params params, void* input, void* output){
+    float* input_array  = reinterpret_cast<float*>(input);
+    float* output_array = reinterpret_cast<float*>(output);
+    int in_size  = params.problem_size * params.problem_size;
+    int out_size = params.problem_size * params.problem_size;
+    // tflite model input array initialization
+    int* in  = (int*) malloc(in_size * sizeof(int));
+    int* out = (int*) calloc(out_size, sizeof(int));
+    // input array conversion
+    for(int i = 0 ; i < in_size ; i++){
+        in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
+    }
+    std::string kernel_path = get_edgetpu_kernel_path(params.app_name, params.problem_size, params.problem_size);
+    printf("TPU kernel starts.\n");
+    run_a_model(kernel_path, params.iter, in, in_size, out, out_size, params.iter);
+    printf("TPU kernel ends.\n");
+    // output array conversion
+    for(int i = 0 ; i < out_size ; i++){
+        output_array[i] = out[i]; // int to float conversion
+    }
+    openctpu_clean_up();
+}
+
 float run_kernel(const std::string& mode, Params& params, void* input, void* output){
     float kernel_ms = 0.0;
-    
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
     if(mode == "cpu"){
@@ -93,24 +119,9 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
     }else if(mode == "gpu"){
 	    kernel_ms = run_kernel_on_gpu(params.app_name, params, input, output);        
     }else if(mode == "tpu"){
-        float* input_array  = reinterpret_cast<float*>(input);
-        float* output_array = reinterpret_cast<float*>(output);
-        int in_size  = params.problem_size * params.problem_size;
-        int out_size = params.problem_size * params.problem_size;
-        int* in  = (int*) malloc(in_size * sizeof(int));
-        int* out = (int*) calloc(out_size, sizeof(int));
-        for(int i = 0 ; i < in_size ; i++){
-            in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
-        }
-        std::string kernel_path = get_edgetpu_kernel_path(params.app_name, params.problem_size, params.problem_size);
-        run_a_model(kernel_path, params.iter, in, in_size, out, out_size, params.iter);
-        for(int i = 0 ; i < out_size ; i++){
-            output_array[i] = out[i]; // int to float conversion
-        }
-        openctpu_clean_up();
+	    kernel_ms = run_kernel_on_tpu(params.app_name, params, input, output);        
     }else{
-        std::cout << "undefined execution mode: " << mode << ", program exits." << std::endl;
-        exit(0);
+        std::cout << "undefined execution mode: " << mode << ", execution is skipped." << std::endl;
     }
     return kernel_ms;
 }
@@ -209,6 +220,7 @@ int main(int argc, char* argv[]){
     double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
 
     // Get quality measurements
+    printf("Getting quality reseults...\n");
     Quality quality(params.problem_size, // m
                     params.problem_size, // n
                     params.problem_size, // ldn
