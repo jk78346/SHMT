@@ -20,4 +20,20 @@ void laplacian_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img);
 typedef void (*func_ptr_cpu)(Mat&, Mat&);
 typedef void (*func_ptr_gpu)(cuda::GpuMat&, cuda::GpuMat&);
 
+/* 
+To check if given app_name is supported as a kernel or not.
+Since template is used, this definition needed to be located in this header file for successful compilation.
+*/
+template <typename T>
+void kernel_existence_checking(std::unordered_map<std::string, T> func_table, const std::string app_name){
+    if(func_table.find(app_name) == func_table.end()){
+        std::cout << "app_name: " << app_name << " not found" << std::endl;
+        std::cout << "supported app: " << std::endl;
+        for(auto const &pair: func_table){
+            std::cout << "{" << pair.first << ": " << pair.second << "}" << std::endl;
+        }
+        exit(0);
+    }
+}
+
 #endif

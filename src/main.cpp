@@ -3,98 +3,128 @@
 #include "gptpu.h"
 #include "types.h"
 #include "utils.h"
+#include "arrays.h"
 #include "params.h"
-#include "kernels.h"
 #include "quality.h"
+#include "kernels.h"
+#include "conversion.h"
 
 using namespace cv;
 
 extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
 extern std::unordered_map<std::string, func_ptr_gpu> gpu_func_table; 
 
-float run_kernel_on_cpu(std::string app_name, Params params, void* input, void* output){
-    // kernel existence checking
-    if(cpu_func_table.find(app_name) == cpu_func_table.end()){
-        std::cout << "app_name: " << app_name << " not found" << std::endl;
-        std::cout << "supported app: " << std::endl;
-        for(auto const &pair: cpu_func_table){
-            std::cout << "{" << pair.first << ": " << pair.second << "}" << std::endl;
-        }
-        exit(0);
-    }
+float run_kernel_on_cpu(Params params, void* input, void* output){
     
-    float* input_array  = reinterpret_cast<float*>(input);
-    float* output_array = reinterpret_cast<float*>(output);
-    Mat img, out_img;
-    array2mat(img, input_array, CV_32F, params.problem_size, params.problem_size);
+    kernel_existence_checking(cpu_func_table, params.app_name);
+
+    // kernel-specifc input/output data type.    
+    Mat in_img, out_img;
+    cpu_kernel_input_conversion(params.app_name, params, input, in_img);
     
+    // Actual kernel call
     printf("CPU kernel starts.\n");
     timing start = clk::now();
-    // Actual kernel call
     for(int i = 0 ; i < params.iter ; i ++){
-//        timing s = clk::now();
-        cpu_func_table[app_name](img, out_img);
-//        timing e = clk::now();
-//        auto time = get_time_ms(e, s);
-//        std::cout << "cpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
+        cpu_func_table[params.app_name](in_img, out_img);
     }
     timing end   = clk::now(); 
     printf("CPU kernel ends.\n");
     
-    out_img.convertTo(out_img, CV_8U);
-    mat2array(out_img, output_array);
+    cpu_kernel_output_conversion(params.app_name, params, out_img, output);
 
     return get_time_ms(end, start);
 }
 
-float run_kernel_on_gpu(std::string app_name, Params params, void* input, void* output){
-    // kernel existence checking
-    if(gpu_func_table.find(app_name) == gpu_func_table.end()){
-        std::cout << "app_name: " << app_name << " not found" << std::endl;
-        std::cout << "supported app: " << std::endl;
-        for(auto const &pair: gpu_func_table){
-            std::cout << "{" << pair.first << ": " << pair.second << "}" << std::endl;
+float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
+    
+    kernel_existence_checking(cpu_func_table, params.app_name);
+
+    // input array partitioning
+    void** input_pars;
+    void** output_pars;
+    input_array_partition_initialization(params, input, input_pars);    
+
+    // input partition conversion
+    Mat* in_img_pars  = new Mat[params.block_size];
+    Mat* out_img_pars = new Mat[params.block_size];
+    int row_cnt = params.problem_size / params.block_size; 
+    int col_cnt = params.problem_size / params.block_size; 
+    unsigned int block_size = params.block_size * params.block_size;
+    for(int i = 0 ; i < row_cnt ; i++){
+        for(int j = 0 ; j < col_cnt ; j++){
+            int idx = i * col_cnt + j;
+            cpu_kernel_input_conversion(params.app_name, params, input_pars[idx], in_img_pars[idx]);
         }
-        exit(0);
+    }   
+
+    // Actual kernel call
+    printf("CPU tiling kernel starts.\n");
+    timing start = clk::now();
+    for(int iter = 0 ; iter < params.iter ; iter++){
+        // per iteration calls
+        for(int i = 0 ; i < row_cnt ; i++){
+            for(int j = 0 ; j < col_cnt ; j++){
+                int idx = i * col_cnt + j;
+                std::cout << "i: " << i << ",j: " << j << ", cpu_func_table starting..." << std::endl;
+                cpu_func_table[params.app_name](in_img_pars[idx], out_img_pars[idx]);
+                std::cout << "end" << std::endl;
+            }
+        }
+    }
+    timing end   = clk::now(); 
+    printf("CPU tiling kernel ends.\n");
+
+    // output partition conversion    
+    for(int i = 0 ; i < row_cnt ; i++){
+        for(int j = 0 ; j < col_cnt ; j++){
+            int idx = i * col_cnt + j;
+            std::cout << "i: " << i << ",j: " << j << ": cpu_kernel_output_conversion starts..." << std::endl;
+            cpu_kernel_output_conversion(params.app_name, params, out_img_pars[idx], output_pars[idx]);
+            std::cout << "end" << std::endl;    
+        }
     }
 
-    float* input_array  = reinterpret_cast<float*>(input);
-    float* output_array = reinterpret_cast<float*>(output);
-	Mat img_host;
-    array2mat(img_host, input_array, CV_32F, params.problem_size, params.problem_size);
-	cuda::GpuMat img;
-	img.upload(img_host); // convert from Mat to GpuMat
-    cuda::GpuMat out_img_gpu;
+    // output partition gathering
+    output_array_partition_gathering(params, output, output_pars);    
+    std::cout << "done" << std::endl;
+    return get_time_ms(end, start);
+}
+
+float run_kernel_on_gpu(Params params, void* input, void* output){
     
+    kernel_existence_checking(gpu_func_table, params.app_name);
+
+    // kernel-specifc input/output data type.    
+	cuda::GpuMat in_img_gpu;
+    cuda::GpuMat out_img_gpu;
+
+    gpu_kernel_input_conversion(params.app_name, params, input, in_img_gpu);
+    
+    // Actual kernel call
     printf("GPU kernel starts.\n");
     timing start = clk::now();
-    // Actual kernel call
     for(int i = 0 ; i < params.iter ; i++){
-//        timing s = clk::now();
-        gpu_func_table[app_name](img, out_img_gpu);
-//        timing e = clk::now();
-//        auto time = get_time_ms(e, s);
-//        std::cout << "gpu kernel time: " << time << " (ms), iter = "<< i << std::endl;
+        gpu_func_table[params.app_name](in_img_gpu, out_img_gpu);
     }
     timing end   = clk::now(); 
     printf("GPU kernel ends.\n");
-    
-    Mat out_img;
-    out_img_gpu.download(out_img); // convert GpuMat to Mat
-    out_img.convertTo(out_img, CV_8U);
-    mat2array(out_img, output_array);
+
+    gpu_kernel_output_conversion(params.app_name, params, out_img_gpu, output);
 
     return get_time_ms(end, start);
 }
 
-float run_kernel_on_tpu(std::string app_name, Params params, void* input, void* output){
+float run_kernel_on_tpu(Params params, void* input, void* output){
     float* input_array  = reinterpret_cast<float*>(input);
     float* output_array = reinterpret_cast<float*>(output);
     int in_size  = params.problem_size * params.problem_size;
     int out_size = params.problem_size * params.problem_size;
+    
     // tflite model input array initialization
     int* in  = (int*) malloc(in_size * sizeof(int));
     int* out = (int*) calloc(out_size, sizeof(int));
+    
     // input array conversion
     for(int i = 0 ; i < in_size ; i++){
         in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
@@ -103,6 +133,7 @@ float run_kernel_on_tpu(std::string app_name, Params params, void* input, void* 
     printf("TPU kernel starts.\n");
     run_a_model(kernel_path, params.iter, in, in_size, out, out_size, params.iter);
     printf("TPU kernel ends.\n");
+    
     // output array conversion
     for(int i = 0 ; i < out_size ; i++){
         output_array[i] = out[i]; // int to float conversion
@@ -115,50 +146,19 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
     if(mode == "cpu"){
-        kernel_ms = run_kernel_on_cpu(params.app_name, params, input, output);        
+        kernel_ms = run_kernel_on_cpu(params, input, output);        
+    }else if(mode == "cpu_p"){ // cpu partition mode
+        kernel_ms = run_kernel_on_cpu_tiling(params, input, output);        
     }else if(mode == "gpu"){
-	    kernel_ms = run_kernel_on_gpu(params.app_name, params, input, output);        
+	    kernel_ms = run_kernel_on_gpu(params, input, output);        
     }else if(mode == "tpu"){
-	    kernel_ms = run_kernel_on_tpu(params.app_name, params, input, output);        
+	    kernel_ms = run_kernel_on_tpu(params, input, output);        
     }else{
         std::cout << "undefined execution mode: " << mode << ", execution is skipped." << std::endl;
     }
     return kernel_ms;
 }
 
-void data_initialization(Params params, 
-                         void** input_array,
-                         void** output_array_baseline,
-                         void** output_array_proposed){
-    // TODO: choose cooresponding initial depends on app_name.
-    //if(params.app_name == ""){
-    //
-    //}
-    
-    // peak input image for a cropped section
-    //std::cout << __func__ << ": peaking input image data..." << std::endl; 
-    //for(int i = 0 ; i < 5 ; i++){
-    //    for(int j = 0 ; j < 5 ; j++){
-    //        std::cout << input_array[i*params.problem_size+j] << " ";
-    //    }
-    //    std::cout << std::endl;
-    //}
-    
-    int rows = params.problem_size;
-    int cols = params.problem_size;
-    unsigned int input_total_size = rows * cols;
-    *input_array = (float*) malloc(input_total_size * sizeof(float));
-    
-    unsigned int output_total_size = rows * cols;
-    *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
-    *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));
-    Mat in_img;
-    read_img(params.input_data_path, 
-             rows, 
-             cols, 
-             in_img);
-    mat2array(in_img, (float*)*input_array);
-}
     
 int main(int argc, char* argv[]){
     if(argc != 6){
@@ -199,26 +199,22 @@ int main(int argc, char* argv[]){
     float baseline_kernel_ms = 0;
     float proposed_kernel_ms = 0;
     
-    timing baseline_start = clk::now();
     // Start to run baseline version of the application's implementation.
+    timing baseline_start = clk::now();
     baseline_kernel_ms = run_kernel(baseline_mode, 
                                     params, 
                                     input_array, 
                                     output_array_baseline);
     timing baseline_end = clk::now();
     
-    timing proposed_start = clk::now();
     // Start to run proposed version of the application's implementation.
+    timing proposed_start = clk::now();
     proposed_kernel_ms = run_kernel(proposed_mode, 
                                     params, 
                                     input_array, 
                                     output_array_proposed);
     timing proposed_end = clk::now();
     
-    // Calculate end to end latency of each implementation
-    double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
-    double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
-
     // Get quality measurements
     printf("Getting quality reseults...\n");
     Quality quality(params.problem_size, // m
@@ -226,8 +222,12 @@ int main(int argc, char* argv[]){
                     params.problem_size, // ldn
                     (float*)output_array_proposed, 
                     (float*)output_array_baseline);
-    quality.print_results(1);
+    quality.print_results(1/*verbose*/);
 
+    // Calculate end to end latency of each implementation
+    double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
+    double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
+    
     std::cout << "===== Latency =====" << std::endl;
     std::cout << baseline_mode << " kernel time: " << baseline_kernel_ms/iter 
               << " (ms), averaged over " << iter << " time(s)." << std::endl;

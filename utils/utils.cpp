@@ -7,6 +7,9 @@ double get_time_ms(timing end, timing start){
     return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000.0;
 }
 
+/*
+    Read a image in file into opencv Mat. 
+*/
 void read_img(const std::string file_name, int rows, int cols, Mat& img){
     Mat raw = imread(file_name);
     assert(!raw.empty());
@@ -42,6 +45,4 @@ std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1
     assert(ifile);
     return path;
 }
-
-
 
