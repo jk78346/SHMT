@@ -3,7 +3,10 @@
 #include <kernels.h>
 #include <unordered_map>
 
-std::unordered_map<std::string, func_ptr_cpu> cpu_func_table = {
+float_func_ptr_table cpu_float_func_table = {
+    {"fft_2d", fft_2d_cpu},
+};
+opencv_func_ptr_table cpu_func_table = {
     {"minimum_2d", minimum_2d_cpu},
     {"sobel_2d", sobel_2d_cpu},
     {"mean_2d", mean_2d_cpu},
@@ -38,4 +41,6 @@ void laplacian_2d_cpu(Mat& in_img, Mat& out_img){
     convertScaleAbs(out_img, out_img);
 }
 
+void fft_2d_cpu(float* input, float* output){
 
+}

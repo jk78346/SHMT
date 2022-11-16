@@ -6,7 +6,7 @@
 #include <opencv2/cudafilters.hpp> // create[XXX]Filter()
 #include <opencv2/cudaarithm.hpp> // addWeighted()
 
-std::unordered_map<std::string, func_ptr_gpu> gpu_func_table = {
+opencv_cuda_func_ptr_table gpu_func_table = {
     {"minimum_2d", minimum_2d_gpu},
     {"sobel_2d", sobel_2d_gpu},
     {"mean_2d", mean_2d_gpu},

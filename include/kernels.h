@@ -9,6 +9,7 @@ void minimum_2d_cpu(Mat& in_img, Mat& out_img);
 void sobel_2d_cpu(Mat& in_img, Mat& out_img);
 void mean_2d_cpu(Mat& in_img, Mat& out_img);
 void laplacian_2d_cpu(Mat& in_img, Mat& out_img);
+void fft_2d_cpu(float* input, float* output);
 
 //GPU kernels baseline
 void minimum_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img);
@@ -17,8 +18,14 @@ void mean_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img);
 void laplacian_2d_gpu(cuda::GpuMat& in_img, cuda::GpuMat& out_img);
 
 // function pointers
+typedef void (*func_ptr_float)(float*, float*);
 typedef void (*func_ptr_cpu)(Mat&, Mat&);
 typedef void (*func_ptr_gpu)(cuda::GpuMat&, cuda::GpuMat&);
+
+typedef std::unordered_map<std::string, func_ptr_float> float_func_ptr_table;
+typedef std::unordered_map<std::string, func_ptr_cpu>   opencv_func_ptr_table;
+typedef std::unordered_map<std::string, func_ptr_gpu>   opencv_cuda_func_ptr_table;
+
 
 /* 
 To check if given app_name is supported as a kernel or not.
