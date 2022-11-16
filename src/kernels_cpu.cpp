@@ -1,23 +1,12 @@
 #include <string>
 #include <stdio.h>
 #include <kernels.h>
-#include <unordered_map>
 
-float_func_ptr_table cpu_float_func_table = {
-    {"fft_2d", fft_2d_cpu},
-};
-opencv_func_ptr_table cpu_func_table = {
-    {"minimum_2d", minimum_2d_cpu},
-    {"sobel_2d", sobel_2d_cpu},
-    {"mean_2d", mean_2d_cpu},
-    {"laplacian_2d", laplacian_2d_cpu}
-};
-
-void minimum_2d_cpu(Mat& in_img, Mat& out_img){
+void CpuKernel::minimum_2d(Mat& in_img, Mat& out_img){
     out_img = in_img;
 }
 
-void sobel_2d_cpu(Mat& in_img, Mat& out_img){
+void CpuKernel::sobel_2d(Mat& in_img, Mat& out_img){
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
     
@@ -31,16 +20,16 @@ void sobel_2d_cpu(Mat& in_img, Mat& out_img){
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
 
-void mean_2d_cpu(Mat& in_img, Mat& out_img){
+void CpuKernel::mean_2d(Mat& in_img, Mat& out_img){
     blur(in_img, out_img, Size(3, 3), Point(-1, -1), BORDER_DEFAULT);
 }
 
-void laplacian_2d_cpu(Mat& in_img, Mat& out_img){
+void CpuKernel::laplacian_2d(Mat& in_img, Mat& out_img){
     int ddepth = CV_32F;
     Laplacian(in_img, out_img, ddepth, 3/*kernel size*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
     convertScaleAbs(out_img, out_img);
 }
 
-void fft_2d_cpu(float* input, float* output){
+void CpuKernel::fft_2d(float* input, float* output){
 
 }

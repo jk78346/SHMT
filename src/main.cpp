@@ -11,12 +11,12 @@
 
 using namespace cv;
 
-extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
+//extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
 extern std::unordered_map<std::string, func_ptr_gpu> gpu_func_table; 
 
 float run_kernel_on_cpu(Params params, void* input, void* output){
-    
-    kernel_existence_checking(cpu_func_table, params.app_name);
+    double kernel_ms = 0.0;
+    CpuKernel* cpu_kernel = new CpuKernel;
 
     // kernel-specifc input/output data type.    
     Mat in_img, out_img;
@@ -24,21 +24,20 @@ float run_kernel_on_cpu(Params params, void* input, void* output){
     
     // Actual kernel call
     printf("CPU kernel starts.\n");
-    timing start = clk::now();
     for(int i = 0 ; i < params.iter ; i ++){
-        cpu_func_table[params.app_name](in_img, out_img);
+        kernel_ms += cpu_kernel->run_kernel(params.app_name, in_img, out_img);
     }
-    timing end   = clk::now(); 
     printf("CPU kernel ends.\n");
     
     cpu_kernel_output_conversion(params.app_name, params, out_img, output);
 
-    return get_time_ms(end, start);
+    delete cpu_kernel;
+    return (float)kernel_ms;
 }
 
 float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     
-    kernel_existence_checking(cpu_func_table, params.app_name);
+    //kernel_existence_checking(cpu_func_table, params.app_name);
 
     // input array partitioning
     void** input_pars;
@@ -67,7 +66,7 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
             for(int j = 0 ; j < col_cnt ; j++){
                 int idx = i * col_cnt + j;
                 std::cout << "i: " << i << ",j: " << j << ", cpu_func_table starting..." << std::endl;
-                cpu_func_table[params.app_name](in_img_pars[idx], out_img_pars[idx]);
+                //cpu_func_table[params.app_name](in_img_pars[idx], out_img_pars[idx]);
                 std::cout << "end" << std::endl;
             }
         }
