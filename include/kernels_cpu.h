@@ -11,20 +11,26 @@
 using namespace cv;
 
 /* CPU kernel class 
-TODO: optimize function table searching algortihm.
+TODO: optimize function table searching algorithm.
 */
 class CpuKernel : public KernelBase{
 public:
     /* input conversion - search over func_tables to do correct input conversion */
-    virtual double input_conversion(Params params, void* input){
+    virtual double input_conversion(Params params, void* input, void* output){
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv, app_name)){
             float* input_array  = reinterpret_cast<float*>(input);
-            array2mat(input_array_type.mat, input_array, CV_32F, params.problem_size, params.problem_size);
+            array2mat(this->input_array_type.mat, 
+                      input_array, 
+                      CV_32F, 
+                      params.problem_size, 
+                      params.problem_size);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             float* input_array  = reinterpret_cast<float*>(input);
-            input_array_type.fp = input_array;
+            float* output_array = reinterpret_cast<float*>(output);
+            this->input_array_type.fp  = input_array;
+            this->output_array_type.fp = output_array;
         }else{
             // app_name not found in any table. 
         }
@@ -38,11 +44,10 @@ public:
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv, app_name)){
             float* output_array = reinterpret_cast<float*>(converted_output);
-            output_array_type.mat.convertTo(output_array_type.mat, CV_8U);
-            mat2array(output_array_type.mat, output_array);
+            this->output_array_type.mat.convertTo(this->output_array_type.mat, CV_8U);
+            mat2array(this->output_array_type.mat, output_array);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            float* output_array = reinterpret_cast<float*>(converted_output);
-            output_array = output_array_type.fp;
+            // no need to convert from float* to float*, pass
         }else{
             // app_name not found in any table. 
         }
@@ -50,10 +55,16 @@ public:
         return get_time_ms(end, start);
     }
 
-    virtual double run_kernel(const std::string app_name){
+    virtual double run_kernel(const std::string app_name, Params params){
         if(if_kernel_in_table(this->func_table_cv, app_name)){
-            return this->run_kernel(app_name, input_array_type.mat, output_array_type.mat);
+            return this->run_kernel(app_name, 
+                                    this->input_array_type.mat, 
+                                    this->output_array_type.mat);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
+            return this->run_kernel(app_name, 
+                                    params, 
+                                    this->input_array_type.fp, 
+                                    this->output_array_type.fp);
         }else{
             // app_name not found in any table. 
         }
@@ -67,10 +78,10 @@ public:
         return get_time_ms(end, start);
     }
     /* float type of input/output */
-    double run_kernel(const std::string app_name, float* input, float* output){
+    double run_kernel(const std::string app_name, Params params, float* input, float* output){
         kernel_existence_checking(this->func_table_fp, app_name);
         timing start = clk::now();
-        this->func_table_fp[app_name](input, output);
+        this->func_table_fp[app_name](params, input, output);
         timing end = clk::now();
         return get_time_ms(end, start);
     }
@@ -82,7 +93,7 @@ private:
     ArrayType input_array_type, output_array_type;
     
     typedef void (*func_ptr_opencv)(const Mat, Mat&); // const Mat: input, Mat& : input/output
-    typedef void (*func_ptr_float)(float*, float*);
+    typedef void (*func_ptr_float)(Params, float*, float*);
     typedef std::unordered_map<std::string, func_ptr_opencv> func_table_opencv;
     typedef std::unordered_map<std::string, func_ptr_float>  func_table_float;
     func_table_opencv func_table_cv = {
@@ -100,6 +111,7 @@ private:
     static void sobel_2d(const Mat in_img, Mat& out_img);
     static void mean_2d(const Mat in_img, Mat& out_img);
     static void laplacian_2d(const Mat in_img, Mat& out_img);
-    static void fft_2d(float* input, float* output);
+    static void fft_2d(Params params, float* input, float* output);
 };
+
 #endif

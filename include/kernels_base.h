@@ -31,6 +31,8 @@ class KernelBase{
 public:
     /*
         The base input_conversion() API returns converted input data type from void* type.
+        Also, this API binds input and output arrays.
+        This API must be called before run_kernel().
     */
     virtual void input_conversion(){};
     

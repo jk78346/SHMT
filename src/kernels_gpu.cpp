@@ -43,7 +43,7 @@ void GpuKernel::laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     out_img.convertTo(out_img, CV_8U);
 }
 
-void GpuKernel::fft_2d(float* in_img, float* out_img){
+void GpuKernel::fft_2d(Params params, float* in_img, float* out_img){
 
 }
 

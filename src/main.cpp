@@ -17,12 +17,12 @@ float run_kernel_on_cpu(Params params, void* input, void* output){
     CpuKernel* cpu_kernel = new CpuKernel;
 
     // input array conversion from void* input
-    cpu_kernel->input_conversion(params, input);
+    cpu_kernel->input_conversion(params, input, output);
     
     // Actual kernel call
     printf("CPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += cpu_kernel->run_kernel(params.app_name);
+        kernel_ms += cpu_kernel->run_kernel(params.app_name, params);
     }
     printf("CPU kernel ends.\n");
     
@@ -91,12 +91,12 @@ float run_kernel_on_gpu(Params params, void* input, void* output){
     GpuKernel* gpu_kernel = new GpuKernel;
 
     // input array conversion from void* input
-    gpu_kernel->input_conversion(params, input);
+    gpu_kernel->input_conversion(params, input, output);
     
     // Actual kernel call
     printf("GPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += gpu_kernel->run_kernel(params.app_name);
+        kernel_ms += gpu_kernel->run_kernel(params.app_name, params);
     }
     printf("GPU kernel ends.\n");
     
