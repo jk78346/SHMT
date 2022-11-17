@@ -14,20 +14,20 @@ using namespace cv;
 
 float run_kernel_on_cpu(Params params, void* input, void* output){
     double kernel_ms = 0.0;
-    CpuKernel* cpu_kernel = new CpuKernel;
+    CpuKernel* cpu_kernel = new CpuKernel(params, input, output);
 
     // input array conversion from void* input
-    cpu_kernel->input_conversion(params, input, output);
+    cpu_kernel->input_conversion();
     
     // Actual kernel call
     printf("CPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += cpu_kernel->run_kernel(params.app_name, params);
+        kernel_ms += cpu_kernel->run_kernel();
     }
     printf("CPU kernel ends.\n");
     
     // output array conversion back to void* output
-    cpu_kernel->output_conversion(params, output);
+    cpu_kernel->output_conversion();
 
     delete cpu_kernel;
     return (float)kernel_ms;
@@ -38,8 +38,6 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     // input array partitioning
     void** input_pars;
     void** output_pars;
-    input_array_partition_initialization(params, input, input_pars);    
-
     // input partition conversion
     Mat* in_img_pars  = new Mat[params.block_size];
     Mat* out_img_pars = new Mat[params.block_size];
@@ -88,20 +86,20 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
 
 float run_kernel_on_gpu(Params params, void* input, void* output){
     double kernel_ms = 0.0;
-    GpuKernel* gpu_kernel = new GpuKernel;
+    GpuKernel* gpu_kernel = new GpuKernel(params, input, output);
 
     // input array conversion from void* input
-    gpu_kernel->input_conversion(params, input, output);
+    gpu_kernel->input_conversion();
     
     // Actual kernel call
     printf("GPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += gpu_kernel->run_kernel(params.app_name, params);
+        kernel_ms += gpu_kernel->run_kernel();
     }
     printf("GPU kernel ends.\n");
     
     // output array conversion back to void* output
-    gpu_kernel->output_conversion(params, output);
+    gpu_kernel->output_conversion();
 
     delete gpu_kernel;
     return (float)kernel_ms;

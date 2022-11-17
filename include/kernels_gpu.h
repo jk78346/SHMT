@@ -15,19 +15,30 @@ TODO: optimize function table searching algorithm.
 */
 class GpuKernel : public KernelBase{
 public:
+    GpuKernel(Params params, void* input, void* output){
+        this->params = params;
+        this->input_array_type.ptr = input;
+        this->output_array_type.ptr = output;
+    };
+
     virtual ~GpuKernel(){};
+
     /* input conversion - search over func_tables to do correct input conversion */
-    virtual double input_conversion(Params params, void* input, void* output){
+    virtual double input_conversion(){
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            float* input_array  = reinterpret_cast<float*>(input);
+            float* input_array  = reinterpret_cast<float*>(this->input_array_type.ptr);
             Mat img_host;
-            array2mat(img_host, input_array, CV_32F, params.problem_size, params.problem_size);
+            array2mat(img_host, 
+                      input_array, 
+                      CV_32F, 
+                      this->params.block_size, 
+                      this->params.block_size);
             this->input_array_type.gpumat.upload(img_host); // convert from Mat to GpuMat
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            float* input_array  = reinterpret_cast<float*>(input);
-            float* output_array = reinterpret_cast<float*>(output);
+            float* input_array  = reinterpret_cast<float*>(this->input_array_type.ptr);
+            float* output_array = reinterpret_cast<float*>(this->output_array_type.ptr);
             this->input_array_type.fp  = input_array;
             this->output_array_type.fp = output_array; 
         }else{
@@ -38,11 +49,12 @@ public:
     }
     
     /* output conversion - search over func_tables to do correct output conversion */
-    virtual double output_conversion(Params params, void* converted_output){
+    virtual double output_conversion(){
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            float* output_array = reinterpret_cast<float*>(converted_output);
+            float* output_array = 
+                reinterpret_cast<float*>(this->output_array_type.ptr);
             Mat out_img;
             this->output_array_type.gpumat.download(out_img); // convert GpuMat to Mat
             out_img.convertTo(out_img, CV_8U);
@@ -56,44 +68,49 @@ public:
         return get_time_ms(end, start);
     }
 
-    virtual double run_kernel(const std::string app_name, Params params){
+    virtual double run_kernel(){
+        std::string app_name = this->params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            return this->run_kernel(app_name, 
-                                    this->input_array_type.gpumat, 
-                                    this->output_array_type.gpumat);
+            return this->run_kernel_opencv_cuda();
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            return this->run_kernel(app_name, 
-                                    params,
-                                    this->input_array_type.fp, 
-                                    this->output_array_type.fp);
+            return this->run_kernel_float();
         }else{
             // app_name not found in any table. 
         }
         return 0.0; // kernel execution is skipped.
     }
+
     /* opencv type of input/output */
-    double run_kernel(const std::string app_name, const cuda::GpuMat in_img, cuda::GpuMat& out_img){
-        kernel_existence_checking(this->func_table_cv_cuda, app_name);
+    double run_kernel_opencv_cuda(){
+        kernel_existence_checking(this->func_table_cv_cuda, this->params.app_name);
         timing start = clk::now();
-        this->func_table_cv_cuda[app_name](in_img, out_img);
+        this->func_table_cv_cuda[this->params.app_name](this->input_array_type.gpumat, 
+                                           this->output_array_type.gpumat);
         timing end = clk::now();
         return get_time_ms(end, start);
     }
+
     /* float type of input/output */
-    double run_kernel(const std::string app_name, Params params, float* input, float* output){
-        kernel_existence_checking(this->func_table_fp, app_name);
+    double run_kernel_float(){
+        kernel_existence_checking(this->func_table_fp, this->params.app_name);
         timing start = clk::now();
-        this->func_table_fp[app_name](params, input, output);
+        this->func_table_fp[this->params.app_name](this->params, 
+                                      this->input_array_type.fp, 
+                                      this->output_array_type.fp);
         timing end = clk::now();
         return get_time_ms(end, start);
     }
 private:
+    // arrays
     struct ArrayType{
+        void* ptr = NULL;
         cuda::GpuMat gpumat;
         float* fp = NULL;
     };
+    Params params;
     ArrayType input_array_type, output_array_type;
     
+    // function tables
     typedef void (*func_ptr_opencv_cuda)(const cuda::GpuMat, cuda::GpuMat&); // const cuda::GpuMat: input, cuda::GpuMat& : input/output
     typedef void (*func_ptr_float)(Params, float*, float*);
     typedef std::unordered_map<std::string, func_ptr_opencv_cuda> func_table_opencv_cuda;

@@ -5,8 +5,8 @@
 using namespace cv;
 
 /* 
-A helper function to check if given app_name is supported as a kernel or not.
-Since template is used, this definition needed to be located in this header 
+Helper functions to check if given app_name is supported as a kernel or not.
+Since template is used, this definitions needed to be located in this header 
 file for successful compilation.
 */
 template <typename T>
@@ -31,24 +31,22 @@ class KernelBase{
 public:
     ~KernelBase(){};
     /*
-        The base input_conversion() API returns converted input data type from void* type.
-        Also, this API binds input and output arrays.
-        This API must be called before run_kernel().
+        The base input_conversion() API converts input data type from void* type.
+        Return: function time in millisecond.
     */
-    virtual void input_conversion(){};
+    virtual double input_conversion(){ return 0.0; };
     
     /*
-        The base output_conversion() API returns converted output data type to void* type.
+        The base output_conversion() API converts output data type to void* type.
+        Return: function time in millisecond.
     */
-    virtual void output_conversion(){};
+    virtual double output_conversion(){ return 0.0; };
     
     /*
-        The base run_kernel() API returns kernel time in millisecond in double type.
+        The base run_kernel() API invokes the acutal kernel execution.
+        Return: function time in millisecond.
     */
-    virtual double run_kernel(){
-        std::cout << "virtual kernel run is not implemented yet." << std::endl;
-        exit(0);
-    };
+    virtual double run_kernel(){ return 0.0; };
 };
 
 #endif
