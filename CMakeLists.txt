@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PROJ_NAME "gpgtpu")
 project(${PROJ_NAME} VERSION 1.0)
 
+set(CMAKE_C_FLAGS "-Wall")
+set(CMAKE_C_FLAGS_DEBUG "-g -O3")
+set(CMAKE_C_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
+set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+
 # Add a series of utils libraries
 add_subdirectory(utils)
 

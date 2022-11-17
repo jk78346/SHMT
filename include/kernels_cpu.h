@@ -15,6 +15,7 @@ TODO: optimize function table searching algorithm.
 */
 class CpuKernel : public KernelBase{
 public:
+    virtual ~CpuKernel(){};
     /* input conversion - search over func_tables to do correct input conversion */
     virtual double input_conversion(Params params, void* input, void* output){
         timing start = clk::now();
@@ -68,6 +69,7 @@ public:
         }else{
             // app_name not found in any table. 
         }
+        return 0.0; // kernel execution is skipped.
     }
     /* opencv type of input/output */
     double run_kernel(const std::string app_name, const Mat in_img, Mat& out_img){

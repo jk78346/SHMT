@@ -43,8 +43,36 @@ void GpuKernel::laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     out_img.convertTo(out_img, CV_8U);
 }
 
+/*
+    GPU convolveFFT2D, this kernel used a fixed 7x6 convolving kernel.
+    Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D.cu
+*/
 void GpuKernel::fft_2d(Params params, float* in_img, float* out_img){
-
+//    //Not including kernel transformation into time measurement,
+//    //since convolution kernel is not changed very frequently
+//    printf("...transforming convolution kernel\n");
+//    timing kernel_fft_s = clk::now();
+//    checkCudaErrors(cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedKernel, (cufftComplex *)d_KernelSpectrum));
+//    timing kernel_fft_e = clk::now();
+// 
+//    printf("...running GPU FFT convolution: ");
+//    checkCudaErrors(cudaDeviceSynchronize());
+//    sdkResetTimer(&hTimer);
+//    sdkStartTimer(&hTimer);
+//
+//    for(int i = 0 ; i < iter ; i++){
+//        checkCudaErrors(cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum));
+//        modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
+//        checkCudaErrors(cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData));
+// 
+//        checkCudaErrors(cudaDeviceSynchronize());
+//    }
+//    sdkStopTimer(&hTimer);
+//    double gpuTime = sdkGetTimerValue(&hTimer)/iter;
+//    printf("%f MPix/s (%f ms), averaged over %d time(s)\n", (double)dataH * (double)dataW * 1e-6 / (gpuTime * 0.001), gpuTime, iter);
+// 
+//    printf("...reading back GPU convolution results\n");
+//    checkCudaErrors(cudaMemcpy(h_ResultGPU, d_PaddedData, fftH * fftW * sizeof(float), cudaMemcpyDeviceToHost));
 }
 
 

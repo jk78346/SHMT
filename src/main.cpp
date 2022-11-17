@@ -45,7 +45,7 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     Mat* out_img_pars = new Mat[params.block_size];
     int row_cnt = params.problem_size / params.block_size; 
     int col_cnt = params.problem_size / params.block_size; 
-    unsigned int block_size = params.block_size * params.block_size;
+    //unsigned int block_size = params.block_size * params.block_size;
     for(int i = 0 ; i < row_cnt ; i++){
         for(int j = 0 ; j < col_cnt ; j++){
             int idx = i * col_cnt + j;
@@ -60,10 +60,10 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
         // per iteration calls
         for(int i = 0 ; i < row_cnt ; i++){
             for(int j = 0 ; j < col_cnt ; j++){
-                int idx = i * col_cnt + j;
-                std::cout << "i: " << i << ",j: " << j << ", cpu_func_table starting..." << std::endl;
+                //int idx = i * col_cnt + j;
+                //std::cout << "i: " << i << ",j: " << j << ", cpu_func_table starting..." << std::endl;
                 //cpu_func_table[params.app_name](in_img_pars[idx], out_img_pars[idx]);
-                std::cout << "end" << std::endl;
+                //std::cout << "end" << std::endl;
             }
         }
     }
@@ -131,6 +131,7 @@ float run_kernel_on_tpu(Params params, void* input, void* output){
         output_array[i] = out[i]; // int to float conversion
     }
     openctpu_clean_up();
+    return 0.0; //TODO: integrating kernel timing as return here
 }
 
 float run_kernel(const std::string& mode, Params& params, void* input, void* output){
