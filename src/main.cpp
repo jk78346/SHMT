@@ -6,38 +6,34 @@
 #include "arrays.h"
 #include "params.h"
 #include "quality.h"
-#include "kernels.h"
 #include "conversion.h"
+#include "kernels_cpu.h"
+#include "kernels_gpu.h"
 
 using namespace cv;
-
-//extern std::unordered_map<std::string, func_ptr_cpu> cpu_func_table; 
-extern std::unordered_map<std::string, func_ptr_gpu> gpu_func_table; 
 
 float run_kernel_on_cpu(Params params, void* input, void* output){
     double kernel_ms = 0.0;
     CpuKernel* cpu_kernel = new CpuKernel;
 
-    // kernel-specifc input/output data type.    
-    Mat in_img, out_img;
-    cpu_kernel_input_conversion(params.app_name, params, input, in_img);
+    // input array conversion from void* input
+    cpu_kernel->input_conversion(params, input);
     
     // Actual kernel call
     printf("CPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += cpu_kernel->run_kernel(params.app_name, in_img, out_img);
+        kernel_ms += cpu_kernel->run_kernel(params.app_name);
     }
     printf("CPU kernel ends.\n");
     
-    cpu_kernel_output_conversion(params.app_name, params, out_img, output);
+    // output array conversion back to void* output
+    cpu_kernel->output_conversion(params, output);
 
     delete cpu_kernel;
     return (float)kernel_ms;
 }
 
 float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
-    
-    //kernel_existence_checking(cpu_func_table, params.app_name);
 
     // input array partitioning
     void** input_pars;
@@ -91,27 +87,24 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
 }
 
 float run_kernel_on_gpu(Params params, void* input, void* output){
-    
-    kernel_existence_checking(gpu_func_table, params.app_name);
+    double kernel_ms = 0.0;
+    GpuKernel* gpu_kernel = new GpuKernel;
 
-    // kernel-specifc input/output data type.    
-	cuda::GpuMat in_img_gpu;
-    cuda::GpuMat out_img_gpu;
-
-    gpu_kernel_input_conversion(params.app_name, params, input, in_img_gpu);
+    // input array conversion from void* input
+    gpu_kernel->input_conversion(params, input);
     
     // Actual kernel call
     printf("GPU kernel starts.\n");
-    timing start = clk::now();
-    for(int i = 0 ; i < params.iter ; i++){
-        gpu_func_table[params.app_name](in_img_gpu, out_img_gpu);
+    for(int i = 0 ; i < params.iter ; i ++){
+        kernel_ms += gpu_kernel->run_kernel(params.app_name);
     }
-    timing end   = clk::now(); 
     printf("GPU kernel ends.\n");
+    
+    // output array conversion back to void* output
+    gpu_kernel->output_conversion(params, output);
 
-    gpu_kernel_output_conversion(params.app_name, params, out_img_gpu, output);
-
-    return get_time_ms(end, start);
+    delete gpu_kernel;
+    return (float)kernel_ms;
 }
 
 float run_kernel_on_tpu(Params params, void* input, void* output){
