@@ -122,7 +122,6 @@ float Quality::ssim(int verbose){
 	// main calculation
 	float ssim = 0.0;
 	
-	int len = this->row * this->col;
 	float ux = this->average(this->target_mat);
 	float uy = this->average(this->baseline_mat);
 	float vx = this->sdev(this->target_mat);
