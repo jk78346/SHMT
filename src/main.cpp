@@ -37,22 +37,16 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     double kernel_ms = 0.0;
 
     // arrays partition
-    float** input_pars = NULL;
-    float** output_pars = NULL;
-    array_partition_initialization(params, false, input, input_pars);
-    array_partition_initialization(params, true/*skip_init*/, output, output_pars);
+    std::vector<void*> input_pars, output_pars;
+    array_partition_initialization(params, false, &input, input_pars);
+    array_partition_initialization(params, true/*skip_init*/, &output, output_pars);
 
     // kernel handler init
     unsigned block_cnt = params.get_block_cnt();
-    //CpuKernel** cpu_kernels = new CpuKernel*[block_cnt];
-    std::vector<CpuKernel*> cpu_kernels;
-    std::cout << "check2: blk_cnt: " << block_cnt << std::endl;
+    CpuKernel** cpu_kernels = new CpuKernel*[block_cnt];
     for(unsigned int i = 0 ; i < block_cnt ; i++){
-    //    auto tmp = new CpuKernel(params, input_pars[i], output_pars[i]);
-        auto tmp = new CpuKernel(params, input, output);
-        cpu_kernels.push_back(tmp);
+        cpu_kernels[i] = new CpuKernel(params, input_pars[i], output_pars[i]);
     }
-    std::cout << "check4" << std::endl;
 
     // input array conversion from void* input
     for(unsigned int i = 0 ; i < block_cnt ; i++){
@@ -62,7 +56,7 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     // Actual kernel call
     printf("CPU kernel starts.\n");
     for(int i = 0 ; i < params.iter ; i ++){
-        // per iteration calls
+        // per iteration tiling calls
         for(unsigned int j = 0 ; j < block_cnt ; j++){
             kernel_ms += cpu_kernels[j]->run_kernel();
         }    
@@ -74,10 +68,17 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
         cpu_kernels[i]->output_conversion();
     }
 
-    //for(unsigned int i = 0 ; i < block_cnt ; i++){
-    //    delete cpu_kernels[i];
-    //}
-    //delete cpu_kernels;
+    // output partition gathering
+    output_array_partition_gathering(params, &output, output_pars);
+
+    // clean up
+    for(unsigned int i = 0 ; i < block_cnt ; i++){
+        delete cpu_kernels[i];
+    }
+    delete cpu_kernels;
+    input_pars.clear();
+    output_pars.clear();
+    
     return (float)kernel_ms;
 }
 
@@ -149,9 +150,14 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
 
     
 int main(int argc, char* argv[]){
-    if(argc != 6){
+    if(argc != 7){
         std::cout << "Usage: " << argv[0] 
-                  << " <application name> <problem_size> <iter> <baseline mode> <proposed mode>" 
+                  << " <application name>"
+                  << " <problem_size>"
+                  << " <block_size>"
+                  << " <iter>"
+                  << " <baseline mode>"
+                  << " <proposed mode>" 
                   << std::endl;
         return 0;
     }else{
@@ -163,15 +169,17 @@ int main(int argc, char* argv[]){
     }
 
     // program arguments assignment
-    std::string app_name = argv[1];
-    int problem_size     = atoi(argv[2]);
-    int iter             = atoi(argv[3]);
-    std::string baseline_mode = argv[4];
-    std::string proposed_mode = argv[5];
+    int idx = 1;
+    std::string app_name = argv[idx++];
+    int problem_size     = atoi(argv[idx++]);
+    int block_size       = atoi(argv[idx++]);
+    int iter             = atoi(argv[idx++]);
+    std::string baseline_mode = argv[idx++];
+    std::string proposed_mode = argv[idx++];
 
     Params params(app_name, 
                   problem_size, 
-                  problem_size/*block size*/, 
+                  block_size, 
                   iter);
 
     void* input_array = NULL;
@@ -217,11 +225,11 @@ int main(int argc, char* argv[]){
     double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
     
     std::cout << "===== Latency =====" << std::endl;
-    std::cout << baseline_mode << " kernel time: " << baseline_kernel_ms/iter 
+    std::cout << baseline_mode << "\t kernel time: " << baseline_kernel_ms/iter 
               << " (ms), averaged over " << iter << " time(s)." << std::endl;
-    std::cout << proposed_mode << " kernel time: " << proposed_kernel_ms/iter
+    std::cout << proposed_mode << "\t kernel time: " << proposed_kernel_ms/iter
               << " (ms), averaged over " << iter << " time(s)." << std::endl;
-    std::cout << baseline_mode << "    e2e time: " << baseline_e2e_ms << " (ms)" << std::endl;
-    std::cout << proposed_mode << "    e2e time: " << proposed_e2e_ms << " (ms)" << std::endl;
+    std::cout << baseline_mode << "\t    e2e time: " << baseline_e2e_ms << " (ms)" << std::endl;
+    std::cout << proposed_mode << "\t    e2e time: " << proposed_e2e_ms << " (ms)" << std::endl;
     return 0;
 }

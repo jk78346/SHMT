@@ -5,11 +5,11 @@
 
 void array_partition_initialization(Params params, 
                                     bool skip_init,      
-                                    void* input, 
-                                    float** input_pars);
+                                    void** input, 
+                                    std::vector<void*>& input_pars);
 void output_array_partition_gathering(Params params, 
-                                      void* output, 
-                                      void** output_pars);
+                                      void** output, 
+                                      std::vector<void*>& output_pars);
 void data_initialization(Params params, 
                          void** input_array, 
                          void** output_array_baseline, 

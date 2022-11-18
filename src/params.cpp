@@ -16,6 +16,7 @@ Params::Params(
     this->mix_p           = mix_p; 
     this->input_data_path = input_data_path;
 
+    assert(problem_size >= block_size);
     // A temporary aligned design, can be released later
     assert(problem_size % block_size == 0);
     this->row_cnt = problem_size / block_size; 

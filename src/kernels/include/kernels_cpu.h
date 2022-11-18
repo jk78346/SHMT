@@ -16,7 +16,6 @@ TODO: optimize function table searching algorithm.
 class CpuKernel : public KernelBase{
 public:
     CpuKernel(Params params, void* input, void* output){
-        std::cout << "CpuKenrel init..." << std::endl;
         this->params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
