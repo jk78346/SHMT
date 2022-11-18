@@ -34,54 +34,51 @@ float run_kernel_on_cpu(Params params, void* input, void* output){
 }
 
 float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
+    double kernel_ms = 0.0;
 
-    // input array partitioning
-    void** input_pars;
-    void** output_pars;
-    // input partition conversion
-    Mat* in_img_pars  = new Mat[params.block_size];
-    Mat* out_img_pars = new Mat[params.block_size];
-    int row_cnt = params.problem_size / params.block_size; 
-    int col_cnt = params.problem_size / params.block_size; 
-    //unsigned int block_size = params.block_size * params.block_size;
-    for(int i = 0 ; i < row_cnt ; i++){
-        for(int j = 0 ; j < col_cnt ; j++){
-            int idx = i * col_cnt + j;
-            cpu_kernel_input_conversion(params.app_name, params, input_pars[idx], in_img_pars[idx]);
-        }
-    }   
+    // arrays partition
+    float** input_pars = NULL;
+    float** output_pars = NULL;
+    array_partition_initialization(params, false, input, input_pars);
+    array_partition_initialization(params, true/*skip_init*/, output, output_pars);
 
+    // kernel handler init
+    unsigned block_cnt = params.get_block_cnt();
+    //CpuKernel** cpu_kernels = new CpuKernel*[block_cnt];
+    std::vector<CpuKernel*> cpu_kernels;
+    std::cout << "check2: blk_cnt: " << block_cnt << std::endl;
+    for(unsigned int i = 0 ; i < block_cnt ; i++){
+    //    auto tmp = new CpuKernel(params, input_pars[i], output_pars[i]);
+        auto tmp = new CpuKernel(params, input, output);
+        cpu_kernels.push_back(tmp);
+    }
+    std::cout << "check4" << std::endl;
+
+    // input array conversion from void* input
+    for(unsigned int i = 0 ; i < block_cnt ; i++){
+        cpu_kernels[i]->input_conversion();
+    }
+    
     // Actual kernel call
-    printf("CPU tiling kernel starts.\n");
-    timing start = clk::now();
-    for(int iter = 0 ; iter < params.iter ; iter++){
+    printf("CPU kernel starts.\n");
+    for(int i = 0 ; i < params.iter ; i ++){
         // per iteration calls
-        for(int i = 0 ; i < row_cnt ; i++){
-            for(int j = 0 ; j < col_cnt ; j++){
-                //int idx = i * col_cnt + j;
-                //std::cout << "i: " << i << ",j: " << j << ", cpu_func_table starting..." << std::endl;
-                //cpu_func_table[params.app_name](in_img_pars[idx], out_img_pars[idx]);
-                //std::cout << "end" << std::endl;
-            }
-        }
+        for(unsigned int j = 0 ; j < block_cnt ; j++){
+            kernel_ms += cpu_kernels[j]->run_kernel();
+        }    
     }
-    timing end   = clk::now(); 
-    printf("CPU tiling kernel ends.\n");
-
-    // output partition conversion    
-    for(int i = 0 ; i < row_cnt ; i++){
-        for(int j = 0 ; j < col_cnt ; j++){
-            int idx = i * col_cnt + j;
-            std::cout << "i: " << i << ",j: " << j << ": cpu_kernel_output_conversion starts..." << std::endl;
-            cpu_kernel_output_conversion(params.app_name, params, out_img_pars[idx], output_pars[idx]);
-            std::cout << "end" << std::endl;    
-        }
+    printf("CPU kernel ends.\n");
+    
+    // output array conversion back to void* output
+    for(unsigned int i = 0 ; i < block_cnt ; i++){
+        cpu_kernels[i]->output_conversion();
     }
 
-    // output partition gathering
-    output_array_partition_gathering(params, output, output_pars);    
-    std::cout << "done" << std::endl;
-    return get_time_ms(end, start);
+    //for(unsigned int i = 0 ; i < block_cnt ; i++){
+    //    delete cpu_kernels[i];
+    //}
+    //delete cpu_kernels;
+    return (float)kernel_ms;
 }
 
 float run_kernel_on_gpu(Params params, void* input, void* output){

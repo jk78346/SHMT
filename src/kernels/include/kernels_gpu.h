@@ -41,6 +41,11 @@ public:
             float* output_array = reinterpret_cast<float*>(this->output_array_type.ptr);
             this->input_array_type.fp  = input_array;
             this->output_array_type.fp = output_array; 
+
+//            checkCudaErrors(
+//                cudaMalloc((void **)&this->input_array_type.device_fp, 
+//                           this->params.block_size * this->params.block_size * sizeof(float)));
+
         }else{
             // app_name not found in any table. 
         }
@@ -107,6 +112,7 @@ private:
         void* ptr = NULL;
         cuda::GpuMat gpumat;
         float* fp = NULL;
+        float* device_fp = NULL; 
     };
     Params params;
     ArrayType input_array_type, output_array_type;

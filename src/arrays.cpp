@@ -27,33 +27,36 @@ void data_initialization(Params params,
 }
 
 /*
-    input partition arrays allocation and initialization.
+    partition array into partitions: allocation and initialization.
 */
-void input_array_partition_initialization(Params params,
-                                      void* input,
-                                      void** input_pars){
-
-    // Temporary design for easy partitioning. TODO: support the residual block.
-    assert(params.problem_size % params.block_size == 0);
+void array_partition_initialization(Params params,
+                                    bool skip_init,
+                                    void* input,
+                                    float** input_pars){
 
     // prepare for utilizing opencv roi() to do partitioning.
     Mat input_mat, tmp;
-    array2mat(input_mat, (float*)input, CV_32F, params.problem_size, params.problem_size);
-
-    int row_cnt = params.problem_size / params.block_size;
-    int col_cnt = params.problem_size / params.block_size;
+    if(!skip_init){
+        array2mat(input_mat, (float*)input, CV_32F, params.problem_size, params.problem_size);
+    }
     unsigned int block_size = params.block_size * params.block_size;
-    for(int i = 0 ; i < row_cnt ; i++){
-        for(int j = 0 ; j < col_cnt ; j++){
-            int idx = i * col_cnt + j;
+
+    // pointer of partition allocation
+    input_pars = (float**) malloc(params.get_block_cnt() * sizeof(float*));
+    
+    for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+        for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+            unsigned int idx = i * params.get_col_cnt() + j;
           
             // partition allocation
             input_pars[idx] = (float*) malloc(block_size * sizeof(float));
 
             // partition initialization
-            Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
-            input_mat(roi).copyTo(tmp); 
-            mat2array(tmp, (float*)input_pars[idx]);
+            if(!skip_init){
+                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                input_mat(roi).copyTo(tmp); 
+                mat2array(tmp, (float*)input_pars[idx]);
+            }
         }
     }
 }

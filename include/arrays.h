@@ -3,9 +3,10 @@
 
 #include "params.h"
 
-void input_array_partition_initialization(Params params, 
-                                          void* input, 
-                                          void** input_pars);
+void array_partition_initialization(Params params, 
+                                    bool skip_init,      
+                                    void* input, 
+                                    float** input_pars);
 void output_array_partition_gathering(Params params, 
                                       void* output, 
                                       void** output_pars);
