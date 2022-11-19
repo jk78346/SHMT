@@ -27,7 +27,7 @@ void data_initialization(Params params,
 }
 
 /*
-    partition array into partitions: allocation and initialization.
+    partition array into partitions: allocation and initialization(optional).
 */
 void array_partition_initialization(Params params,
                                     bool skip_init,
@@ -41,7 +41,7 @@ void array_partition_initialization(Params params,
     unsigned int block_total_size = params.block_size * params.block_size;
 
     // vector of partitions allocation
-    input_pars.resize(params.get_block_cnt());    
+    input_pars.resize(params.get_block_cnt());   
     for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
         for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
             unsigned int idx = i * params.get_col_cnt() + j;         

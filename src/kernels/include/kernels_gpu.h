@@ -33,8 +33,8 @@ public:
             array2mat(img_host, 
                       input_array, 
                       CV_32F, 
-                      this->params.block_size, 
-                      this->params.block_size);
+                      this->params.get_kernel_size(), 
+                      this->params.get_kernel_size());
             this->input_array_type.gpumat.upload(img_host); // convert from Mat to GpuMat
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             float* input_array  = reinterpret_cast<float*>(this->input_array_type.ptr);
@@ -44,7 +44,7 @@ public:
 
 //            checkCudaErrors(
 //                cudaMalloc((void **)&this->input_array_type.device_fp, 
-//                           this->params.block_size * this->params.block_size * sizeof(float)));
+//                           this->params.get_kernel_size() * this->params.get_kenrel_size() * sizeof(float)));
 
         }else{
             // app_name not found in any table. 

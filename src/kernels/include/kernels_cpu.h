@@ -33,8 +33,8 @@ public:
             array2mat(this->input_array_type.mat, 
                       input_array, 
                       CV_32F, 
-                      this->params.block_size, 
-                      this->params.block_size);
+                      this->params.get_kernel_size(), 
+                      this->params.get_kernel_size());
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             float* input_array  = 
                 reinterpret_cast<float*>(this->input_array_type.ptr);

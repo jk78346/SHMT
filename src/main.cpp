@@ -38,6 +38,7 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
 
     // arrays partition
     std::vector<void*> input_pars, output_pars;
+    params.set_tiling_mode(true);
     array_partition_initialization(params, false, &input, input_pars);
     array_partition_initialization(params, true/*skip_init*/, &output, output_pars);
 
@@ -152,10 +153,10 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
 int main(int argc, char* argv[]){
     if(argc != 7){
         std::cout << "Usage: " << argv[0] 
-                  << " <application name>"
-                  << " <problem_size>"
-                  << " <block_size>"
-                  << " <iter>"
+                  << " <application name>" // kernel's name
+                  << " <problem_size>" // given problem size
+                  << " <block_size>" // desired blocking size (effective only if tiling mode(s) is chosen.)
+                  << " <iter>" // number of iteration
                   << " <baseline mode>"
                   << " <proposed mode>" 
                   << std::endl;
@@ -180,6 +181,7 @@ int main(int argc, char* argv[]){
     Params params(app_name, 
                   problem_size, 
                   block_size, 
+                  false, // default no tiling mode. can be reset anytime later
                   iter);
 
     void* input_array = NULL;
