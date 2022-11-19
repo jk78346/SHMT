@@ -1,6 +1,6 @@
 #ifndef __ARRAYS_H__
 #define __ARRAYS_H__
-
+#include <vector>
 #include "params.h"
 
 void array_partition_initialization(Params params, 
