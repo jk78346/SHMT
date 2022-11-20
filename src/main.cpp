@@ -41,9 +41,7 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
                                                    "cpu_p",
                                                    input,
                                                    output);
-    p_run->partition_arrays();
-    p_run->init_kernel_handlers();
-    p_run->input_partition_conversion();
+    p_run->prepare_partitions();
     
     // Actual kernel call
     printf("CPU kernel starts.\n");
@@ -53,54 +51,9 @@ float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
     }
     printf("CPU kernel ends.\n");
 
-    p_run->output_partition_conversion();
-    p_run->output_summation();
+    p_run->transform_output();
 
     delete p_run;
-//    // arrays partition
-//    std::vector<void*> input_pars, output_pars;
-//    params.set_tiling_mode(true);
-//    array_partition_initialization(params, false, &input, input_pars);
-//    array_partition_initialization(params, true/*skip_init*/, &output, output_pars);
-
-//    // kernel handler init
-//    unsigned block_cnt = params.get_block_cnt();
-//    CpuKernel** cpu_kernels = new CpuKernel*[block_cnt];
-//    for(unsigned int i = 0 ; i < block_cnt ; i++){
-//        cpu_kernels[i] = new CpuKernel(params, input_pars[i], output_pars[i]);
-//    }
-
-//    // input array conversion from void* input
-//    for(unsigned int i = 0 ; i < block_cnt ; i++){
-//        cpu_kernels[i]->input_conversion();
-//    }
-    
-//    // Actual kernel call
-//    printf("CPU kernel starts.\n");
-//    for(int i = 0 ; i < params.iter ; i ++){
-//        // per iteration tiling calls
-//        for(unsigned int j = 0 ; j < block_cnt ; j++){
-//            kernel_ms += cpu_kernels[j]->run_kernel();
-//        }    
-//    }
-//    printf("CPU kernel ends.\n");
-    
-//    // output array conversion back to void* output
-//    for(unsigned int i = 0 ; i < block_cnt ; i++){
-//        cpu_kernels[i]->output_conversion();
-//    }
-
-//    // output partition gathering
-//    output_array_partition_gathering(params, &output, output_pars);
-
-//    // clean up
-//    for(unsigned int i = 0 ; i < block_cnt ; i++){
-//        delete cpu_kernels[i];
-//    }
-//    delete cpu_kernels;
-//    input_pars.clear();
-//    output_pars.clear();
-    
     return (float)kernel_ms;
 }
 
@@ -122,6 +75,29 @@ float run_kernel_on_gpu(Params params, void* input, void* output){
     gpu_kernel->output_conversion();
 
     delete gpu_kernel;
+    return (float)kernel_ms;
+}
+
+float run_kernel_on_gpu_tiling(Params params, void* input, void* output){
+    double kernel_ms = 0.0;
+
+    PartitionRuntime* p_run = new PartitionRuntime(params,
+                                                   "gpu_p",
+                                                   input,
+                                                   output);
+    p_run->prepare_partitions();
+    
+    // Actual kernel call
+    printf("GPU kernel starts.\n");
+    for(int i = 0 ; i < params.iter ; i ++){
+        // per iteration tiling calls
+        kernel_ms += p_run->run_partitions();
+    }
+    printf("GPU kernel ends.\n");
+
+    p_run->transform_output();
+
+    delete p_run;
     return (float)kernel_ms;
 }
 
@@ -162,6 +138,8 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
         kernel_ms = run_kernel_on_cpu_tiling(params, input, output);        
     }else if(mode == "gpu"){
 	    kernel_ms = run_kernel_on_gpu(params, input, output);        
+    }else if(mode == "gpu_p"){ // gpu partition mode
+        kernel_ms = run_kernel_on_gpu_tiling(params, input, output);        
     }else if(mode == "tpu"){
 	    kernel_ms = run_kernel_on_tpu(params, input, output);        
     }else{

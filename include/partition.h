@@ -13,13 +13,9 @@ public:
                      void* output);
     
     ~PartitionRuntime();
-
-    void partition_arrays();
-    void init_kernel_handlers();
-    void input_partition_conversion();
+    void prepare_partitions();
     double run_partitions();
-    void output_partition_conversion();
-    void output_summation();
+    void transform_output();
 
 private:
     unsigned int block_cnt = 1;
