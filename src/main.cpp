@@ -1,6 +1,5 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
-#include "gptpu.h"
 #include "types.h"
 #include "utils.h"
 #include "arrays.h"
@@ -10,6 +9,7 @@
 #include "conversion.h"
 #include "kernels_cpu.h"
 #include "kernels_gpu.h"
+#include "kernels_tpu.h"
 
 using namespace cv;
 
@@ -102,30 +102,24 @@ float run_kernel_on_gpu_tiling(Params params, void* input, void* output){
 }
 
 float run_kernel_on_tpu(Params params, void* input, void* output){
-    float* input_array  = reinterpret_cast<float*>(input);
-    float* output_array = reinterpret_cast<float*>(output);
-    int in_size  = params.problem_size * params.problem_size;
-    int out_size = params.problem_size * params.problem_size;
+    double kernel_ms = 0.0;
+    TpuKernel* tpu_kernel = new TpuKernel(params, input, output);
+
+    // input array conversion from void* input
+    tpu_kernel->input_conversion();
     
-    // tflite model input array initialization
-    int* in  = (int*) malloc(in_size * sizeof(int));
-    int* out = (int*) calloc(out_size, sizeof(int));
-    
-    // input array conversion
-    for(int i = 0 ; i < in_size ; i++){
-        in[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
-    }
-    std::string kernel_path = get_edgetpu_kernel_path(params.app_name, params.problem_size, params.problem_size);
+    // Actual kernel call
     printf("TPU kernel starts.\n");
-    run_a_model(kernel_path, params.iter, in, in_size, out, out_size, params.iter);
+    for(int i = 0 ; i < params.iter ; i ++){
+        kernel_ms += tpu_kernel->run_kernel();
+    }
     printf("TPU kernel ends.\n");
     
-    // output array conversion
-    for(int i = 0 ; i < out_size ; i++){
-        output_array[i] = out[i]; // int to float conversion
-    }
-    openctpu_clean_up();
-    return 0.0; //TODO: integrating kernel timing as return here
+    // output array conversion back to void* output
+    tpu_kernel->output_conversion();
+
+    delete tpu_kernel;
+    return (float)kernel_ms;
 }
 
 float run_kernel(const std::string& mode, Params& params, void* input, void* output){
