@@ -82,3 +82,7 @@ To add an exception for this directory, call:
 git config --global --add safe.directory '*'
 ```
 reference: https://stackoverflow.com/questions/71901632/fatal-error-unsafe-repository-home-repon-is-owned-by-someone-else
+
+### 3. ```Unsupported data type in custom op handler``` during run time.
+One of many reasons is that too many edgetpu runtime versions are installed as mentioned here: https://github.com/google-coral/tflite/issues/45#issuecomment-815080437 \
+Remove all ```dpkg -l | grep edgetpu``` listed ones and make sure that the one compiled from source code within this project ```libedgetpu``` is used.
