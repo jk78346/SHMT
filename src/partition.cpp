@@ -24,6 +24,11 @@ PartitionRuntime::~PartitionRuntime(){
             delete this->gpu_kernels[i];
         }   
         delete this->gpu_kernels;
+    }else if(this->mode == "tpu_p"){
+        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+            delete this->tpu_kernels[i];
+        }   
+        delete this->tpu_kernels;
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
@@ -66,6 +71,15 @@ void PartitionRuntime::prepare_partitions(){
                               this->output_pars[i]);
             this->gpu_kernels[i]->input_conversion();
         }
+    }else if(this->mode == "tpu_p"){
+        this->tpu_kernels = new TpuKernel*[this->block_cnt];
+        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+            this->tpu_kernels[i] =
+                new TpuKernel(this->params,
+                              this->input_pars[i],
+                              this->output_pars[i]);
+            this->tpu_kernels[i]->input_conversion();
+        }
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
@@ -84,6 +98,10 @@ double PartitionRuntime::run_partitions(){
         for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
             kernel_ms += this->gpu_kernels[i]->run_kernel();
         }   
+    }else if(this->mode == "tpu_p"){
+        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
+            kernel_ms += this->tpu_kernels[i]->run_kernel();
+        }   
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
@@ -101,6 +119,10 @@ void PartitionRuntime::transform_output(){
     }else if(this->mode == "gpu_p"){
         for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
             this->gpu_kernels[i]->output_conversion();
+        }   
+    }else if(this->mode == "tpu_p"){
+        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
+            this->tpu_kernels[i]->output_conversion();
         }   
     }else{
         std::cout << __func__ << ": undefined partition mode: "

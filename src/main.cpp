@@ -122,6 +122,29 @@ float run_kernel_on_tpu(Params params, void* input, void* output){
     return (float)kernel_ms;
 }
 
+float run_kernel_on_tpu_tiling(Params params, void* input, void* output){
+    double kernel_ms = 0.0;
+
+    PartitionRuntime* p_run = new PartitionRuntime(params,
+                                                   "tpu_p",
+                                                   input,
+                                                   output);
+    p_run->prepare_partitions();
+    
+    // Actual kernel call
+    printf("TPU kernel starts.\n");
+    for(int i = 0 ; i < params.iter ; i ++){
+        // per iteration tiling calls
+        kernel_ms += p_run->run_partitions();
+    }
+    printf("TPU kernel ends.\n");
+
+    p_run->transform_output();
+
+    delete p_run;
+    return (float)kernel_ms;
+}
+
 float run_kernel(const std::string& mode, Params& params, void* input, void* output){
     float kernel_ms = 0.0;
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
@@ -136,6 +159,8 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
         kernel_ms = run_kernel_on_gpu_tiling(params, input, output);        
     }else if(mode == "tpu"){
 	    kernel_ms = run_kernel_on_tpu(params, input, output);        
+    }else if(mode == "tpu_p"){ // tpu partition mode
+	    kernel_ms = run_kernel_on_tpu_tiling(params, input, output);        
     }else{
         std::cout << "undefined execution mode: " << mode << ", execution is skipped." << std::endl;
     }
