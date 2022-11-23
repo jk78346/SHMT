@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PROJ_NAME "gpgtpu")
 project(${PROJ_NAME} VERSION 1.0)
 
-set(CMAKE_C_FLAGS "-Wall")
+set(CMAKE_C_FLAGS "-Wall -pthread")
 set(CMAKE_C_FLAGS_DEBUG "-g -O4")
 set(CMAKE_C_FLAGS_RELEASE "-O4")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")

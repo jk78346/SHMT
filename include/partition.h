@@ -38,6 +38,7 @@ private:
     std::string mode = "cpu_p"; // partition mode, default as cpu_p
     void* input;
     void* output;
+    unsigned int dev_type_cnt = 3;
     CpuKernel** cpu_kernels;
     GpuKernel** gpu_kernels;
     TpuKernel** tpu_kernels;

@@ -3,18 +3,34 @@
 #include "arrays.h"
 #include "partition.h"
 
-//#define CONCURRENT 1
+#define CONCURRENT 1
 
 struct thread_data{
-    KernelBase* kernel_base;
+    GenericKernel* generic_kernels;
+    unsigned int block_cnt;
+    double kernel_ms;
+    // The device type the thread is representing.
+    DeviceType device_type;
 };
 
-void *RunKernelThread(void *my_args){
+void *RunDeviceThread(void *my_args){
     // getting argument(s)
     struct thread_data *args = (struct thread_data*) my_args;
+    GenericKernel* generic_kernels = args->generic_kernels;
+    unsigned int block_cnt = args->block_cnt;
+    double kernel_ms = args->kernel_ms;
+    DeviceType device_type = args->device_type;
     
-    double kernel_ms = 0.0;
-    kernel_ms += args->kernel_base->run_kernel();
+    kernel_ms = 0.0;
+    for(unsigned int  i = 0 ; i < block_cnt ; i++){
+        /* Check if the device type this kernel was assigned to is the same as
+           the type this consumer thread is representing. 
+         */
+        if(generic_kernels[i].device_type == device_type){
+            kernel_ms += generic_kernels[i].kernel_base->run_kernel();
+        }
+    }
+    args->kernel_ms = kernel_ms;
     pthread_exit(NULL);
 }
 
@@ -33,6 +49,7 @@ PartitionRuntime::PartitionRuntime(Params params,
     
     // For rand_p partition mode
     srand(time(NULL));
+    
 };
 
 PartitionRuntime::~PartitionRuntime(){
@@ -66,16 +83,19 @@ void PartitionRuntime::prepare_partitions(){
                 new CpuKernel(this->params,
                           this->input_pars[i],
                           this->output_pars[i]);
+            this->generic_kernels[i].device_type = cpu;
         }else if(device_type == gpu){
             this->generic_kernels[i].kernel_base =
                 new GpuKernel(this->params,
                           this->input_pars[i],
                           this->output_pars[i]);
+            this->generic_kernels[i].device_type = gpu;
         }else if(device_type == tpu){
             this->generic_kernels[i].kernel_base =
                 new TpuKernel(this->params,
                           this->input_pars[i],
                           this->output_pars[i]);
+            this->generic_kernels[i].device_type = tpu;
         }else{
             std::cout << __func__ << ": undefined device type: "
                       << device_type << ", program exits."
@@ -91,27 +111,37 @@ double PartitionRuntime::run_partitions(){
 #ifdef CONCURRENT
     timing start = clk::now();
     
-    //create pthreads to handle concurrent kernel execution on devices
-    pthread_t threads[this->block_cnt];
-    struct thread_data td[this->block_cnt];
-    int rc;
-    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-        td[i].kernel_base = this->generic_kernels[i].kernel_base; 
-        rc = pthread_create(&threads[i], NULL, RunKernelThread, (void *)&td[i]);
-        if(rc){
-            std::cout << __func__ << ": fail to create pthread " << i 
-                      << ", rc = " << rc << std::endl;
-            exit(-1);
-        }
-    }
+    //create pthreads for each device as runtime threading
+    pthread_t threads[this->dev_type_cnt];
+    struct thread_data td[this->dev_type_cnt];
+
+    // CPU thread
+    td[0].device_type = cpu;
     
-    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+    // GPU thread
+    td[1].device_type = gpu;
+
+    // edgeTPU thread
+    td[2].device_type = tpu;
+    
+    // create device threads
+    for(unsigned int i = 0 ; i < this->dev_type_cnt ; i++){
+        td[i].generic_kernels = this->generic_kernels; 
+        td[i].block_cnt = this->block_cnt;
+        pthread_create(&threads[i], NULL, RunDeviceThread, (void *)&td[i]);
+    }
+
+    // wait for join
+    for(unsigned int i = 0 ; i < this->dev_type_cnt ; i++){
         pthread_join(threads[i], NULL);
     }
 
     timing end = clk::now();
+    std::cout << __func__ << ": CPU thread latency: " << td[0].kernel_ms << " (ms)" << std::endl;
+    std::cout << __func__ << ": GPU thread latency: " << td[1].kernel_ms << " (ms)" << std::endl;
+    std::cout << __func__ << ": TPU thread latency: " << td[2].kernel_ms << " (ms)" << std::endl;
     double e2e_kernel_ms = get_time_ms(end, start);
-    std::cout << __func__ << ": e2e kernel time: " << e2e_kernel_ms << " (ms)" << std::endl;
+    std::cout << __func__ << ": e2e kernel time: " << e2e_kernel_ms << " (ms) (pthread overhead included)" << std::endl;
     return e2e_kernel_ms;
 #else
     double kernel_ms = 0.0;
