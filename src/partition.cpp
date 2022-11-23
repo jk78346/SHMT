@@ -14,27 +14,10 @@ PartitionRuntime::PartitionRuntime(Params params,
 };
 
 PartitionRuntime::~PartitionRuntime(){
-    if(this->mode == "cpu_p"){
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            delete this->cpu_kernels[i];
-        }   
-        delete this->cpu_kernels;
-    }else if(this->mode == "gpu_p"){
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            delete this->gpu_kernels[i];
-        }   
-        delete this->gpu_kernels;
-    }else if(this->mode == "tpu_p"){
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            delete this->tpu_kernels[i];
-        }   
-        delete this->tpu_kernels;
-    }else{
-        std::cout << __func__ << ": undefined partition mode: "
-                  << this->mode << ", program exits."
-                  << std::endl;
-        exit(0);
-    }
+    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+        delete this->generic_kernels[i].kernel_base;
+    }   
+    delete this->generic_kernels;
     this->input_pars.clear();
     this->output_pars.clear();
 }
@@ -52,86 +35,68 @@ void PartitionRuntime::prepare_partitions(){
                                    &(this->output),
                                    this->output_pars);
 
-    // assign partitions to each kernel handler
-    if(this->mode == "cpu_p"){
-        this->cpu_kernels = new CpuKernel*[this->block_cnt];
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            this->cpu_kernels[i] =
+    // assign partitions to each type of kernel handler
+    this->generic_kernels = new GenericKernel[this->block_cnt];
+    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+        auto device_type = this->mix_policy(i);
+        if(device_type == cpu){
+            this->generic_kernels[i].kernel_base =
                 new CpuKernel(this->params,
-                              this->input_pars[i],
-                              this->output_pars[i]);
-            this->cpu_kernels[i]->input_conversion();
-        }
-    }else if(this->mode == "gpu_p"){
-        this->gpu_kernels = new GpuKernel*[this->block_cnt];
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            this->gpu_kernels[i] =
+                          this->input_pars[i],
+                          this->output_pars[i]);
+        }else if(device_type == gpu){
+            this->generic_kernels[i].kernel_base =
                 new GpuKernel(this->params,
-                              this->input_pars[i],
-                              this->output_pars[i]);
-            this->gpu_kernels[i]->input_conversion();
-        }
-    }else if(this->mode == "tpu_p"){
-        this->tpu_kernels = new TpuKernel*[this->block_cnt];
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            this->tpu_kernels[i] =
+                          this->input_pars[i],
+                          this->output_pars[i]);
+        }else if(device_type == tpu){
+            this->generic_kernels[i].kernel_base =
                 new TpuKernel(this->params,
-                              this->input_pars[i],
-                              this->output_pars[i]);
-            this->tpu_kernels[i]->input_conversion();
+                          this->input_pars[i],
+                          this->output_pars[i]);
+        }else{
+            std::cout << __func__ << ": undefined device type: "
+                      << device_type << ", program exits."
+                      << std::endl;
+            exit(0);
         }
-    }else{
-        std::cout << __func__ << ": undefined partition mode: "
-                  << this->mode << ", program exits."
-                  << std::endl;
-        exit(0);
+        this->generic_kernels[i].kernel_base->input_conversion();
     }
 }
 
 double PartitionRuntime::run_partitions(){
     double kernel_ms = 0.0;
-    if(this->mode == "cpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            kernel_ms += this->cpu_kernels[i]->run_kernel();
-        }   
-    }else if(this->mode == "gpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            kernel_ms += this->gpu_kernels[i]->run_kernel();
-        }   
-    }else if(this->mode == "tpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            kernel_ms += this->tpu_kernels[i]->run_kernel();
-        }   
-    }else{
-        std::cout << __func__ << ": undefined partition mode: "
-                  << this->mode << ", program exits."
-                  << std::endl;
-        exit(0);
-    }
+    for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
+        kernel_ms += this->generic_kernels[i].kernel_base->run_kernel();
+    }   
     return kernel_ms;
 }
 
 void PartitionRuntime::transform_output(){
+    for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
+        this->generic_kernels[i].kernel_base->output_conversion();
+    }   
+    output_array_partition_gathering(this->params,
+                                     &(this->output),
+                                     this->output_pars);
+}
+
+DeviceType PartitionRuntime::mix_policy(unsigned i/*index of a tiling task*/){
+    DeviceType ret = undefine;
     if(this->mode == "cpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            this->cpu_kernels[i]->output_conversion();
-        }   
+        ret = cpu;
     }else if(this->mode == "gpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            this->gpu_kernels[i]->output_conversion();
-        }   
+        ret = gpu;
     }else if(this->mode == "tpu_p"){
-        for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-            this->tpu_kernels[i]->output_conversion();
-        }   
+        ret = tpu;
+    }else if(this->mode == "mix_p"){ // a default mixed GPU/edgeTPU concurrent mode
+        ret = (i%2 == 0)?gpu:tpu;
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
                   << std::endl;
         exit(0);
     }   
-    output_array_partition_gathering(this->params,
-                                     &(this->output),
-                                     this->output_pars);
+    return ret;
 }
 

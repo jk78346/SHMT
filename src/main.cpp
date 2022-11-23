@@ -13,131 +13,53 @@
 
 using namespace cv;
 
-float run_kernel_on_cpu(Params params, void* input, void* output){
+float run_kernel_on_single_device(const std::string& mode, Params& params, void* input, void* output){
     double kernel_ms = 0.0;
-    CpuKernel* cpu_kernel = new CpuKernel(params, input, output);
+    KernelBase* kernel = NULL;
+    if(mode == "cpu"){
+        kernel = new CpuKernel(params, input, output);
+    }else if(mode == "gpu"){
+        kernel = new GpuKernel(params, input, output);
+    }else if(mode == "tpu"){
+        kernel = new TpuKernel(params, input, output);
+    }else{
+        std::cout << __func__ << ": undefined execution mode: " << mode 
+                  << ", execution is skipped." << std::endl;
+    }
 
     // input array conversion from void* input
-    cpu_kernel->input_conversion();
+    kernel->input_conversion();
     
     // Actual kernel call
-    printf("CPU kernel starts.\n");
+    std::cout << mode << " kernel starts." << std::endl;
     for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += cpu_kernel->run_kernel();
+        kernel_ms += kernel->run_kernel();
     }
-    printf("CPU kernel ends.\n");
+    std::cout << mode << " kernel ends." << std::endl;
     
     // output array conversion back to void* output
-    cpu_kernel->output_conversion();
+    kernel->output_conversion();
 
-    delete cpu_kernel;
+    delete kernel;
     return (float)kernel_ms;
 }
 
-float run_kernel_on_cpu_tiling(Params params, void* input, void* output){
+float run_kernel_partition(const std::string& mode, Params params, void* input, void* output){
     double kernel_ms = 0.0;
 
     PartitionRuntime* p_run = new PartitionRuntime(params,
-                                                   "cpu_p",
+                                                   mode,
                                                    input,
                                                    output);
     p_run->prepare_partitions();
     
     // Actual kernel call
-    printf("CPU kernel starts.\n");
+    std::cout << mode << " kernel starts." << std::endl;
     for(int i = 0 ; i < params.iter ; i ++){
         // per iteration tiling calls
         kernel_ms += p_run->run_partitions();
     }
-    printf("CPU kernel ends.\n");
-
-    p_run->transform_output();
-
-    delete p_run;
-    return (float)kernel_ms;
-}
-
-float run_kernel_on_gpu(Params params, void* input, void* output){
-    double kernel_ms = 0.0;
-    GpuKernel* gpu_kernel = new GpuKernel(params, input, output);
-
-    // input array conversion from void* input
-    gpu_kernel->input_conversion();
-    
-    // Actual kernel call
-    printf("GPU kernel starts.\n");
-    for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += gpu_kernel->run_kernel();
-    }
-    printf("GPU kernel ends.\n");
-    
-    // output array conversion back to void* output
-    gpu_kernel->output_conversion();
-
-    delete gpu_kernel;
-    return (float)kernel_ms;
-}
-
-float run_kernel_on_gpu_tiling(Params params, void* input, void* output){
-    double kernel_ms = 0.0;
-
-    PartitionRuntime* p_run = new PartitionRuntime(params,
-                                                   "gpu_p",
-                                                   input,
-                                                   output);
-    p_run->prepare_partitions();
-    
-    // Actual kernel call
-    printf("GPU kernel starts.\n");
-    for(int i = 0 ; i < params.iter ; i ++){
-        // per iteration tiling calls
-        kernel_ms += p_run->run_partitions();
-    }
-    printf("GPU kernel ends.\n");
-
-    p_run->transform_output();
-
-    delete p_run;
-    return (float)kernel_ms;
-}
-
-float run_kernel_on_tpu(Params params, void* input, void* output){
-    double kernel_ms = 0.0;
-    TpuKernel* tpu_kernel = new TpuKernel(params, input, output);
-
-    // input array conversion from void* input
-    tpu_kernel->input_conversion();
-    
-    // Actual kernel call
-    printf("TPU kernel starts.\n");
-    for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += tpu_kernel->run_kernel();
-    }
-    printf("TPU kernel ends.\n");
-    
-    // output array conversion back to void* output
-    tpu_kernel->output_conversion();
-
-    delete tpu_kernel;
-    return (float)kernel_ms;
-}
-
-float run_kernel_on_tpu_tiling(Params params, void* input, void* output){
-    double kernel_ms = 0.0;
-
-    PartitionRuntime* p_run = new PartitionRuntime(params,
-                                                   "tpu_p",
-                                                   input,
-                                                   output);
-    p_run->prepare_partitions();
-    
-    // Actual kernel call
-    printf("TPU kernel starts.\n");
-    for(int i = 0 ; i < params.iter ; i ++){
-        // per iteration tiling calls
-        kernel_ms += p_run->run_partitions();
-    }
-    printf("TPU kernel ends.\n");
+    std::cout << mode << " kernel ends." << std::endl;
 
     p_run->transform_output();
 
@@ -149,24 +71,13 @@ float run_kernel(const std::string& mode, Params& params, void* input, void* out
     float kernel_ms = 0.0;
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
-    if(mode == "cpu"){
-        kernel_ms = run_kernel_on_cpu(params, input, output);        
-    }else if(mode == "cpu_p"){ // cpu partition mode
-        kernel_ms = run_kernel_on_cpu_tiling(params, input, output);        
-    }else if(mode == "gpu"){
-	    kernel_ms = run_kernel_on_gpu(params, input, output);        
-    }else if(mode == "gpu_p"){ // gpu partition mode
-        kernel_ms = run_kernel_on_gpu_tiling(params, input, output);        
-    }else if(mode == "tpu"){
-	    kernel_ms = run_kernel_on_tpu(params, input, output);        
-    }else if(mode == "tpu_p"){ // tpu partition mode
-	    kernel_ms = run_kernel_on_tpu_tiling(params, input, output);        
+    if(mode == "cpu" || mode == "gpu" || mode == "tpu"){
+        kernel_ms = run_kernel_on_single_device(mode, params, input, output); 
     }else{
-        std::cout << "undefined execution mode: " << mode << ", execution is skipped." << std::endl;
+        kernel_ms = run_kernel_partition(mode, params, input, output);
     }
     return kernel_ms;
 }
-
     
 int main(int argc, char* argv[]){
     if(argc != 7){
@@ -232,7 +143,8 @@ int main(int argc, char* argv[]){
     timing proposed_end = clk::now();
     
     // Get quality measurements
-    printf("Getting quality reseults...\n");
+    std::cout << "Getting quality reseults..." << std::endl;
+    
     Quality quality(params.problem_size, // m
                     params.problem_size, // n
                     params.problem_size, // ldn

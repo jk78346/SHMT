@@ -29,7 +29,7 @@ void kernel_existence_checking(std::unordered_map<std::string, T> func_table, co
 /* Base class for kernels*/
 class KernelBase{
 public:
-    ~KernelBase(){};
+    virtual ~KernelBase(){};
     /*
         The base input_conversion() API converts input data type from void* type.
         Return: function time in millisecond.
