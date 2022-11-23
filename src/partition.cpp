@@ -3,6 +3,21 @@
 #include "arrays.h"
 #include "partition.h"
 
+//#define CONCURRENT 1
+
+struct thread_data{
+    KernelBase* kernel_base;
+};
+
+void *RunKernelThread(void *my_args){
+    // getting argument(s)
+    struct thread_data *args = (struct thread_data*) my_args;
+    
+    double kernel_ms = 0.0;
+    kernel_ms += args->kernel_base->run_kernel();
+    pthread_exit(NULL);
+}
+
 PartitionRuntime::PartitionRuntime(Params params,
                                    std::string mode,
                                    void* input,
@@ -15,6 +30,7 @@ PartitionRuntime::PartitionRuntime(Params params,
     this->output = output;
     this->generic_kernels = new GenericKernel[this->block_cnt];
     this->dev_sequence = new DeviceType[this->block_cnt];
+    
     // For rand_p partition mode
     srand(time(NULL));
 };
@@ -68,14 +84,42 @@ void PartitionRuntime::prepare_partitions(){
         }
         this->generic_kernels[i].kernel_base->input_conversion();
     }
+
 }
 
 double PartitionRuntime::run_partitions(){
+#ifdef CONCURRENT
+    timing start = clk::now();
+    
+    //create pthreads to handle concurrent kernel execution on devices
+    pthread_t threads[this->block_cnt];
+    struct thread_data td[this->block_cnt];
+    int rc;
+    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+        td[i].kernel_base = this->generic_kernels[i].kernel_base; 
+        rc = pthread_create(&threads[i], NULL, RunKernelThread, (void *)&td[i]);
+        if(rc){
+            std::cout << __func__ << ": fail to create pthread " << i 
+                      << ", rc = " << rc << std::endl;
+            exit(-1);
+        }
+    }
+    
+    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+        pthread_join(threads[i], NULL);
+    }
+
+    timing end = clk::now();
+    double e2e_kernel_ms = get_time_ms(end, start);
+    std::cout << __func__ << ": e2e kernel time: " << e2e_kernel_ms << " (ms)" << std::endl;
+    return e2e_kernel_ms;
+#else
     double kernel_ms = 0.0;
     for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
         kernel_ms += this->generic_kernels[i].kernel_base->run_kernel();
     }   
     return kernel_ms;
+#endif
 }
 
 void PartitionRuntime::transform_output(){

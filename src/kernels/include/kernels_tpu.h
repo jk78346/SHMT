@@ -59,7 +59,15 @@ public:
         return get_time_ms(end, start);
     }
 
+    /*
+        TODO: separate out all stage timings of a single run_a_model() call
+        will do into input_conversion, actual kernel, output conversion.
+        Now measure the e2e time as kernel time as return to align with
+        partitioning runtime design. This is a must ToDo as a future performance 
+        improvement.
+    */
     virtual double run_kernel(){
+        timing start = clk::now();
         run_a_model(this->kernel_path,
                     this->params.iter,
                     this->input_kernel,
@@ -68,7 +76,8 @@ public:
                     this->out_size,
                     1/*scale*/
                     );
-        return 0.0; // kernel execution is skipped.
+        timing end = clk::now();
+        return get_time_ms(end, start);
     }
 
 private:

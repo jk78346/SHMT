@@ -2,6 +2,7 @@
 #define __PARTITION_H__
 #include <string>
 #include <iostream>
+#include <pthread.h>
 #include "params.h"
 #include "kernels_cpu.h"
 #include "kernels_gpu.h"
@@ -43,7 +44,7 @@ private:
 
     GenericKernel* generic_kernels;
     DeviceType* dev_sequence; // device sequence storing device types of each tiling block
-
+    
     std::vector<void*> input_pars;
     std::vector<void*> output_pars;
 };
