@@ -25,7 +25,7 @@ public:
     void prepare_partitions();
     double run_partitions();
     void transform_output();
-
+    void show_device_sequence();
 private:
     /*
         The main algorithm to determine tiling tasks to specific device(s). 
@@ -41,9 +41,8 @@ private:
     GpuKernel** gpu_kernels;
     TpuKernel** tpu_kernels;
 
-    //KernelBase** kernel_base;
     GenericKernel* generic_kernels;
-
+    DeviceType* dev_sequence; // device sequence storing device types of each tiling block
 
     std::vector<void*> input_pars;
     std::vector<void*> output_pars;

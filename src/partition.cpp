@@ -1,3 +1,5 @@
+#include <time.h>
+#include <stdlib.h>
 #include "arrays.h"
 #include "partition.h"
 
@@ -11,6 +13,10 @@ PartitionRuntime::PartitionRuntime(Params params,
     this->mode = mode;
     this->input = input;
     this->output = output;
+    this->generic_kernels = new GenericKernel[this->block_cnt];
+    this->dev_sequence = new DeviceType[this->block_cnt];
+    // For rand_p partition mode
+    srand(time(NULL));
 };
 
 PartitionRuntime::~PartitionRuntime(){
@@ -18,6 +24,7 @@ PartitionRuntime::~PartitionRuntime(){
         delete this->generic_kernels[i].kernel_base;
     }   
     delete this->generic_kernels;
+    delete this->dev_sequence;
     this->input_pars.clear();
     this->output_pars.clear();
 }
@@ -36,7 +43,6 @@ void PartitionRuntime::prepare_partitions(){
                                    this->output_pars);
 
     // assign partitions to each type of kernel handler
-    this->generic_kernels = new GenericKernel[this->block_cnt];
     for(unsigned int i = 0 ; i < this->block_cnt ; i++){
         auto device_type = this->mix_policy(i);
         if(device_type == cpu){
@@ -81,7 +87,8 @@ void PartitionRuntime::transform_output(){
                                      this->output_pars);
 }
 
-DeviceType PartitionRuntime::mix_policy(unsigned i/*index of a tiling task*/){
+DeviceType PartitionRuntime::mix_policy(unsigned i
+        /*index of a tiling task, no larger than this->block_cnt*/){
     DeviceType ret = undefine;
     if(this->mode == "cpu_p"){
         ret = cpu;
@@ -91,12 +98,23 @@ DeviceType PartitionRuntime::mix_policy(unsigned i/*index of a tiling task*/){
         ret = tpu;
     }else if(this->mode == "mix_p"){ // a default mixed GPU/edgeTPU concurrent mode
         ret = (i%2 == 0)?gpu:tpu;
+    }else if(this->mode == "rand_p"){ // randomly choose a device among cpu, gpu and tpu
+        int idx = rand()%3;
+        ret = (idx == 0)?cpu:((idx == 1)?gpu:tpu);
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
                   << std::endl;
         exit(0);
     }   
+    this->dev_sequence[i] = ret;
     return ret;
 }
 
+void PartitionRuntime::show_device_sequence(){
+    std::cout << __func__ << ": ";
+    for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
+        std::cout << this->dev_sequence[i] << " ";
+    }   
+    std::cout << std::endl;
+}

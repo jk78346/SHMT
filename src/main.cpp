@@ -62,6 +62,7 @@ float run_kernel_partition(const std::string& mode, Params params, void* input, 
     std::cout << mode << " kernel ends." << std::endl;
 
     p_run->transform_output();
+    p_run->show_device_sequence();
 
     delete p_run;
     return (float)kernel_ms;
