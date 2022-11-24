@@ -178,11 +178,14 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
         ret = gpu;
     }else if(this->mode == "tpu_p"){ // all partitions on tpu
         ret = tpu;
-    }else if(this->mode == "cgr_p"){ // randomly choose between cpu and gpu
+    }else if(this->mode == "all_p"){ // sequentially choose between cpu, gpu and tpu
+        int idx = i%3;
+        ret = (idx == 0)?cpu:((idx == 1)?gpu:tpu);
+    }else if(this->mode == "cgr_p"){ // sequentially choose between cpu and gpu
         ret = (i%2 == 0)?cpu:gpu;
-    }else if(this->mode == "gtr_p"){ // randomly choose between gpu and tpu
+    }else if(this->mode == "gtr_p"){ // sequentially choose between gpu and tpu
         ret = (i%2 == 0)?gpu:tpu;
-    }else if(this->mode == "ctr_p"){ // randomly choose between cpu and tpu
+    }else if(this->mode == "ctr_p"){ // sequentially choose between cpu and tpu
         ret = (i%2 == 0)?cpu:tpu;
     }else if(this->mode == "rand_p"){ // randomly choose a device among cpu, gpu and tpu
         int idx = rand()%3;

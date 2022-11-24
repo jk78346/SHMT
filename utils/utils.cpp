@@ -64,3 +64,50 @@ std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1
     return path;
 }
 
+void dump_to_csv(std::string log_file_path,
+                 std::string app_name,
+                 std::string baseline_mode,
+                 std::string proposed_mode,
+                 unsigned int problem_size,
+                 unsigned int block_size,
+                 unsigned int iter,
+                 Quality* quality,
+                 TimeBreakDown* baseline_time_breakdown,
+                 TimeBreakDown* proposed_time_breakdown){
+    std::fstream myfile;
+    // simply append baseline and proposed rows
+    myfile.open(log_file_path.c_str(), std::ios_base::app);
+    assert(myfile.is_open()); 
+    myfile // baseline mode
+           << app_name << ","
+           << problem_size << ","
+           << block_size << ","
+           << baseline_mode << ","
+           << iter << ","
+           << baseline_time_breakdown->input_time_ms << ","
+           << baseline_time_breakdown->kernel_time_ms << ","
+           << baseline_time_breakdown->output_time_ms << ","
+           << baseline_time_breakdown->get_total_time_ms() << std::endl;
+
+           // proposed mode
+    myfile << app_name << ","
+           << problem_size << ","
+           << block_size << ","
+           << proposed_mode << ","
+           << iter << ","
+           << proposed_time_breakdown->input_time_ms << ","
+           << proposed_time_breakdown->kernel_time_ms << ","
+           << proposed_time_breakdown->output_time_ms << ","
+           << proposed_time_breakdown->get_total_time_ms() << ","
+           << (baseline_time_breakdown->kernel_time_ms /
+                proposed_time_breakdown->kernel_time_ms) << ","
+           << (baseline_time_breakdown->get_total_time_ms() /
+                proposed_time_breakdown->get_total_time_ms()) << ","
+           << quality->rmse(0) / 100 << ","
+           << quality->error_rate(0) / 100 << ","
+           << quality->error_percentage(0) / 100 << ","
+           << quality->ssim(0) << ","
+           << quality->pnsr(0) << "," << std::endl;
+    myfile.close();
+}
+

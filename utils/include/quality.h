@@ -1,3 +1,6 @@
+#ifndef __QUALITY_H__
+#define __QUALITY_H__
+
 class Quality{
     public:
     	// default constructor
@@ -23,3 +26,5 @@ class Quality{
 	    float* target_mat;
 	    float* baseline_mat;
 };
+#endif
+
