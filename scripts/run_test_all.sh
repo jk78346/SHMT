@@ -8,7 +8,7 @@ iter=1
 baseline_mode="cpu"
 log_file_path="../log/record.csv"
 
-for app_name in "sobel_2d"
+for app_name in "sobel_2d" "mean_2d" "laplacian_2d"
 do
     for problem_size in 2048 4096 8192
     do
