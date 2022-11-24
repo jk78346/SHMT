@@ -66,10 +66,10 @@ public:
         partitioning runtime design. This is a must ToDo as a future performance 
         improvement.
     */
-    virtual double run_kernel(){
+    virtual double run_kernel(unsigned int iter){
         timing start = clk::now();
         run_a_model(this->kernel_path,
-                    this->params.iter,
+                    iter,
                     this->input_kernel,
                     this->in_size,
                     this->output_kernel,

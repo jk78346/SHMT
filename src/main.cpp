@@ -13,8 +13,17 @@
 
 using namespace cv;
 
-float run_kernel_on_single_device(const std::string& mode, Params& params, void* input, void* output){
-    double kernel_ms = 0.0;
+struct TimeBreakDown{
+    double input_time_ms;
+    double kernel_time_ms;
+    double output_time_ms;
+};
+
+void run_kernel_on_single_device(const std::string& mode, 
+                                  Params& params, 
+                                  void* input, 
+                                  void* output,
+                                  struct TimeBreakDown& time_breakdown){
     KernelBase* kernel = NULL;
     if(mode == "cpu"){
         kernel = new CpuKernel(params, input, output);
@@ -28,65 +37,71 @@ float run_kernel_on_single_device(const std::string& mode, Params& params, void*
     }
 
     // input array conversion from void* input
-    kernel->input_conversion();
+    time_breakdown.input_time_ms = kernel->input_conversion();
     
     // Actual kernel call
-    std::cout << mode << " kernel starts." << std::endl;
-    for(int i = 0 ; i < params.iter ; i ++){
-        kernel_ms += kernel->run_kernel();
-    }
-    std::cout << mode << " kernel ends." << std::endl;
+    std::cout << mode << " mode of kernel starts." << std::endl;
+    time_breakdown.kernel_time_ms = kernel->run_kernel(params.iter);
+    std::cout << mode << " mode of kernel ends." << std::endl;
     
     // output array conversion back to void* output
-    kernel->output_conversion();
+    time_breakdown.output_time_ms = kernel->output_conversion();
 
     delete kernel;
-    return (float)kernel_ms;
 }
 
-float run_kernel_partition(const std::string& mode, Params params, void* input, void* output){
-    double kernel_ms = 0.0;
-
+void run_kernel_partition(const std::string& mode, 
+                          Params params, 
+                          void* input, 
+                          void* output,
+                          struct TimeBreakDown& time_breakdown){
     PartitionRuntime* p_run = new PartitionRuntime(params,
                                                    mode,
                                                    input,
                                                    output);
-    p_run->prepare_partitions();
+    time_breakdown.input_time_ms = p_run->prepare_partitions();
     
     // Actual kernel call
-    std::cout << mode << " kernel starts." << std::endl;
-    for(int i = 0 ; i < params.iter ; i ++){
-        // per iteration tiling calls
-        kernel_ms += p_run->run_partitions();
-    }
-    std::cout << mode << " kernel ends." << std::endl;
+    std::cout << mode << " mode of kernel starts." << std::endl;
+    time_breakdown.kernel_time_ms = p_run->run_partitions();
+    std::cout << mode << " mode of kernel ends." << std::endl;
 
-    p_run->transform_output();
+    time_breakdown.output_time_ms = p_run->transform_output();
     p_run->show_device_sequence();
 
     delete p_run;
-    return (float)kernel_ms;
 }
 
-float run_kernel(const std::string& mode, Params& params, void* input, void* output){
-    float kernel_ms = 0.0;
+void run_kernel(const std::string& mode, 
+                 Params& params, 
+                 void* input, 
+                 void* output,
+                 struct TimeBreakDown& time_breakdown){
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
     if(mode == "cpu" || mode == "gpu" || mode == "tpu"){
-        kernel_ms = run_kernel_on_single_device(mode, params, input, output); 
+        run_kernel_on_single_device(mode, 
+                                    params, 
+                                    input, 
+                                    output,
+                                    time_breakdown); 
     }else{
-        kernel_ms = run_kernel_partition(mode, params, input, output);
+        run_kernel_partition(mode, 
+                             params, 
+                             input, 
+                             output,
+                             time_breakdown);
     }
-    return kernel_ms;
 }
-    
+   
+
 int main(int argc, char* argv[]){
     if(argc != 7){
         std::cout << "Usage: " << argv[0] 
                   << " <application name>" // kernel's name
                   << " <problem_size>" // given problem size
                   << " <block_size>" // desired blocking size (effective only if tiling mode(s) is chosen.)
-                  << " <iter>" // number of iteration
+                  << " <iter>" // number of iteration on kernel execution
                   << " <baseline mode>"
                   << " <proposed mode>" 
                   << std::endl;
@@ -123,24 +138,26 @@ int main(int argc, char* argv[]){
                         &input_array,
                         &output_array_baseline,
                         &output_array_proposed);
-
-    float baseline_kernel_ms = 0;
-    float proposed_kernel_ms = 0;
     
+    struct TimeBreakDown baseline_time_breakdown;
+    struct TimeBreakDown proposed_time_breakdown;
+
     // Start to run baseline version of the application's implementation.
     timing baseline_start = clk::now();
-    baseline_kernel_ms = run_kernel(baseline_mode, 
-                                    params, 
-                                    input_array, 
-                                    output_array_baseline);
+    run_kernel(baseline_mode, 
+               params, 
+               input_array, 
+               output_array_baseline,
+               baseline_time_breakdown);
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation.
     timing proposed_start = clk::now();
-    proposed_kernel_ms = run_kernel(proposed_mode, 
-                                    params, 
-                                    input_array, 
-                                    output_array_proposed);
+    run_kernel(proposed_mode, 
+               params, 
+               input_array, 
+               output_array_proposed,
+               proposed_time_breakdown);
     timing proposed_end = clk::now();
     
     // Get quality measurements
@@ -157,12 +174,23 @@ int main(int argc, char* argv[]){
     double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
     double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
     
-    std::cout << "===== Latency =====" << std::endl;
-    std::cout << baseline_mode << "\t kernel time: " << baseline_kernel_ms/iter 
-              << " (ms), averaged over " << iter << " time(s)." << std::endl;
-    std::cout << proposed_mode << "\t kernel time: " << proposed_kernel_ms/iter
-              << " (ms), averaged over " << iter << " time(s)." << std::endl;
-    std::cout << baseline_mode << "\t    e2e time: " << baseline_e2e_ms << " (ms)" << std::endl;
-    std::cout << proposed_mode << "\t    e2e time: " << proposed_e2e_ms << " (ms)" << std::endl;
+    std::cout << "=============== Latency ===============" << std::endl;
+    std::cout << std::setprecision(7);
+    std::cout << "        modes compared: \t" << baseline_mode << "\t" 
+                                              << proposed_mode << std::endl;
+    std::cout << " input conversion time: " 
+              << baseline_time_breakdown.input_time_ms << " (ms), " 
+              << proposed_time_breakdown.input_time_ms << " (ms)" << std::endl;
+    std::cout << "           kernel time: " 
+              << baseline_time_breakdown.kernel_time_ms/iter << " (ms), "
+              << proposed_time_breakdown.kernel_time_ms/iter << " (ms)"
+              << ", averaged over " << iter << " time(s)." << std::endl;
+    std::cout << "output conversion time: " 
+              << baseline_time_breakdown.output_time_ms << " (ms), " 
+              << proposed_time_breakdown.output_time_ms << " (ms)" << std::endl;
+    std::cout << "--------------- Summary ---------------" << std::endl;
+    std::cout << "              e2e time: " << baseline_e2e_ms << " (ms), " 
+                                            << proposed_e2e_ms << " (ms)" 
+                                            << std::endl;
     return 0;
 }

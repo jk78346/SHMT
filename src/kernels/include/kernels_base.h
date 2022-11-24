@@ -46,7 +46,7 @@ public:
         The base run_kernel() API invokes the acutal kernel execution.
         Return: function time in millisecond.
     */
-    virtual double run_kernel(){ return 0.0; };
+    virtual double run_kernel(unsigned int iter){ return 0.0; };
 };
 
 #endif

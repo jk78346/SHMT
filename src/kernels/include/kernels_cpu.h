@@ -68,12 +68,12 @@ public:
         return get_time_ms(end, start);
     }
 
-    virtual double run_kernel(){
+    virtual double run_kernel(unsigned int iter){
         std::string app_name = this->params.app_name;
         if(if_kernel_in_table(this->func_table_cv, app_name)){
-            return this->run_kernel_opencv();
+            return this->run_kernel_opencv(iter);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            return this->run_kernel_float();
+            return this->run_kernel_float(iter);
         }else{
             // app_name not found in any table. 
         }
@@ -82,22 +82,26 @@ public:
 
 private:
     /* opencv type of input/output */
-    double run_kernel_opencv(){
+    double run_kernel_opencv(unsigned int iter){
         kernel_existence_checking(this->func_table_cv, this->params.app_name);
         timing start = clk::now();
-        this->func_table_cv[this->params.app_name](this->input_array_type.mat, 
-                                                   this->output_array_type.mat);
+        for(unsigned int i = 0 ; i < iter ; i++){
+            this->func_table_cv[this->params.app_name](this->input_array_type.mat, 
+                                                       this->output_array_type.mat);
+        }
         timing end = clk::now();
         return get_time_ms(end, start);
     }
 
     /* float type of input/output */
-    double run_kernel_float(){
+    double run_kernel_float(unsigned int iter){
         kernel_existence_checking(this->func_table_fp, this->params.app_name);
         timing start = clk::now();
-        this->func_table_fp[this->params.app_name](this->params, 
-                                                   this->input_array_type.fp, 
-                                                   this->output_array_type.fp);
+        for(unsigned int i = 0 ; i < iter ; i++){
+            this->func_table_fp[this->params.app_name](this->params, 
+                                                       this->input_array_type.fp, 
+                                                       this->output_array_type.fp);
+        }
         timing end = clk::now();
         return get_time_ms(end, start);
     }

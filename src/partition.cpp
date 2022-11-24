@@ -8,6 +8,7 @@
 struct thread_data{
     GenericKernel* generic_kernels;
     unsigned int block_cnt;
+    unsigned int iter;
     double kernel_ms;
     // The device type the thread is representing.
     DeviceType device_type;
@@ -18,6 +19,7 @@ void *RunDeviceThread(void *my_args){
     struct thread_data *args = (struct thread_data*) my_args;
     GenericKernel* generic_kernels = args->generic_kernels;
     unsigned int block_cnt = args->block_cnt;
+    unsigned int iter = args->iter;
     double kernel_ms = args->kernel_ms;
     DeviceType device_type = args->device_type;
     
@@ -27,7 +29,7 @@ void *RunDeviceThread(void *my_args){
            the type this consumer thread is representing. 
          */
         if(generic_kernels[i].device_type == device_type){
-            kernel_ms += generic_kernels[i].kernel_base->run_kernel();
+            kernel_ms += generic_kernels[i].kernel_base->run_kernel(iter);
         }
     }
     args->kernel_ms = kernel_ms;
@@ -62,7 +64,8 @@ PartitionRuntime::~PartitionRuntime(){
     this->output_pars.clear();
 }
 
-void PartitionRuntime::prepare_partitions(){
+double PartitionRuntime::prepare_partitions(){
+    timing start = clk::now();
     // allocate input partitions and initialization
     array_partition_initialization(this->params,
                                    false,
@@ -104,7 +107,8 @@ void PartitionRuntime::prepare_partitions(){
         }
         this->generic_kernels[i].kernel_base->input_conversion();
     }
-
+    timing end = clk::now();
+    return get_time_ms(end, start);
 }
 
 double PartitionRuntime::run_partitions(){
@@ -128,6 +132,7 @@ double PartitionRuntime::run_partitions(){
     for(unsigned int i = 0 ; i < this->dev_type_cnt ; i++){
         td[i].generic_kernels = this->generic_kernels; 
         td[i].block_cnt = this->block_cnt;
+        td[i].iter = this->params.iter;
         pthread_create(&threads[i], NULL, RunDeviceThread, (void *)&td[i]);
     }
 
@@ -146,32 +151,39 @@ double PartitionRuntime::run_partitions(){
 #else
     double kernel_ms = 0.0;
     for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-        kernel_ms += this->generic_kernels[i].kernel_base->run_kernel();
+        kernel_ms += this->generic_kernels[i].kernel_base->run_kernel(iter);
     }   
     return kernel_ms;
 #endif
 }
 
-void PartitionRuntime::transform_output(){
+double PartitionRuntime::transform_output(){
+    timing start = clk::now();
     for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
         this->generic_kernels[i].kernel_base->output_conversion();
     }   
     output_array_partition_gathering(this->params,
                                      &(this->output),
                                      this->output_pars);
+    timing end = clk::now();
+    return get_time_ms(end, start);
 }
 
 DeviceType PartitionRuntime::mix_policy(unsigned i
         /*index of a tiling task, no larger than this->block_cnt*/){
     DeviceType ret = undefine;
-    if(this->mode == "cpu_p"){
+    if(this->mode == "cpu_p"){ // all partitions on cpu
         ret = cpu;
-    }else if(this->mode == "gpu_p"){
+    }else if(this->mode == "gpu_p"){ // all partitions on gpu
         ret = gpu;
-    }else if(this->mode == "tpu_p"){
+    }else if(this->mode == "tpu_p"){ // all partitions on tpu
         ret = tpu;
-    }else if(this->mode == "mix_p"){ // a default mixed GPU/edgeTPU concurrent mode
+    }else if(this->mode == "cgr_p"){ // randomly choose between cpu and gpu
+        ret = (i%2 == 0)?cpu:gpu;
+    }else if(this->mode == "gtr_p"){ // randomly choose between gpu and tpu
         ret = (i%2 == 0)?gpu:tpu;
+    }else if(this->mode == "ctr_p"){ // randomly choose between cpu and tpu
+        ret = (i%2 == 0)?cpu:tpu;
     }else if(this->mode == "rand_p"){ // randomly choose a device among cpu, gpu and tpu
         int idx = rand()%3;
         ret = (idx == 0)?cpu:((idx == 1)?gpu:tpu);

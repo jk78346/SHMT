@@ -23,9 +23,9 @@ public:
                      void* output);
     
     ~PartitionRuntime();
-    void prepare_partitions();
+    double prepare_partitions();
     double run_partitions();
-    void transform_output();
+    double transform_output();
     void show_device_sequence();
 private:
     /*

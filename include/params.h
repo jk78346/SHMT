@@ -23,7 +23,7 @@ public:
     int problem_size;
     int block_size;
     bool tiling_mode;
-    int iter;
+    unsigned int iter;
     float mix_p;
     std::string input_data_path;
 
