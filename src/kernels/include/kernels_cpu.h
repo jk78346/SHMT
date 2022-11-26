@@ -128,6 +128,7 @@ private:
     };
     func_table_float func_table_fp = {
         std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d)
+        std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d)
     };
 
     // kernels
@@ -136,6 +137,7 @@ private:
     static void mean_2d(const Mat in_img, Mat& out_img);
     static void laplacian_2d(const Mat in_img, Mat& out_img);
     static void fft_2d(Params params, float* input, float* output);
+    static void dct8x8_2d(Params params, float* input, float* output); 
 };
 
 #endif
