@@ -127,7 +127,7 @@ private:
         std::make_pair<std::string, func_ptr_opencv> ("laplacian_2d", this->laplacian_2d)
     };
     func_table_float func_table_fp = {
-        std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d)
+        std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d),
         std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d)
     };
 
