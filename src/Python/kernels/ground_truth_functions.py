@@ -1,6 +1,7 @@
+import scipy
 import cv2 as cv
 import numpy as np
-import scipy
+from scipy.fftpack import dct, idct
 
 class Applications:
     """ This class provides a series of application functions as ground truth. """
@@ -73,24 +74,15 @@ class Applications:
             GPGTPU/samples/3_Imaging/convolutionFFT2D """
         dataH, dataW = src.shape
         kernelH, kenrelW = kernel.shape  # 7, 6
-        #kernel = np.random.randint(0, 16, (kernelH, kernelW))
         ret = scipy.signal.fftconvolve(src, kernel, mode='same')
         return ret
-        #result = np.empty(src.shape) 
-        #for y in range(dataH):
-        #    for x in range(dataW):
-        #        _sum = 0
-        #        for ky in range(-1*(kernelH - kernelY - 1), kernelY+1, 1):
-        #            for kx in range(-1*(kernelW - kernelX - 1), kernelX+1, 1):
-        #                dy = y + ky
-        #                dx = x + kx
-        #                dy = 0 if dy < 0 else dy
-        #                dx = 0 if dx < 0 else dx
-        #                dy = dataH - 1 if dy >= dataH else dy
-        #                dx = dataW - 1 if dx >= dataW else dx
-        #                _sum += src[dy][dx] * kernel[kernelY - ky][kernelX - kx]
-        #        result[y][x] = _sum
-        #return result
+
+    @staticmethod
+    def dct8x8_2d(src):
+        """ This function implements dct8x8. """
+        imF = dct(dct(src.T, norm='ortho').T, norm='ortho')
+        return imF
+        #return idct(idct(imF.T, norm='ortho').T, norm='ortho')
 
     @staticmethod
     def histogram256(src):
