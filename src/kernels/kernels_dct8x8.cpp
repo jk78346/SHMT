@@ -20,7 +20,7 @@ float C_norm = 0.3535533905932737f; // 1 / (8^0.5)
 /**
 *  JPEG quality=0_of_12 quantization matrix
 */
-float Q[BLOCK_SIZE2] =
+float Q_array[BLOCK_SIZE2] =
 {
     32.f,  33.f,  51.f,  81.f,  66.f,  39.f,  34.f,  17.f,
     33.f,  36.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,
@@ -91,16 +91,16 @@ float round_f(float num)
 void quantizeGoldFloat(float *fSrcDst, int Stride, int width, int height)
 {
 
-    //perform block wise in-place quantization using Q
-    //Q(A) = round(A ./ Q) .* Q;
+    //perform block wise in-place quantization using Q_array
+    //Q_array(A) = round(A ./ Q_array) .* Q_array;
     for (int i=0; i<height; i++)
     {
         for (int j=0; j<width; j++)
         {
             int qx = j % BLOCK_SIZE;
             int qy = i % BLOCK_SIZE;
-            float quantized = round_f(fSrcDst[i*Stride+j] / Q[(qy<<BLOCK_SIZE_LOG2)+qx]);
-            fSrcDst[i*Stride+j] = quantized * Q[(qy<<BLOCK_SIZE_LOG2)+qx];
+            float quantized = round_f(fSrcDst[i*Stride+j] / Q_array[(qy<<BLOCK_SIZE_LOG2)+qx]);
+            fSrcDst[i*Stride+j] = quantized * Q_array[(qy<<BLOCK_SIZE_LOG2)+qx];
         }
     }
 }
@@ -161,8 +161,8 @@ void computeIDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, 
     Reference: samples/3_Imaging/dct8x8/dct8x8.cu: Gold2
 */
 void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
-    int width  = params.block_size;
-    int height = params.block_size;
+    int width  = params.get_kernel_size();
+    int height = params.get_kernel_size();
     int StrideF = width;
     float* ImgF2 = (float*) malloc(width * height * sizeof(float));  
     

@@ -20,8 +20,8 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
     float *h_Result = output;
     float *h_Data = input;
     float *h_Kernel = fft_2d_kernel_array;
-    int dataH = params.block_size;
-    int dataW = params.block_size;
+    int dataH = params.get_kernel_size();
+    int dataW = params.get_kernel_size();
     int kernelH = 7;
     int kernelW = 6;
     int kernelY = 3;
