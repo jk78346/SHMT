@@ -7,6 +7,10 @@
     https://stackoverflow.com/questions/10167534/how-to-find-out-what-type-of-a-mat-object-is-with-mattype-in-opencv
 */
 
+#define ASSERT_WITH_MESSAGE(condition, message) do { \
+if (!(condition)) { std::cout << message << std::endl; } \
+assert ((condition)); } while(false)
+
 double get_time_ms(timing end, timing start){
     return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000.0;
 }
@@ -55,12 +59,17 @@ void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
     }
 }
 
-std::string get_edgetpu_kernel_path(std::string app_name, int shape0, int shape1){
+std::string get_edgetpu_kernel_path(std::string app_name, 
+                                    int shape0, 
+                                    int shape1){
     std::string path =  "../models/"+ 
-                        app_name+"_"+std::to_string(shape0)+"x"+std::to_string(shape1)+"/"+
+                        app_name+"_"+std::to_string(shape0)+"x"+
+                                     std::to_string(shape1)+"/"+
                         app_name+"_edgetpu.tflite";
     std::ifstream ifile(path);
-    assert(ifile);
+    ASSERT_WITH_MESSAGE(ifile.is_open(), 
+                        __func__ << ": edgeTPU kernel file: " 
+                                 << path << " doesn't exist.");
     return path;
 }
 

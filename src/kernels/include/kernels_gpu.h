@@ -81,6 +81,9 @@ public:
             return this->run_kernel_float(iter);
         }else{
             // app_name not found in any table. 
+            std::cout << __func__ << ": kernel name: " << app_name 
+                      << " not found, program exists." << std::endl;
+            std::exit(0);
         }
         return 0.0; // kernel execution is skipped.
     }

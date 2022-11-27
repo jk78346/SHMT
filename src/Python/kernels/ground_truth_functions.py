@@ -81,8 +81,7 @@ class Applications:
     def dct8x8_2d(src):
         """ This function implements dct8x8. """
         imF = dct(dct(src.T, norm='ortho').T, norm='ortho')
-        return imF
-        #return idct(idct(imF.T, norm='ortho').T, norm='ortho')
+        return idct(idct(imF.T, norm='ortho').T, norm='ortho')
 
     @staticmethod
     def histogram256(src):

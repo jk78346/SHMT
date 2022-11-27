@@ -157,7 +157,7 @@ void computeIDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, 
 
 
 /*
-    CPU dct8x8. This implementation requires both dimensions of inputarray to be multiply of 8. Incorrect otherwise.
+    CPU dct8x8. This implementation requires both dimensions of input/output arrays to be multiply of 8. Incorrect otherwise.
     Reference: samples/3_Imaging/dct8x8/dct8x8.cu: Gold2
 */
 void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
