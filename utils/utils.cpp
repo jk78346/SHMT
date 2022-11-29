@@ -94,9 +94,9 @@ void dump_to_csv(std::string log_file_path,
            << baseline_mode << ","
            << iter << ","
            << baseline_time_breakdown->input_time_ms << ","
-           << baseline_time_breakdown->kernel_time_ms << ","
+           << baseline_time_breakdown->kernel_time_ms / iter << ","
            << baseline_time_breakdown->output_time_ms << ","
-           << baseline_time_breakdown->get_total_time_ms() << std::endl;
+           << baseline_time_breakdown->get_total_time_ms(iter) << std::endl;
 
            // proposed mode
     myfile << app_name << ","
@@ -105,13 +105,13 @@ void dump_to_csv(std::string log_file_path,
            << proposed_mode << ","
            << iter << ","
            << proposed_time_breakdown->input_time_ms << ","
-           << proposed_time_breakdown->kernel_time_ms << ","
+           << proposed_time_breakdown->kernel_time_ms / iter << ","
            << proposed_time_breakdown->output_time_ms << ","
-           << proposed_time_breakdown->get_total_time_ms() << ","
+           << proposed_time_breakdown->get_total_time_ms(iter) << ","
            << (baseline_time_breakdown->kernel_time_ms /
                 proposed_time_breakdown->kernel_time_ms) << ","
-           << (baseline_time_breakdown->get_total_time_ms() /
-                proposed_time_breakdown->get_total_time_ms()) << ","
+           << (baseline_time_breakdown->get_total_time_ms(iter) /
+                proposed_time_breakdown->get_total_time_ms(iter)) << ","
            << quality->rmse(0) / 100 << ","
            << quality->error_rate(0) / 100 << ","
            << quality->error_percentage(0) / 100 << ","
