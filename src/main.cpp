@@ -158,7 +158,7 @@ int main(int argc, char* argv[]){
     timing proposed_end = clk::now();
     
     // Get quality measurements
-    std::cout << "Getting quality reseults..." << std::endl;
+    std::cout << "Getting quality results..." << std::endl;
     
     Quality* quality = new Quality(params.problem_size, // m
                                    params.problem_size, // n

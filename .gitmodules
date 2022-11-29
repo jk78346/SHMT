@@ -4,3 +4,6 @@
 [submodule "third_party/GPUJPEG"]
 	path = third_party/GPUJPEG
 	url = git@github.com:CESNET/GPUJPEG.git
+[submodule "third_party/concurrentqueue"]
+	path = third_party/concurrentqueue
+	url = git@github.com:cameron314/concurrentqueue.git

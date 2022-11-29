@@ -26,7 +26,9 @@ public:
     double prepare_partitions();
     double run_partitions();
     double transform_output();
+    void create_kernel_by_type(unsigned int block_id, DeviceType device_type);
     void show_device_sequence();
+    unsigned int dev_type_cnt = 3;
 private:
     /*
         The main algorithm to determine tiling tasks to specific device(s). 
@@ -38,7 +40,6 @@ private:
     std::string mode = "cpu_p"; // partition mode, default as cpu_p
     void* input;
     void* output;
-    unsigned int dev_type_cnt = 3;
     CpuKernel** cpu_kernels;
     GpuKernel** gpu_kernels;
     TpuKernel** tpu_kernels;
