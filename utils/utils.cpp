@@ -75,7 +75,6 @@ std::string get_edgetpu_kernel_path(std::string app_name,
 
 void dump_to_csv(std::string log_file_path,
                  std::string app_name,
-                 std::string baseline_mode,
                  std::string proposed_mode,
                  unsigned int problem_size,
                  unsigned int block_size,
@@ -87,17 +86,6 @@ void dump_to_csv(std::string log_file_path,
     // simply append baseline and proposed rows
     myfile.open(log_file_path.c_str(), std::ios_base::app);
     assert(myfile.is_open()); 
-    myfile // baseline mode
-           << app_name << ","
-           << problem_size << ","
-           << block_size << ","
-           << baseline_mode << ","
-           << iter << ","
-           << baseline_time_breakdown->input_time_ms << ","
-           << baseline_time_breakdown->kernel_time_ms / iter << ","
-           << baseline_time_breakdown->output_time_ms << ","
-           << baseline_time_breakdown->get_total_time_ms(iter) << std::endl;
-
            // proposed mode
     myfile << app_name << ","
            << problem_size << ","

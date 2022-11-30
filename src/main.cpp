@@ -120,18 +120,23 @@ int main(int argc, char* argv[]){
     std::string proposed_mode = argv[idx++];
     std::string log_file_path = argv[idx++];
 
-    Params params(app_name, 
-                  problem_size, 
-                  block_size, 
-                  false, // default no tiling mode. can be reset anytime later
-                  iter);
+    Params baseline_params(app_name,
+                           problem_size, 
+                           block_size, 
+                           false, // default no tiling mode. can be reset anytime later
+                           1); 
+    Params proposed_params(app_name,
+                           problem_size, 
+                           block_size, 
+                           false, // default no tiling mode. can be reset anytime later
+                           iter);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
     void* output_array_proposed = NULL;
 
     // input/output array allocation and inititalization
-    data_initialization(params, 
+    data_initialization(proposed_params, 
                         &input_array,
                         &output_array_baseline,
                         &output_array_proposed);
@@ -142,7 +147,7 @@ int main(int argc, char* argv[]){
     // Start to run baseline version of the application's implementation.
     timing baseline_start = clk::now();
     run_kernel(baseline_mode, 
-               params, 
+               baseline_params, 
                input_array, 
                output_array_baseline,
                baseline_time_breakdown);
@@ -151,7 +156,7 @@ int main(int argc, char* argv[]){
     // Start to run proposed version of the application's implementation.
     timing proposed_start = clk::now();
     run_kernel(proposed_mode, 
-               params, 
+               proposed_params, 
                input_array, 
                output_array_proposed,
                proposed_time_breakdown);
@@ -160,9 +165,9 @@ int main(int argc, char* argv[]){
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
     
-    Quality* quality = new Quality(params.problem_size, // m
-                                   params.problem_size, // n
-                                   params.problem_size, // ldn
+    Quality* quality = new Quality(proposed_params.problem_size, // m
+                                   proposed_params.problem_size, // n
+                                   proposed_params.problem_size, // ldn
                                    (float*)output_array_proposed, 
                                    (float*)output_array_baseline);
     quality->print_results(1/*verbose*/);
@@ -179,27 +184,35 @@ int main(int argc, char* argv[]){
               << baseline_time_breakdown->input_time_ms << " (ms), " 
               << proposed_time_breakdown->input_time_ms << " (ms)" << std::endl;
     std::cout << "           kernel time: " 
-              << baseline_time_breakdown->kernel_time_ms/iter << " (ms), "
-              << proposed_time_breakdown->kernel_time_ms/iter << " (ms)"
-              << ", averaged over " << iter << " time(s)." << std::endl;
+              << baseline_time_breakdown->kernel_time_ms/baseline_params.iter 
+              << " (ms), "
+              << proposed_time_breakdown->kernel_time_ms/proposed_params.iter 
+              << " (ms)"
+              << ", proposed one is averaged over " << proposed_params.iter 
+              << " time(s)." << std::endl;
     std::cout << "output conversion time: " 
               << baseline_time_breakdown->output_time_ms << " (ms), " 
               << proposed_time_breakdown->output_time_ms << " (ms)" << std::endl;
     std::cout << "--------------- Summary ---------------" << std::endl;
-    std::cout << "              e2e time: " << baseline_e2e_ms << " (ms), " 
-                                            << proposed_e2e_ms << " (ms)" 
-                                            << std::endl;
+    std::cout << "     averaged e2e time: " 
+              << baseline_time_breakdown->get_total_time_ms(baseline_params.iter) 
+              << " (ms), " 
+              << proposed_time_breakdown->get_total_time_ms(proposed_params.iter) 
+              << " (ms), (iteration averaged)" << std::endl;
+    std::cout << "      overall e2e time: " 
+              << baseline_e2e_ms << " (ms), " 
+              << proposed_e2e_ms << " (ms), (iteration included)" << std::endl;
     // dump record to csv file
-    std::cout << "dumping results into file: " << log_file_path << std::endl;
+    std::cout << "dumping proposed results into file: " 
+              << log_file_path << std::endl;
     dump_to_csv(log_file_path, 
-                params.app_name,
-                baseline_mode,
+                proposed_params.app_name,
                 proposed_mode,
-                params.problem_size,
-                params.block_size,
-                params.iter,
+                proposed_params.problem_size,
+                proposed_params.block_size,
+                proposed_params.iter,
                 quality, 
-                baseline_time_breakdown, 
+                baseline_time_breakdown,
                 proposed_time_breakdown);
 
     delete quality;

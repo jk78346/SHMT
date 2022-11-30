@@ -16,7 +16,7 @@ do
         do
             if [ ${problem_size} -gt ${block_size} ]
             then
-                for proposed_mode in "cpu_p" "gpu_p" "tpu_p" "all_p" "gtr_p" "ctr_p" "cgr_p"
+                for proposed_mode in "cpu" "gpu" "cpu_p" "gpu_p" "tpu_p" "cgt_s" "cg_s" "gt_s" "ct_s" "cgt_b" "cg_b" "gt_b" "ct_b"
                 do
                     sudo ./gpgtpu ${app_name} ${problem_size} ${block_size} ${iter} ${baseline_mode} ${proposed_mode} ${log_file_path}
                 done
