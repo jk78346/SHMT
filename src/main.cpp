@@ -124,7 +124,7 @@ int main(int argc, char* argv[]){
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           1); 
+                           iter); 
     Params proposed_params(app_name,
                            problem_size, 
                            block_size, 
