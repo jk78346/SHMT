@@ -106,6 +106,7 @@ class TrainParams(TrainParamsBase):
                                      size=size,
                                      in_shape=(size, size),
                                      out_shape=(size, size),
+                                     min_delta=1e-5,
                                      optimizer=keras.optimizers.Adam(learning_rate=0.005))
         elif model_name == 'fft_2d':
             TrainParamsBase.__init__(self, 
