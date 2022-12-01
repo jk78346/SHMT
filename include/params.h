@@ -9,7 +9,6 @@ public:
           int block_size=2048,
           bool tiling_mode = false,
           int iter=1,
-          float mix_p=0.5,
           std::string input_data_path="../data/lena_gray_2Kx2K.bmp");
     
     void set_tiling_mode(bool);
@@ -24,7 +23,6 @@ public:
     int block_size;
     bool tiling_mode;
     unsigned int iter;
-    float mix_p;
     std::string input_data_path;
 
 private:        

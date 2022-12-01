@@ -26,6 +26,16 @@ void read_img(const std::string file_name, int rows, int cols, Mat& img){
     assert(img.size().width * img.size().height == rows * cols);
 }
 
+void save_float_image(const std::string file_name, 
+                      unsigned int rows, 
+                      unsigned int cols,
+                      float* img){
+    Mat mat;
+    array2mat(mat, img, CV_32F, rows, cols);
+    assert(!mat.empty());
+    imwrite(file_name, mat); 
+}
+
 void mat2array(Mat img, float* data){
     // data has to be pre-allocated with proper size
     if(!img.isContinuous()){

@@ -10,6 +10,22 @@ Quality::Quality(int m, int n, int ldn, float* x, float* y){
 	this->ldn          = ldn;
 	this->target_mat   = x;
 	this->baseline_mat = y;
+
+//    uint8_t proposed_max = 0x00;
+//    uint8_t proposed_min = 0xff;
+//    for(int i = 0 ; i < this->row ; i++){
+//        for(int j = 0 ; j < this->col ; j++){
+//            if(this->target_mat[i*this->ldn+j] > proposed_max)
+//                proposed_max = this->target_mat[i*this->ldn+j];
+//            if(this->target_mat[i*this->ldn+j] < proposed_min)
+//                proposed_min = this->target_mat[i*this->ldn+j];
+//        }
+//    }
+//    for(int i = 0 ; i < this->row ; i++){
+//        for(int j = 0 ; j < this->col ; j++){
+//            this->target_mat[i*this->ldn+j] *= (255.0/(float)proposed_max);
+//        }
+//    }
 }
 
 void Quality::get_minmax(float* x, float& max, float& min){
@@ -155,22 +171,46 @@ void Quality::print_results(int verbose){
     float ssim             = this->ssim(verbose);
     float pnsr             = this->pnsr(verbose);
 
+    int size = 5;
+
+    uint8_t baseline_max = 0x00;
+    uint8_t baseline_min = 0xff;
+    uint8_t proposed_max = 0x00;
+    uint8_t proposed_min = 0xff;
+
     if(verbose){
         std::cout << "baseline result:" << std::endl;
-        for(int i = 0 ; i < 5 ; i++){
-            for(int j = 0 ; j < 5 ; j++){
-                std::cout << baseline_mat[i*this->ldn+j] << " ";
+        for(int i = 0 ; i < this->row ; i++){
+            for(int j = 0 ; j < this->col ; j++){
+                if(i < size && j < size)
+                    std::cout << baseline_mat[i*this->ldn+j] << " ";
+                if(baseline_mat[i*this->ldn+j] > baseline_max)
+                    baseline_max = baseline_mat[i*this->ldn+j];
+                if(baseline_mat[i*this->ldn+j] < baseline_min)
+                    baseline_min = baseline_mat[i*this->ldn+j];
             }
-            std::cout << std::endl;
+            if(i < size)
+                std::cout << std::endl;
         }
         std::cout << "proposed result:" << std::endl;
-        for(int i = 0 ; i < 5 ; i++){
-            for(int j = 0 ; j < 5 ; j++){
-                std::cout << target_mat[i*this->ldn+j] << " ";
+        for(int i = 0 ; i < this->row ; i++){
+            for(int j = 0 ; j < this->col ; j++){
+                if(i < size && j < size)
+                    std::cout << target_mat[i*this->ldn+j] << " ";
+                if(target_mat[i*this->ldn+j] > proposed_max)
+                    proposed_max = target_mat[i*this->ldn+j];
+                if(target_mat[i*this->ldn+j] < proposed_min)
+                    proposed_min = target_mat[i*this->ldn+j];
             }
-            std::cout << std::endl;
+            if(i < size)
+                std::cout << std::endl;
         }
     }
+
+    std::cout << "baseline_mat max: " << (unsigned)baseline_max << ", "
+              << "min: " << (unsigned)baseline_min << std::endl;
+    std::cout << "proposed_mat max: " << (unsigned)proposed_max << ", "
+              << "min: " << (unsigned)proposed_min << std::endl;
 
     printf("=============================================\n");
     printf("Quality results\n");

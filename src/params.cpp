@@ -7,7 +7,6 @@ Params::Params(
     int block_size,
     bool tiling_mode,
     int iter,
-    float mix_p,
     std::string input_data_path){
 
     this->app_name        = app_name;
@@ -15,7 +14,6 @@ Params::Params(
     this->block_size      = block_size;
     this->tiling_mode     = tiling_mode,
     this->iter            = iter;
-    this->mix_p           = mix_p; 
     this->input_data_path = input_data_path;
 
     assert(problem_size >= block_size);

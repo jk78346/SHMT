@@ -91,7 +91,7 @@ void run_kernel(const std::string& mode,
 }
    
 int main(int argc, char* argv[]){
-    if(argc != 8){
+    if(argc < 8 || argc > 9){
         std::cout << "Usage: " << argv[0] 
                   << " <application name>" // kernel's name
                   << " <problem_size>" // given problem size
@@ -100,6 +100,7 @@ int main(int argc, char* argv[]){
                   << " <baseline mode>"
                   << " <proposed mode>"
                   << " <log file path>"
+                  << " <testing image path>(optional)"
                   << std::endl;
         return 0;
     }else{
@@ -119,17 +120,21 @@ int main(int argc, char* argv[]){
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
     std::string log_file_path = argv[idx++];
-
+    std::string testing_img_path = 
+        (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
+    
     Params baseline_params(app_name,
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           iter); 
+                           iter,
+                           testing_img_path); 
     Params proposed_params(app_name,
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           iter);
+                           iter,
+                           testing_img_path);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
@@ -171,6 +176,18 @@ int main(int argc, char* argv[]){
                                    (float*)output_array_proposed, 
                                    (float*)output_array_baseline);
     quality->print_results(1/*verbose*/);
+
+    // save result arrays as image files
+    std::cout << "saving output results as images..." << std::endl;
+    save_float_image("./baseline.png", 
+                     baseline_params.problem_size, 
+                     baseline_params.problem_size,
+                     (float*)output_array_baseline);
+    save_float_image("./proposed.png",
+                     proposed_params.problem_size,
+                     proposed_params.problem_size,
+                     (float*)output_array_proposed);
+
 
     // Calculate end to end latency of each implementation
     double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
