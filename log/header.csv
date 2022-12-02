@@ -1,1 +1,1 @@
-benchmark,problem size,block size,partition mode,kernel iteration,input conversion,kernel execution,output conversion,total time,kernel speedup,total speedup,RMSE%,error rate,error percentage,SSIM,PNSR
+benchmark,problem size,block size,partition mode,kernel iteration,input conversion,kernel execution,output conversion,total time,kernel speedup,total speedup,RMSE%,error rate,error percentage,SSIM,PNSR,timestamp

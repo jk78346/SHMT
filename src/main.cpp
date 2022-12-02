@@ -140,7 +140,10 @@ int main(int argc, char* argv[]){
     void* output_array_baseline = NULL;
     void* output_array_proposed = NULL;
 
-    // input/output array allocation and inititalization
+    /* input/output array allocation and inititalization
+        All arrays will be casted to corresponding data type
+        depending on application.
+     */
     data_initialization(proposed_params, 
                         &input_array,
                         &output_array_baseline,
@@ -166,15 +169,21 @@ int main(int argc, char* argv[]){
                output_array_proposed,
                proposed_time_breakdown);
     timing proposed_end = clk::now();
-    
+   
+    std::cout << "Converting output array to float type for quality measurement" 
+              << std::endl;
+    UnifyType* unify_baseline_type = 
+        new UnifyType(baseline_params, &output_array_baseline);    
+    UnifyType* unify_proposed_type = 
+        new UnifyType(proposed_params, &output_array_proposed);    
+
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
-    
     Quality* quality = new Quality(proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
                                    proposed_params.problem_size, // ldn
-                                   (float*)output_array_proposed, 
-                                   (float*)output_array_baseline);
+                                   unify_proposed_type->convert_to_float(), 
+                                   unify_baseline_type->convert_to_float());
     quality->print_results(1/*verbose*/);
 
     // save result arrays as image files
@@ -235,5 +244,7 @@ int main(int argc, char* argv[]){
     delete quality;
     delete baseline_time_breakdown;
     delete proposed_time_breakdown;
+    delete unify_baseline_type;
+    delete unify_proposed_type;
     return 0;
 }

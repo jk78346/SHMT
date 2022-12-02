@@ -28,11 +28,10 @@ public:
         timing start = clk::now();
         std::string app_name = this->params.app_name;
         if(if_kernel_in_table(this->func_table_cv, app_name)){
-            float* input_array  = 
-                reinterpret_cast<float*>(this->input_array_type.ptr);
+            uint8_t* input_array  = 
+                reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
             array2mat(this->input_array_type.mat, 
                       input_array, 
-                      CV_32F, 
                       this->params.get_kernel_size(), 
                       this->params.get_kernel_size());
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
@@ -54,8 +53,8 @@ public:
         timing start = clk::now();
         std::string app_name = this->params.app_name;
         if(if_kernel_in_table(this->func_table_cv, app_name)){
-            float* output_array = 
-                reinterpret_cast<float*>(this->output_array_type.ptr);
+            uint8_t* output_array = 
+                reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
             this->output_array_type.mat.convertTo(this->output_array_type.mat, 
                                                   CV_8U);
             mat2array(this->output_array_type.mat, output_array);

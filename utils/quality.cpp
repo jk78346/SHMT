@@ -10,22 +10,6 @@ Quality::Quality(int m, int n, int ldn, float* x, float* y){
 	this->ldn          = ldn;
 	this->target_mat   = x;
 	this->baseline_mat = y;
-
-//    uint8_t proposed_max = 0x00;
-//    uint8_t proposed_min = 0xff;
-//    for(int i = 0 ; i < this->row ; i++){
-//        for(int j = 0 ; j < this->col ; j++){
-//            if(this->target_mat[i*this->ldn+j] > proposed_max)
-//                proposed_max = this->target_mat[i*this->ldn+j];
-//            if(this->target_mat[i*this->ldn+j] < proposed_min)
-//                proposed_min = this->target_mat[i*this->ldn+j];
-//        }
-//    }
-//    for(int i = 0 ; i < this->row ; i++){
-//        for(int j = 0 ; j < this->col ; j++){
-//            this->target_mat[i*this->ldn+j] *= (255.0/(float)proposed_max);
-//        }
-//    }
 }
 
 void Quality::get_minmax(float* x, float& max, float& min){

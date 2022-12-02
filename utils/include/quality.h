@@ -1,5 +1,6 @@
 #ifndef __QUALITY_H__
 #define __QUALITY_H__
+#include <stdint.h>
 
 class Quality{
     public:

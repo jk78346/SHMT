@@ -1,3 +1,4 @@
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <assert.h>
@@ -16,14 +17,14 @@ double get_time_ms(timing end, timing start){
 }
 
 /*
-    Read a image in file into opencv Mat. 
+    Read a image in file into opencv Mat in CV_8U data type. 
 */
 void read_img(const std::string file_name, int rows, int cols, Mat& img){
     Mat raw = imread(file_name);
     assert(!raw.empty());
     cvtColor(raw, img, COLOR_BGR2GRAY);
     resize(img, img, Size(rows, cols), 0, 0, INTER_AREA);
-    assert(img.size().width * img.size().height == rows * cols);
+    img.convertTo(img, CV_8U);
 }
 
 void save_float_image(const std::string file_name, 
@@ -31,42 +32,49 @@ void save_float_image(const std::string file_name,
                       unsigned int cols,
                       float* img){
     Mat mat;
-    array2mat(mat, img, CV_32F, rows, cols);
+    array2mat(mat, img, rows, cols);
     assert(!mat.empty());
     imwrite(file_name, mat); 
 }
 
-void mat2array(Mat img, float* data){
+void mat2array(Mat img, uint8_t* data){
+    assert(img.type() % 8 == 0); // CV_8U series
+    
     // data has to be pre-allocated with proper size
     if(!img.isContinuous()){
         img = img.clone();
     }
     // row-major
-    if(img.type() % 8 <= 1){ // CV_8U, CV_8S series
-        for(int i = 0 ; i < img.rows ; i++){
-            for(int j = 0 ; j < img.cols ; j++){
-                int idx = i*(img.cols)+j;
-                data[idx] = img.data[idx]; // uint8_t to float conversion
-            }
+    for(int i = 0 ; i < img.rows ; i++){
+        for(int j = 0 ; j < img.cols ; j++){
+            int idx = i*(img.cols)+j;
+            data[idx] = img.data[idx]; 
         }
-    }else if(img.type() % 8 == 5){ // CV_32F series
-        std::memcpy(data, 
-                    (float*)img.data, 
-                    img.size().width * img.size().height * sizeof(float));
-    }else{
-        std::cout << "[WARN] " << __func__ << ": undefined img.type: " 
-                  << img.type() << " to float* conversion." << std::endl;
     }
+
 }
 
-void array2mat(Mat& img, float* data, int CV_type, int rows, int cols){
-    if(CV_type % 8 == 0 || CV_type % 8 == 1 || CV_type % 8 == 5){
-        Mat tmp = Mat(rows, cols, CV_type, data);
-        tmp.copyTo(img);
-    }else{
-        std::cout << "[WARN] " << __func__ << ": undefined float* to img.type: " 
-                  << img.type() << " conversion." << std::endl;
+void mat2array(Mat img, float* data){
+    assert(img.type() % 8 == 5); // CV_32F series
+    
+    // data has to be pre-allocated with proper size
+    if(!img.isContinuous()){
+        img = img.clone();
     }
+    // row-major
+    std::memcpy(data, 
+                (float*)img.data, 
+                img.size().width * img.size().height * sizeof(float));
+}
+
+void array2mat(Mat& img, uint8_t* data, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_8U, data);
+    tmp.copyTo(img);
+}
+
+void array2mat(Mat& img, float* data, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_32F, data);
+    tmp.copyTo(img);
 }
 
 std::string get_edgetpu_kernel_path(std::string app_name, 
@@ -96,7 +104,10 @@ void dump_to_csv(std::string log_file_path,
     // simply append baseline and proposed rows
     myfile.open(log_file_path.c_str(), std::ios_base::app);
     assert(myfile.is_open()); 
-           // proposed mode
+    
+    auto t = std::chrono::system_clock::now();
+    std::time_t timestamp = std::chrono::system_clock::to_time_t(t);
+
     myfile << app_name << ","
            << problem_size << ","
            << block_size << ","
@@ -114,7 +125,9 @@ void dump_to_csv(std::string log_file_path,
            << quality->error_rate(0) / 100 << ","
            << quality->error_percentage(0) / 100 << ","
            << quality->ssim(0) << ","
-           << quality->pnsr(0) << "," << std::endl;
+           << quality->pnsr(0) << ","
+           << std::ctime(&timestamp) << std::endl; 
+
     myfile.close();
 }
 

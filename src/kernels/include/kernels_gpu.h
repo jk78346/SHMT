@@ -28,11 +28,10 @@ public:
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            float* input_array  = reinterpret_cast<float*>(this->input_array_type.ptr);
+            uint8_t* input_array  = reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
             Mat img_host;
             array2mat(img_host, 
                       input_array, 
-                      CV_32F, 
                       this->params.get_kernel_size(), 
                       this->params.get_kernel_size());
             this->input_array_type.gpumat.upload(img_host); // convert from Mat to GpuMat
@@ -58,12 +57,14 @@ public:
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            float* output_array = 
-                reinterpret_cast<float*>(this->output_array_type.ptr);
+            uint8_t* output_array = 
+                reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
+            this->output_array_type.gpumat.convertTo(
+                this->output_array_type.gpumat, 
+                CV_8U);
             Mat out_img;
             this->output_array_type.gpumat.download(out_img); // convert GpuMat to Mat
-            out_img.convertTo(out_img, CV_8U);
-            mat2array(out_img, output_array);
+            mat2array(out_img, output_array); // more than 95% of conversion time
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             // no need to convert from float* to float*, pass
         }else{
