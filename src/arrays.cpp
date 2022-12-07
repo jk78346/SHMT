@@ -16,6 +16,7 @@ std::vector<std::string> uint8_t_type_app = {
     "laplacian_2d"
 };
 
+
 void data_initialization(Params params,
                          void** input_array,
                          void** output_array_baseline,
@@ -25,7 +26,7 @@ void data_initialization(Params params,
     int cols = params.problem_size;
     unsigned int input_total_size = rows * cols;
     unsigned int output_total_size = rows * cols;
-    
+
     // image filter type of kernels
     if( std::find(uint8_t_type_app.begin(), 
                   uint8_t_type_app.end(), 
@@ -33,7 +34,7 @@ void data_initialization(Params params,
         uint8_t_type_app.end() ){
         *input_array = (uint8_t*) malloc(input_total_size * sizeof(uint8_t));
         *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
-        *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));   
+        *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        
         Mat in_img;
         read_img(params.input_data_path,
                  rows,
@@ -60,27 +61,57 @@ void array_partition_initialization(Params params,
                                     bool skip_init,
                                     void** input,
                                     std::vector<void*>& input_pars){
-    // prepare for utilizing opencv roi() to do partitioning.
-    Mat input_mat, tmp(params.block_size, params.block_size, CV_32F);
-    if(!skip_init){
-        array2mat(input_mat, (float*)*input, params.problem_size, params.problem_size);
-    }
-    unsigned int block_total_size = params.block_size * params.block_size;
+    if( std::find(uint8_t_type_app.begin(), 
+                  uint8_t_type_app.end(), 
+                  params.app_name) !=
+        uint8_t_type_app.end() ){
+        // prepare for utilizing opencv roi() to do partitioning.
+        Mat input_mat, tmp(params.block_size, params.block_size, CV_8U);
+        if(!skip_init){
+            array2mat(input_mat, (uint8_t*)*input, params.problem_size, params.problem_size);
+        }
+        unsigned int block_total_size = params.block_size * params.block_size;
 
-    // vector of partitions allocation
-    input_pars.resize(params.get_block_cnt());   
-    for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
-        for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
-            unsigned int idx = i * params.get_col_cnt() + j;         
-    
-            // partition allocation
-            input_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
-            
-            // partition initialization
-            if(!skip_init){
-                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
-                input_mat(roi).copyTo(tmp); 
-                mat2array(tmp, (float*)((input_pars[idx])));
+        // vector of partitions allocation
+        input_pars.resize(params.get_block_cnt());   
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
+                unsigned int idx = i * params.get_col_cnt() + j;         
+        
+                // partition allocation
+                input_pars[idx] = (uint8_t*) calloc(block_total_size, sizeof(uint8_t));
+                
+                // partition initialization
+                if(!skip_init){
+                    Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                    input_mat(roi).copyTo(tmp); 
+                    mat2array(tmp, (uint8_t*)((input_pars[idx])));
+                }
+            }
+        }
+    }else{
+        // prepare for utilizing opencv roi() to do partitioning.
+        Mat input_mat, tmp(params.block_size, params.block_size, CV_32F);
+        if(!skip_init){
+            array2mat(input_mat, (float*)*input, params.problem_size, params.problem_size);
+        }
+        unsigned int block_total_size = params.block_size * params.block_size;
+
+        // vector of partitions allocation
+        input_pars.resize(params.get_block_cnt());   
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
+                unsigned int idx = i * params.get_col_cnt() + j;         
+        
+                // partition allocation
+                input_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
+                
+                // partition initialization
+                if(!skip_init){
+                    Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                    input_mat(roi).copyTo(tmp); 
+                    mat2array(tmp, (float*)((input_pars[idx])));
+                }
             }
         }
     }
@@ -93,17 +124,34 @@ void output_array_partition_gathering(Params params,
                                       void** output,
                                       std::vector<void*>& output_pars){
     // prepare for utilizing opencv roi() to do gathering.
-    Mat output_mat(params.problem_size, params.problem_size, CV_32F), tmp;
+    if( std::find(uint8_t_type_app.begin(), 
+                  uint8_t_type_app.end(), 
+                  params.app_name) !=
+        uint8_t_type_app.end() ){
+        Mat output_mat(params.problem_size, params.problem_size, CV_8U), tmp;
     
-    for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
-        for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
-            unsigned int idx = i * params.get_col_cnt() + j;
-            array2mat(tmp, (float*)((output_pars[idx])), params.block_size, params.block_size);
-            Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
-            tmp.copyTo(output_mat(roi));
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+                array2mat(tmp, (uint8_t*)((output_pars[idx])), params.block_size, params.block_size);
+                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                tmp.copyTo(output_mat(roi));
+            }
         }
-    }
-    mat2array(output_mat, (float*)*output);
+        mat2array(output_mat, (uint8_t*)*output);
+    }else{
+        Mat output_mat(params.problem_size, params.problem_size, CV_32F), tmp;
+    
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+                array2mat(tmp, (float*)((output_pars[idx])), params.block_size, params.block_size);
+                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                tmp.copyTo(output_mat(roi));
+            }
+        }
+        mat2array(output_mat, (float*)*output);
+    }    
 }
 
 

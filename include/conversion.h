@@ -5,10 +5,17 @@
 
 class UnifyType{
 public:
-    UnifyType(Params params, void** in);
-    ~UnifyType();
-    float* convert_to_float();
+    UnifyType(Params params, void* in);
+    ~UnifyType(){};
+    uint8_t* get_char_array();
+    void save_as_img(const std::string file_name, 
+                     unsigned int rows, 
+                     unsigned int cols, 
+                     void* img);
     float* float_array;
+private:
+    Params params;
+    uint8_t* char_array;
 };
 
 #endif

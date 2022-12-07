@@ -27,16 +27,6 @@ void read_img(const std::string file_name, int rows, int cols, Mat& img){
     img.convertTo(img, CV_8U);
 }
 
-void save_float_image(const std::string file_name, 
-                      unsigned int rows, 
-                      unsigned int cols,
-                      float* img){
-    Mat mat;
-    array2mat(mat, img, rows, cols);
-    assert(!mat.empty());
-    imwrite(file_name, mat); 
-}
-
 void mat2array(Mat img, uint8_t* data){
     assert(img.type() % 8 == 0); // CV_8U series
     
@@ -45,13 +35,9 @@ void mat2array(Mat img, uint8_t* data){
         img = img.clone();
     }
     // row-major
-    for(int i = 0 ; i < img.rows ; i++){
-        for(int j = 0 ; j < img.cols ; j++){
-            int idx = i*(img.cols)+j;
-            data[idx] = img.data[idx]; 
-        }
-    }
-
+    std::memcpy(data,
+                (uint8_t*)img.data,
+                img.size().width * img.size().height * sizeof(uint8_t));
 }
 
 void mat2array(Mat img, float* data){

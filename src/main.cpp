@@ -16,7 +16,7 @@
 using namespace cv;
 
 void run_kernel_on_single_device(const std::string& mode, 
-                                  Params& params, 
+                                  Params params, 
                                   void* input, 
                                   void* output,
                                   TimeBreakDown* time_breakdown){
@@ -169,34 +169,34 @@ int main(int argc, char* argv[]){
                output_array_proposed,
                proposed_time_breakdown);
     timing proposed_end = clk::now();
-   
-    std::cout << "Converting output array to float type for quality measurement" 
+
+    std::cout << "Converting output array to float type for quality measurement..." 
               << std::endl;
+    
     UnifyType* unify_baseline_type = 
-        new UnifyType(baseline_params, &output_array_baseline);    
+        new UnifyType(baseline_params, output_array_baseline);    
     UnifyType* unify_proposed_type = 
-        new UnifyType(proposed_params, &output_array_proposed);    
+        new UnifyType(proposed_params, output_array_proposed);    
 
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
     Quality* quality = new Quality(proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
                                    proposed_params.problem_size, // ldn
-                                   unify_proposed_type->convert_to_float(), 
-                                   unify_baseline_type->convert_to_float());
+                                   unify_proposed_type->float_array, 
+                                   unify_baseline_type->float_array);
     quality->print_results(1/*verbose*/);
 
     // save result arrays as image files
     std::cout << "saving output results as images..." << std::endl;
-    save_float_image("./baseline.png", 
-                     baseline_params.problem_size, 
-                     baseline_params.problem_size,
-                     (float*)output_array_baseline);
-    save_float_image("./proposed.png",
-                     proposed_params.problem_size,
-                     proposed_params.problem_size,
-                     (float*)output_array_proposed);
-
+    unify_baseline_type->save_as_img("./baseline.png", 
+                                    baseline_params.problem_size,
+                                    baseline_params.problem_size,
+                                    output_array_baseline);
+    unify_proposed_type->save_as_img("./proposed.png", 
+                                    proposed_params.problem_size,
+                                    proposed_params.problem_size,
+                                    output_array_proposed);
 
     // Calculate end to end latency of each implementation
     double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
@@ -229,7 +229,7 @@ int main(int argc, char* argv[]){
               << baseline_e2e_ms << " (ms), " 
               << proposed_e2e_ms << " (ms), (iteration included)" << std::endl;
     // dump record to csv file
-    std::cout << "dumping proposed results into file: " 
+    std::cout << "dumping measurement results into file: " 
               << log_file_path << std::endl;
     dump_to_csv(log_file_path, 
                 proposed_params.app_name,
