@@ -31,17 +31,36 @@ public:
     virtual double input_conversion(){
         timing start = clk::now();
         std::string app_name = this->params.app_name;
-        float* input_array  = reinterpret_cast<float*>(this->input);
-        this->in_size  = this->params.get_kernel_size() * params.get_kernel_size();        
-        this->out_size = this->params.get_kernel_size() * params.get_kernel_size();        
+        this->in_size  = 
+            this->params.get_kernel_size() * this->params.get_kernel_size();        
+        this->out_size = 
+            this->params.get_kernel_size() * this->params.get_kernel_size();        
 
         // tflite model input array initialization
         this->input_kernel  = (int*) malloc(this->in_size * sizeof(int));
         this->output_kernel = (int*) calloc(this->out_size, sizeof(int));
+        if( std::find(this->kernel_table_uint8.begin(),
+                      this->kernel_table_uint8.end(),
+                      app_name) !=
+            this->kernel_table_uint8.end() ){
+            uint8_t* input_array  = reinterpret_cast<uint8_t*>(this->input);
 
-        // input array conversion
-        for(unsigned int i = 0 ; i < this->in_size ; i++){
-            this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
+            // input array conversion
+            for(unsigned int i = 0 ; i < this->in_size ; i++){
+                this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // uint8_t to int conversion
+            }
+        }else if( std::find(this->kernel_table_fp.begin(),
+                            this->kernel_table_fp.end(),
+                            app_name) !=
+                  this->kernel_table_fp.end() ){
+            float* input_array  = reinterpret_cast<float*>(this->input);
+
+            // input array conversion
+            for(unsigned int i = 0 ; i < this->in_size ; i++){
+                this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
+            }
+        }else{
+            // app_name not found in any table. 
         }
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -50,9 +69,22 @@ public:
     /* output conversion */
     virtual double output_conversion(){
         timing start = clk::now();
-        float* output_array = reinterpret_cast<float*>(this->output);
-        for(unsigned int i = 0 ; i < this->out_size ; i++){
-            output_array[i] = this->output_kernel[i]; // int to float conversion
+        std::string app_name = this->params.app_name;
+        if( std::find(this->kernel_table_uint8.begin(),
+                      this->kernel_table_uint8.end(),
+                      app_name) !=
+            this->kernel_table_uint8.end()){
+            uint8_t* output_array = reinterpret_cast<uint8_t*>(this->output);
+            for(unsigned int i = 0 ; i < this->out_size ; i++){
+                output_array[i] = this->output_kernel[i]; // int to uint8 conversion
+            }
+        }else if( std::find(this->kernel_table_fp.begin(),
+                            this->kernel_table_fp.end(),
+                            app_name) !=
+                  this->kernel_table_fp.end() ){
+            this->output = this->output_kernel; // simply forward float pointer
+        }else{
+            // app_name not found in any table. 
         }
         openctpu_clean_up();
         timing end = clk::now();
@@ -90,6 +122,19 @@ private:
     unsigned int out_size = 0;
     Params params;
     std::string kernel_path;
+
+    // kernel table
+    std::vector<std::string> kernel_table_uint8 = {
+        "minimal_2d",
+        "sobel_2d",
+        "mean_2d",
+        "laplacian_2d"
+    };
+    std::vector<std::string> kernel_table_fp = {
+        "fft_2d",
+        "dct8x8_2d",
+        "blackscholes_2d"
+    };
 };
 
 #endif
