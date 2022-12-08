@@ -28,23 +28,19 @@ public:
         timing start = clk::now();
         std::string app_name = params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
-            uint8_t* input_array  = reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
-            Mat img_host;
-            array2mat(img_host, 
+            uint8_t* input_array  = 
+                reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
+            array2mat(this->input_array_type.gpumat, 
                       input_array, 
                       this->params.get_kernel_size(), 
                       this->params.get_kernel_size());
-            this->input_array_type.gpumat.upload(img_host); // convert from Mat to GpuMat
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            float* input_array  = reinterpret_cast<float*>(this->input_array_type.ptr);
-            float* output_array = reinterpret_cast<float*>(this->output_array_type.ptr);
+            float* input_array  = 
+                reinterpret_cast<float*>(this->input_array_type.ptr);
+            float* output_array = 
+                reinterpret_cast<float*>(this->output_array_type.ptr);
             this->input_array_type.fp  = input_array;
             this->output_array_type.fp = output_array; 
-
-//            checkCudaErrors(
-//                cudaMalloc((void **)&this->input_array_type.device_fp, 
-//                           this->params.get_kernel_size() * this->params.get_kenrel_size() * sizeof(float)));
-
         }else{
             // app_name not found in any table. 
         }
@@ -55,16 +51,14 @@ public:
     /* output conversion - search over func_tables to do correct output conversion */
     virtual double output_conversion(){
         timing start = clk::now();
-        std::string app_name = params.app_name;
+        std::string app_name = this->params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             uint8_t* output_array = 
                 reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
             this->output_array_type.gpumat.convertTo(
                 this->output_array_type.gpumat, 
                 CV_8U);
-            Mat out_img;
-            this->output_array_type.gpumat.download(out_img); // convert GpuMat to Mat
-            mat2array(out_img, output_array); // more than 95% of conversion time
+            mat2array(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             // no need to convert from float* to float*, pass
         }else{

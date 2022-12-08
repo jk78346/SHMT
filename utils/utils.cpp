@@ -40,6 +40,21 @@ void mat2array(Mat img, uint8_t* data){
                 img.size().width * img.size().height * sizeof(uint8_t));
 }
 
+void mat2array(cuda::GpuMat img, uint8_t* data){
+    assert(img.type() % 8 == 0); // CV_8U series
+    
+    Mat tmp;
+    img.download(tmp);
+    // data has to be pre-allocated with proper size
+    if(!tmp.isContinuous()){
+        tmp = tmp.clone();
+    }
+    // row-major
+    std::memcpy(data,
+                (uint8_t*)tmp.data,
+                tmp.size().width * tmp.size().height * sizeof(uint8_t));
+}
+
 void mat2array(Mat img, float* data){
     assert(img.type() % 8 == 5); // CV_32F series
     
@@ -53,14 +68,39 @@ void mat2array(Mat img, float* data){
                 img.size().width * img.size().height * sizeof(float));
 }
 
+void mat2array(cuda::GpuMat img, float* data){
+    assert(img.type() % 8 == 5); // CV_32F series
+    
+    Mat tmp;
+    img.download(tmp);
+    // data has to be pre-allocated with proper size
+    if(!tmp.isContinuous()){
+        tmp = tmp.clone();
+    }
+    // row-major
+    std::memcpy(data, 
+                (float*)tmp.data, 
+                tmp.size().width * tmp.size().height * sizeof(float));
+}
+
 void array2mat(Mat& img, uint8_t* data, int rows, int cols){
     Mat tmp = Mat(rows, cols, CV_8U, data);
     tmp.copyTo(img);
 }
 
+void array2mat(cuda::GpuMat& img, uint8_t* data, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_8U, data);
+    img.upload(tmp);
+}
+
 void array2mat(Mat& img, float* data, int rows, int cols){
     Mat tmp = Mat(rows, cols, CV_32F, data);
     tmp.copyTo(img);
+}
+
+void array2mat(cuda::GpuMat& img, float* data, int rows, int cols){
+    Mat tmp = Mat(rows, cols, CV_32F, data);
+    img.upload(tmp);
 }
 
 std::string get_edgetpu_kernel_path(std::string app_name, 

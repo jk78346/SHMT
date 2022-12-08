@@ -55,8 +55,9 @@ public:
         if(if_kernel_in_table(this->func_table_cv, app_name)){
             uint8_t* output_array = 
                 reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
-            this->output_array_type.mat.convertTo(this->output_array_type.mat, 
-                                                  CV_8U);
+            this->output_array_type.mat.convertTo(
+                this->output_array_type.mat, 
+                CV_8U);
             mat2array(this->output_array_type.mat, output_array);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             // no need to convert from float* to float*, pass

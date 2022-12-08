@@ -20,21 +20,19 @@ void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
 }
  
 void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
- 
+
     cuda::GpuMat grad_x, grad_y;
     cuda::GpuMat abs_grad_x, abs_grad_y;
- 
-    auto sobel_dx = cuda::createSobelFilter(in_img.type(), in_img.type(), 1, 0, 3    );
-    auto sobel_dy = cuda::createSobelFilter(in_img.type(), in_img.type(), 0, 1, 3    );
+
+    int ddepth = CV_32F;
+    auto sobel_dx = cuda::createSobelFilter(in_img.type(), ddepth, 1, 0, 3);
+    auto sobel_dy = cuda::createSobelFilter(in_img.type(), ddepth, 0, 1, 3);
  
     sobel_dx->apply(in_img, grad_x);
     sobel_dy->apply(in_img, grad_y);
  
-    cuda::abs(grad_x, grad_x);
-    cuda::abs(grad_y, grad_y);
+    cuda::abs(grad_x, abs_grad_x);
+    cuda::abs(grad_y, abs_grad_y);
   
-    grad_x.convertTo(grad_x, CV_8U);
-    grad_y.convertTo(grad_y, CV_8U);
-  
-    cuda::addWeighted(grad_x, 0.5, grad_y, 0.5, 0, out_img);
+    cuda::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
