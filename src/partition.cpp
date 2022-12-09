@@ -19,7 +19,7 @@ PartitionRuntime::PartitionRuntime(Params params,
     this->generic_kernels = new GenericKernel[this->block_cnt];
     this->dev_sequence = new DeviceType[this->block_cnt];
     this->is_dynamic_block = new bool[this->block_cnt]; 
-    this->is_dynamic_device = new bool[this->dev_type_cnt]; 
+    this->is_dynamic_device = new bool[this->dev_type_cnt+1]; // enum is 1-index. 
     // For rand_p partition mode
     srand(time(NULL));
     
@@ -273,7 +273,7 @@ void PartitionRuntime::populate_dynamic_flags(){
     for(unsigned int i = 0 ; i < this->block_cnt ; i++){
         this->is_dynamic_block[i] = false;
     }
-    for(unsigned int i = 0 ; i < this->dev_type_cnt ; i++){
+    for(unsigned int i = 0 ; i < this->dev_type_cnt+1 ; i++){
         this->is_dynamic_device[i] = false;
     }
 
@@ -281,11 +281,11 @@ void PartitionRuntime::populate_dynamic_flags(){
         this->mode.length() > delimiter_loc &&
         this->mode.substr(delimiter_loc+1, 1) == "b"){
         
-        // switch block to dynamic.
+        // switch all blocks to dynamic.
         for(unsigned int i = 0 ; i < this->block_cnt ; i++){
             this->is_dynamic_block[i] = true;
         }
-        // switch device to dynamic if detected.
+        // switch each device to dynamic if detected.
         std::string sub_mode = this->mode.substr(0, delimiter_loc);
         if(sub_mode.find("c") != std::string::npos){ // found cpu type
             this->is_dynamic_device[cpu] = true;
