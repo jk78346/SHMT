@@ -2,8 +2,8 @@ import os
 seed=2022
 os.environ['PYTHONHASHSEED'] = str(seed)
 import tensorflow as tf
-tf.keras.utils.set_random_seed(seed)
-tf.config.experimental.enable_op_determinism()
+#tf.keras.utils.set_random_seed(seed)
+#tf.config.experimental.enable_op_determinism()
 
 assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
@@ -32,6 +32,7 @@ from tensorflow.keras import (
         callbacks
 )
 from tensorflow.keras.optimizers import Adam
+import tensorflow_model_optimization as tfmot
 from utils.params_base import (
         TrainParamsBase,
         fft_2d_kernel_array
@@ -115,7 +116,7 @@ def model_lr(epoch, lr):
     else:
         return lr * 0.995 
 
-def train(params, train_from_scratch, kernel_model, random_input_gen):
+def train(params, train_from_scratch, kernel_model, random_input_gen, qat):
     """ The main training script """
     gpu_setup()
 
@@ -131,6 +132,12 @@ def train(params, train_from_scratch, kernel_model, random_input_gen):
         else:
             print("===== Start from pre-trained weights. =====")
             model = loaded_model
+
+    # enable quantization-aware training if the flag is set.
+    if qat == True:
+        quantize_model = tfmot.quantization.keras.quantize_model
+        model = quantize_model(model)
+        print("===== QAT mode is set. =====")
 
     model.summary()
 
@@ -246,7 +253,7 @@ def main(args):
     target_func, kernel_model = get_funcs(args.model)
     my_data_gen = MyDataGen(params, target_func)
     if args.skip_train == False:
-        train(params, args.train_from_scratch, kernel_model, my_data_gen.random_input_gen)
+        train(params, args.train_from_scratch, kernel_model, my_data_gen.random_input_gen, args.qat)
     if args.skip_pre_test == False:
         pre_quantize_test(params, target_func)
     if args.skip_tflite == False:
@@ -261,11 +268,14 @@ if __name__ == "__main__":
     parser.add_argument('--skip_pre_test', dest='skip_pre_test', action='store_true', help='To skip testing on trained fp32 model (before quantization).')
     parser.add_argument('--skip_tflite', dest='skip_tflite', action='store_true', help='To skip tflite converting.')
     parser.add_argument('--size', dest='size', action='store', type=int, help='problem size.')
-   
+    parser.add_argument('--QAT', dest='qat', action='store_true', help='to enable quantization-aware training. Default is disabled.')
+
     parser.set_defaults(model="mean_2d")
     parser.set_defaults(size=2048)
     parser.set_defaults(skip_train=False)
     parser.set_defaults(train_from_scratch=False)
     parser.set_defaults(skip_tflite=False)
+    parser.set_defaults(qat=False)
+
     args = parser.parse_args()
     main(args)
