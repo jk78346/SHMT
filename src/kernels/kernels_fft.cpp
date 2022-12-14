@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "kernels_cpu.h"
 #include "kernels_gpu.h"
+#include "kernels_fft.cuh"
 
 float fft_2d_kernel_array[7*6] = {
     13, 12, 13,  0,  1,  1,
@@ -58,6 +59,7 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
     Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D.cu
 */
 void GpuKernel::fft_2d(Params params, float* in_img, float* out_img){
+    fft_2d_kernel_wrapper(in_img, out_img);
 //    //Not including kernel transformation into time measurement,
 //    //since convolution kernel is not changed very frequently
 //    printf("...transforming convolution kernel\n");

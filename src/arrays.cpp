@@ -50,6 +50,7 @@ void data_initialization(Params params,
                  rows,
                  cols,
                  in_img);
+        in_img.convertTo(in_img, CV_32F);
         mat2array(in_img, (float*)*input_array);
     }
 }

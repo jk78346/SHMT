@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(PROJ_NAME "gpgtpu")
-project(${PROJ_NAME} VERSION 1.0)
+project(${PROJ_NAME} VERSION 1.0 LANGUAGES CXX CUDA)
+enable_language(CUDA)
 
 set(CMAKE_C_FLAGS "-Wall -pthread -std=c++17")
 set(CMAKE_C_FLAGS_DEBUG "-g -O4")
@@ -11,6 +12,7 @@ set(CMAKE_C_FLAGS_RELEASE "-O4")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+set(CMAKE_CUDA_STANDARD 17)
 
 # Add a series of utils libraries
 add_subdirectory(utils)

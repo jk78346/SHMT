@@ -1,4 +1,4 @@
-file(GLOB SRC "*.cpp")
+file(GLOB SRC "*.cpp" "*.cu")
 add_library(kernels ${SRC})
 
 find_package(OpenCV REQUIRED)
