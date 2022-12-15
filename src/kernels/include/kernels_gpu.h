@@ -180,7 +180,7 @@ private:
     };
     
     // kernel-specifc input/output conversion wrappers
-    static void fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData);
+    static void fft_2d_input_conversion(KernelParams kernel_params/*, float* h_Data*/, float* d_PaddedData);
     static void fft_2d_output_conversion(KernelParams kernel_params, float* h_ResultGPU, float* d_PaddedData);
 
     // kernels

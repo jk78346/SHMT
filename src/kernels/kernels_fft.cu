@@ -61,7 +61,7 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
         }
 }
 
-void GpuKernel::fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData){
+void GpuKernel::fft_2d_input_conversion(KernelParams kernel_params/*, float* h_Data*/, float* d_PaddedData){
 // ***** start to integrating fft_2d as the first integration trial *****
     const int kernelH = 7;
     const int kernelW = 6;
@@ -72,7 +72,8 @@ void GpuKernel::fft_2d_input_conversion(KernelParams kernel_params, float* h_Dat
  
     const int fftH = snapTransformSize(dataH + kernelH - 1); //
     const int fftW = snapTransformSize(dataW + kernelW - 1); //
- 
+
+    float* h_Data; // === temp 
     float* h_Kernel;
     float* d_Data;
     float* d_Kernel;
