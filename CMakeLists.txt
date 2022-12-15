@@ -20,7 +20,9 @@ add_subdirectory(src/kernels)
 
 # Find external packages
 find_package(OpenCV REQUIRED)
+find_package(CUDA 10.2 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${CUDA_INCLUDE_DIRS})
 
 # Find GPTPU library
 find_library(gptpu /usr/local)

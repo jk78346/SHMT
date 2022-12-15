@@ -8,6 +8,9 @@
 #include "params.h"
 #include "kernels_base.h"
 
+//#include <helper_functions.h>
+//#include <helper_cuda.h>
+
 using namespace cv;
 
 /* GPU kernel class 
@@ -41,6 +44,10 @@ public:
                 reinterpret_cast<float*>(this->output_array_type.ptr);
             this->input_array_type.fp  = input_array;
             this->output_array_type.fp = output_array; 
+
+            // ***** integrating fft_2d conversion as the first trial *****
+            this->fft_2d_input_conversion(params, this->input_array_type.fp);
+
         }else{
             // app_name not found in any table. 
         }
@@ -135,6 +142,8 @@ private:
         std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d),
         std::make_pair<std::string, func_ptr_float> ("blackscholes_2d", this->blackscholes_2d)
     };
+    // input conversion wrappers
+    static void fft_2d_input_conversion(Params params, float* in);
 
     // kernels
     static void minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
