@@ -61,50 +61,46 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
         }
 }
 
-void GpuKernel::fft_2d_input_conversion(Params params, float* input_array){
+void GpuKernel::fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData){
 // ***** start to integrating fft_2d as the first integration trial *****
     const int kernelH = 7;
     const int kernelW = 6;
     const int kernelY = 3;
     const int kernelX = 4;
-    const int   dataH = params.get_kernel_size();
-    const int   dataW = params.get_kernel_size();
+    const int   dataH = kernel_params.params.get_kernel_size();
+    const int   dataW = kernel_params.params.get_kernel_size();
  
-    const int fftH = snapTransformSize(dataH + kernelH - 1);
-    const int fftW = snapTransformSize(dataW + kernelW - 1);
+    const int fftH = snapTransformSize(dataH + kernelH - 1); //
+    const int fftW = snapTransformSize(dataW + kernelW - 1); //
  
-    float* h_Data = input_array;
-    // Need to fill in the pre-determined kernel matrix for fair comparision
-    float* h_Kernel = (float *)malloc(kernelH * kernelW * sizeof(float));
-    float* h_ResultGPU = (float *)malloc(fftH    * fftW * sizeof(float));
-    float *d_Data;
-    float *d_Kernel;
-    float* d_PaddedData;
-    float* d_PaddedKernel;
+    float* h_Kernel;
+    float* d_Data;
+    float* d_Kernel;
+    float* d_PaddedKernel; 
  
     fComplex
-    *d_DataSpectrum,
-    *d_KernelSpectrum;
- 
-    cufftHandle
-    fftPlanFwd,
-    fftPlanInv;
- 
+    *d_DataSpectrum, //
+    *d_KernelSpectrum; //
+
+    // assign input data
+    h_Kernel = fft_2d_kernel_array;
+    
     cudaMalloc((void **)&d_Data, dataH * dataW * sizeof(float));
     cudaMalloc((void **)&d_Kernel, kernelH * kernelW * sizeof(float));
     cudaMemcpy(d_Kernel, h_Kernel, kernelH * kernelW * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_Data,   h_Data,   dataH   * dataW *   sizeof(float), cudaMemcpyHostToDevice);
- 
+
+    // Design point: allocate this during arrays.cpp  or here?
     cudaMalloc((void **)&d_PaddedData,   fftH * fftW * sizeof(float));
     cudaMalloc((void **)&d_PaddedKernel, fftH * fftW * sizeof(float));
  
     cudaMalloc((void **)&d_DataSpectrum,   fftH * (fftW / 2 + 1) * sizeof(fComplex));
     cudaMalloc((void **)&d_KernelSpectrum, fftH * (fftW / 2 + 1) * sizeof(fComplex));
     cudaMemset(d_KernelSpectrum, 0, fftH * (fftW / 2 + 1) * sizeof(fComplex));
- 
+
     printf("...creating R2C & C2R FFT plans for %i x %i\n", fftH, fftW);
-    cufftPlan2d(&fftPlanFwd, fftH, fftW, CUFFT_R2C);
-    cufftPlan2d(&fftPlanInv, fftH, fftW, CUFFT_C2R);
+    cufftPlan2d(&kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd, fftH, fftW, CUFFT_R2C);
+    cufftPlan2d(&kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanInv, fftH, fftW, CUFFT_C2R);
 
     padKernel(
         d_PaddedKernel,
@@ -132,21 +128,19 @@ void GpuKernel::fft_2d_input_conversion(Params params, float* input_array){
 
     printf("...transforming convolution kernel\n");
 //    timing kernel_fft_s = clk::now();
-    cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedKernel, (cufftComplex *)d_KernelSpectrum);
+    cufftExecR2C(kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd, 
+                 (cufftReal *)d_PaddedKernel, 
+                 (cufftComplex *)d_KernelSpectrum);
 //    timing kernel_fft_e = clk::now();
 
     printf("...running GPU FFT convolution: ");
     cudaDeviceSynchronize();
 
-/* The actual kernel invokation. think of interfacing arguments */
-
-    for(int i = 0 ; i < params.iter ; i++){
-        cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum);
-        modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
-        cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData);
- 
-        cudaDeviceSynchronize();
-    }
+    kernel_params.cuda_kernel_args.fft_kernel_args.fftH             = fftH;
+    kernel_params.cuda_kernel_args.fft_kernel_args.fftW             = fftW;
+    kernel_params.cuda_kernel_args.fft_kernel_args.d_PaddedData     = d_PaddedData;
+    kernel_params.cuda_kernel_args.fft_kernel_args.d_DataSpectrum   = d_DataSpectrum;
+    kernel_params.cuda_kernel_args.fft_kernel_args.d_KernelSpectrum = d_KernelSpectrum;
 
 //    fft_2d_input_conversion_wrapper();
 }
@@ -155,8 +149,29 @@ void GpuKernel::fft_2d_input_conversion(Params params, float* input_array){
     GPU convolveFFT2D, this kernel used a fixed 7x6 convolving kernel.
     Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D.cu
 */
-void GpuKernel::fft_2d(Params params, float* in_img, float* out_img){
-    fft_2d_kernel_wrapper(in_img, out_img);
+void GpuKernel::fft_2d(KernelParams& kernel_params, float* in_img, float* out_img){
+    int         fftH             = kernel_params.cuda_kernel_args.fft_kernel_args.fftH;
+    int         fftW             = kernel_params.cuda_kernel_args.fft_kernel_args.fftW;
+    float*      d_PaddedData     = kernel_params.cuda_kernel_args.fft_kernel_args.d_PaddedData;
+    fComplex*   d_DataSpectrum   = kernel_params.cuda_kernel_args.fft_kernel_args.d_DataSpectrum;
+    fComplex*   d_KernelSpectrum = kernel_params.cuda_kernel_args.fft_kernel_args.d_KernelSpectrum;
+    cufftHandle fftPlanFwd       = kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd;
+    cufftHandle fftPlanInv       = kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanInv;
+
+    d_PaddedData = in_img;
+
+    for(int i = 0 ; i < kernel_params.params.iter ; i++){
+        cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum);
+        modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
+        cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData);
+ 
+        cudaDeviceSynchronize();
+    }
+
+    out_img = d_PaddedData;
+
+//    fft_2d_kernel_wrapper(in_img, out_img);
+
 //    //Not including kernel transformation into time measurement,
 //    //since convolution kernel is not changed very frequently
 //    printf("...transforming convolution kernel\n");

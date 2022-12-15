@@ -81,7 +81,7 @@ void CpuKernel::blackscholes_2d(Params params, float* input, float* output){
     GPU blackscholes
     Reference: samples/
 */
-void GpuKernel::blackscholes_2d(Params params, float* in_img, float* out_img){
+void GpuKernel::blackscholes_2d(KernelParams& kernel_params, float* in_img, float* out_img){
 }
 
 

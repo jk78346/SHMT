@@ -6,7 +6,11 @@
 #include "types.h"
 #include "utils.h"
 #include "params.h"
+#include "cuda_utils.h"
 #include "kernels_base.h"
+
+#include <cuda_runtime.h>
+#include <cufft.h>
 
 //#include <helper_functions.h>
 //#include <helper_cuda.h>
@@ -46,8 +50,13 @@ public:
             this->output_array_type.fp = output_array; 
 
             // ***** integrating fft_2d conversion as the first trial *****
-            this->fft_2d_input_conversion(params, this->input_array_type.fp);
-
+            if(params.app_name == "fft_2d"){
+                this->fft_2d_input_conversion(
+                    this->kernel_params, 
+                    this->input_array_type.fp);
+            }else{
+                // other fp type of kernels' input conversions
+            }
         }else{
             // app_name not found in any table. 
         }
@@ -108,7 +117,7 @@ private:
         kernel_existence_checking(this->func_table_fp, this->params.app_name);
         timing start = clk::now();
         for(unsigned int i = 0 ; i < iter ; i++){
-            this->func_table_fp[this->params.app_name](this->params, 
+            this->func_table_fp[this->params.app_name](this->kernel_params, 
                                                        this->input_array_type.fp, 
                                                        this->output_array_type.fp);
         }
@@ -125,10 +134,37 @@ private:
     };
     Params params;
     ArrayType input_array_type, output_array_type;
-    
+
+    /* 
+       kernel_specific input covnersion to actual kernel interfacing arguments
+    */
+    struct FftKernelArgs{
+        int fftH;
+        int fftW;
+        float* d_PaddedData;
+        fComplex* d_DataSpectrum;
+        fComplex* d_KernelSpectrum;
+        cufftHandle fftPlanFwd;
+        cufftHandle fftPlanInv;
+    };
+
+    // generic kernel arguments of cuda type of kernels
+    struct CudaKernelArgs{
+        FftKernelArgs fft_kernel_args;
+        // and others here
+    };
+
+    // outer params wrapper that includes origin params as well as kernel specific args
+    struct KernelParams{
+        Params params;
+        CudaKernelArgs cuda_kernel_args;
+    };
+
+    KernelParams kernel_params;
+
     // function tables
     typedef void (*func_ptr_opencv_cuda)(const cuda::GpuMat, cuda::GpuMat&); // const cuda::GpuMat: input, cuda::GpuMat& : input/output
-    typedef void (*func_ptr_float)(Params, float*, float*);
+    typedef void (*func_ptr_float)(KernelParams&, float*, float*);
     typedef std::unordered_map<std::string, func_ptr_opencv_cuda> func_table_opencv_cuda;
     typedef std::unordered_map<std::string, func_ptr_float>  func_table_float;
     func_table_opencv_cuda func_table_cv_cuda = {
@@ -142,16 +178,18 @@ private:
         std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d),
         std::make_pair<std::string, func_ptr_float> ("blackscholes_2d", this->blackscholes_2d)
     };
-    // input conversion wrappers
-    static void fft_2d_input_conversion(Params params, float* in);
+    
+    // kernel-specifc input/output conversion wrappers
+    static void fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData);
+    static void fft_2d_output_conversion(KernelParams kernel_params, float* h_ResultGPU, float* d_PaddedData);
 
     // kernels
     static void minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
-    static void fft_2d(Params params, float* input, float* output);
-    static void dct8x8_2d(Params params, float* input, float* output);
-    static void blackscholes_2d(Params params, float* input, float* output);
+    static void fft_2d(KernelParams& kernel_params, float* input, float* output);
+    static void dct8x8_2d(KernelParams& kernel_params, float* input, float* output);
+    static void blackscholes_2d(KernelParams& kernel_params, float* input, float* output);
 };
 #endif
