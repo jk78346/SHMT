@@ -4,6 +4,7 @@
 #include "kernels_cpu.h"
 #include "kernels_gpu.h"
 #include "kernels_fft.cuh"
+#include "kernels_fft_wrapper.cu"
 
 #include <cuda_runtime.h>
 #include <cufft.h>
@@ -64,8 +65,8 @@ void GpuKernel::fft_2d_input_conversion(Params params, float* input_array){
 // ***** start to integrating fft_2d as the first integration trial *****
     const int kernelH = 7;
     const int kernelW = 6;
-//            const int kernelY = 3;
-//            const int kernelX = 4;
+    const int kernelY = 3;
+    const int kernelX = 4;
     const int   dataH = params.get_kernel_size();
     const int   dataW = params.get_kernel_size();
  
@@ -105,16 +106,47 @@ void GpuKernel::fft_2d_input_conversion(Params params, float* input_array){
     cufftPlan2d(&fftPlanFwd, fftH, fftW, CUFFT_R2C);
     cufftPlan2d(&fftPlanInv, fftH, fftW, CUFFT_C2R);
 
-//    padKernel(
-//        d_PaddedKernel,
-//        d_Kernel,
-//        fftH,
-//        fftW,
-//        kernelH,
-//        kernelW,
-//        kernelY,
-//        kernelX
-//    );
+    padKernel(
+        d_PaddedKernel,
+        d_Kernel,
+        fftH,
+        fftW,
+        kernelH,
+        kernelW,
+        kernelY,
+        kernelX
+    );
+
+    padDataClampToBorder(
+        d_PaddedData,
+        d_Data,
+        fftH,
+        fftW,
+        dataH,
+        dataW,
+        kernelH,
+        kernelW,
+        kernelY,
+        kernelX
+    );
+
+    printf("...transforming convolution kernel\n");
+//    timing kernel_fft_s = clk::now();
+    cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedKernel, (cufftComplex *)d_KernelSpectrum);
+//    timing kernel_fft_e = clk::now();
+
+    printf("...running GPU FFT convolution: ");
+    cudaDeviceSynchronize();
+
+/* The actual kernel invokation. think of interfacing arguments */
+
+    for(int i = 0 ; i < params.iter ; i++){
+        cufftExecR2C(fftPlanFwd, (cufftReal *)d_PaddedData, (cufftComplex *)d_DataSpectrum);
+        modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
+        cufftExecC2R(fftPlanInv, (cufftComplex *)d_DataSpectrum, (cufftReal *)d_PaddedData);
+ 
+        cudaDeviceSynchronize();
+    }
 
 //    fft_2d_input_conversion_wrapper();
 }
