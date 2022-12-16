@@ -13,7 +13,7 @@
 #include <cufft.h>
 
 //#include <helper_functions.h>
-//#include <helper_cuda.h>
+#include <helper_cuda.h>
 
 using namespace cv;
 
@@ -23,10 +23,10 @@ TODO: optimize function table searching algorithm.
 class GpuKernel : public KernelBase{
 public:
     GpuKernel(Params params, void* input, void* output){
-        this->params = params;
+        this->kernel_params.params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
-        //findCudaDevice();
+//        findCudaDevice();
         cudaFree(0);
     };
 
@@ -35,14 +35,14 @@ public:
     /* input conversion - search over func_tables to do correct input conversion */
     virtual double input_conversion(){
         timing start = clk::now();
-        std::string app_name = params.app_name;
+        std::string app_name = this->kernel_params.params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             uint8_t* input_array  = 
                 reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
             array2mat(this->input_array_type.gpumat, 
                       input_array, 
-                      this->params.get_kernel_size(), 
-                      this->params.get_kernel_size());
+                      this->kernel_params.params.get_kernel_size(), 
+                      this->kernel_params.params.get_kernel_size());
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             float* input_array  = 
                 reinterpret_cast<float*>(this->input_array_type.ptr);
@@ -53,7 +53,6 @@ public:
 
             // ***** integrating fft_2d conversion as the first trial *****
             if(app_name == "fft_2d"){
-                this->kernel_params.params = params;
                 this->fft_2d_input_conversion(
                     this->kernel_params, 
                     this->input_array_type.host_fp,
@@ -71,7 +70,7 @@ public:
     /* output conversion - search over func_tables to do correct output conversion */
     virtual double output_conversion(){
         timing start = clk::now();
-        std::string app_name = this->params.app_name;
+        std::string app_name = this->kernel_params.params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             uint8_t* output_array = 
                 reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
@@ -96,7 +95,7 @@ public:
     }
 
     virtual double run_kernel(unsigned int iter){
-        std::string app_name = this->params.app_name;
+        std::string app_name = this->kernel_params.params.app_name;
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             return this->run_kernel_opencv_cuda(iter);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
@@ -113,10 +112,10 @@ public:
 private:
     /* opencv type of input/output */
     double run_kernel_opencv_cuda(unsigned int iter){
-        kernel_existence_checking(this->func_table_cv_cuda, this->params.app_name);
+        kernel_existence_checking(this->func_table_cv_cuda, this->kernel_params.params.app_name);
         timing start = clk::now();
         for(unsigned int i = 0 ; i < iter ; i++){
-            this->func_table_cv_cuda[this->params.app_name](this->input_array_type.gpumat, 
+            this->func_table_cv_cuda[this->kernel_params.params.app_name](this->input_array_type.gpumat, 
                                                             this->output_array_type.gpumat);
         }
         timing end = clk::now();
@@ -125,10 +124,10 @@ private:
 
     /* float type of input/output */
     double run_kernel_float(unsigned int iter){
-        kernel_existence_checking(this->func_table_fp, this->params.app_name);
+        kernel_existence_checking(this->func_table_fp, this->kernel_params.params.app_name);
         timing start = clk::now();
         for(unsigned int i = 0 ; i < iter ; i++){
-            this->func_table_fp[this->params.app_name](this->kernel_params, 
+            this->func_table_fp[this->kernel_params.params.app_name](this->kernel_params, 
                                                        this->input_array_type.device_fp, 
                                                        this->output_array_type.device_fp);
         }
@@ -143,7 +142,6 @@ private:
         float* host_fp = NULL; // reinterpreted float pointer of void* ptr
         float* device_fp = NULL; 
     };
-    Params params;
     ArrayType input_array_type, output_array_type;
 
     /* 
@@ -170,7 +168,6 @@ private:
         Params params;
         CudaKernelArgs cuda_kernel_args;
     };
-
     KernelParams kernel_params;
 
     // function tables
@@ -209,8 +206,8 @@ private:
         (a.k.a need to avoid duplicate allocation and fails the program.)
      */
 
-    static void fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData);
-    static void fft_2d_output_conversion(KernelParams kernel_params, float* h_ResultGPU, float* d_PaddedData);
+    static void fft_2d_input_conversion(KernelParams& kernel_params, float* h_Data, float* d_PaddedData);
+    static void fft_2d_output_conversion(KernelParams& kernel_params, float* h_ResultGPU, float* d_PaddedData);
 
     // kernels
     static void minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
