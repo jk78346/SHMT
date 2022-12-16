@@ -45,13 +45,23 @@ void data_initialization(Params params,
         *input_array = (float*) malloc(input_total_size * sizeof(float));
         *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
         *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
-        Mat in_img;
-        read_img(params.input_data_path,
-                 rows,
-                 cols,
-                 in_img);
-        in_img.convertTo(in_img, CV_32F);
-        mat2array(in_img, (float*)*input_array);
+
+        if(params.app_name == "fft_2d"){
+            printf("...generating random input data\n");
+            srand(2010);
+            float* tmp = reinterpret_cast<float*>(*input_array);
+            for(unsigned int i = 0 ; i < input_total_size ; i++){
+                tmp[i] = (float)(rand() % 16);        
+            }
+        }else{
+            Mat in_img;
+            read_img(params.input_data_path,
+                    rows,
+                    cols,
+                    in_img);
+            in_img.convertTo(in_img, CV_32F);
+            mat2array(in_img, (float*)*input_array);
+        }
     }
 }
 

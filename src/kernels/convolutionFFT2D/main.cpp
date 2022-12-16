@@ -113,6 +113,7 @@ bool test0(int size, int iter)
     const int    fftW = snapTransformSize(dataW + kernelW - 1);
 
     printf("...allocating memory\n");
+    timing alloc_start = clk::now();
     h_Data      = (float *)malloc(dataH   * dataW * sizeof(float));
     h_Kernel    = (float *)malloc(kernelH * kernelW * sizeof(float));
     h_ResultCPU = (float *)malloc(dataH   * dataW * sizeof(float));
@@ -127,6 +128,7 @@ bool test0(int size, int iter)
     checkCudaErrors(cudaMalloc((void **)&d_DataSpectrum,   fftH * (fftW / 2 + 1) * sizeof(fComplex)));
     checkCudaErrors(cudaMalloc((void **)&d_KernelSpectrum, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
     checkCudaErrors(cudaMemset(d_KernelSpectrum, 0, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
+    timing alloc_end = clk::now();
 
     printf("...generating random input data\n");
     srand(2010);
@@ -267,11 +269,13 @@ bool test0(int size, int iter)
     free(h_Kernel);
 
     // GPU timing
+    double alloc_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(alloc_end - alloc_start).count()/1000000.0;
     double pad_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(pad_e - pad_s).count()/1000000.0;
     double kernel_fft_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(kernel_fft_e - kernel_fft_s).count()/1000000.0;
     
     printf("===== Latency summary =====\n");
     printf("GPU part:\n");
+    printf("allocation time           : %f (ms)\n", alloc_ms);
     printf("Data padding time         : %f (ms)\n", pad_ms);
     printf("FFT on kernelSpectrum time: %f (ms)\n", kernel_fft_ms);
     printf("actualy GPU kernel time   : %f (ms), averaged over %d time(s)\n", gpuTime, iter);

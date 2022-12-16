@@ -26,6 +26,8 @@ public:
         this->params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
+        //findCudaDevice();
+        cudaFree(0);
     };
 
     virtual ~GpuKernel(){};
@@ -46,14 +48,16 @@ public:
                 reinterpret_cast<float*>(this->input_array_type.ptr);
             float* output_array = 
                 reinterpret_cast<float*>(this->output_array_type.ptr);
-            this->input_array_type.fp  = input_array;
-            this->output_array_type.fp = output_array; 
+            this->input_array_type.host_fp  = input_array;
+            this->output_array_type.host_fp = output_array; 
 
             // ***** integrating fft_2d conversion as the first trial *****
-            if(params.app_name == "fft_2d"){
+            if(app_name == "fft_2d"){
+                this->kernel_params.params = params;
                 this->fft_2d_input_conversion(
                     this->kernel_params, 
-                    this->input_array_type.fp);
+                    this->input_array_type.host_fp,
+                    this->input_array_type.device_fp);
             }else{
                 // other fp type of kernels' input conversions
             }
@@ -76,7 +80,14 @@ public:
                 CV_8U);
             mat2array(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            // no need to convert from float* to float*, pass
+            if(app_name == "fft_2d"){
+                this->fft_2d_output_conversion(
+                    this->kernel_params,
+                    this->output_array_type.host_fp,
+                    this->output_array_type.device_fp); 
+            }else{
+                // other fp type of kernels' output conversion
+            }
         }else{
             // app_name not found in any table. 
         }
@@ -118,8 +129,8 @@ private:
         timing start = clk::now();
         for(unsigned int i = 0 ; i < iter ; i++){
             this->func_table_fp[this->params.app_name](this->kernel_params, 
-                                                       this->input_array_type.fp, 
-                                                       this->output_array_type.fp);
+                                                       this->input_array_type.device_fp, 
+                                                       this->output_array_type.device_fp);
         }
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -129,7 +140,7 @@ private:
     struct ArrayType{
         void* ptr = NULL;
         cuda::GpuMat gpumat;
-        float* fp = NULL;
+        float* host_fp = NULL; // reinterpreted float pointer of void* ptr
         float* device_fp = NULL; 
     };
     Params params;
@@ -179,8 +190,26 @@ private:
         std::make_pair<std::string, func_ptr_float> ("blackscholes_2d", this->blackscholes_2d)
     };
     
-    // kernel-specifc input/output conversion wrappers
-    static void fft_2d_input_conversion(KernelParams kernel_params/*, float* h_Data*/, float* d_PaddedData);
+    // kernel-specific input/output conversion wrappers
+    /*
+        Note: arrays.cpp is in charge of allocating and populating h_Data of this tiling block.
+        According to mat and gpumat 's way, the allocation of d_paddedData should be done within input conversion.   
+        Since it is more like an internal memory object that explicitly separated out for staging measurment.
+        But the necessity of the input conversion is part of the behavior of this application design.
+        
+        So, for general standard, kinda need to integrate d_PaddedData into ArrayType ??
+        And the general name should be sth like: d_input_array
+     
+        Oh, it's the: float* fp and float* device_fp in ArrayType. Think of how to leverage them
+
+        Furthermore, float* fp seems to be avoid-able. All input are from void** pointer type and
+        casted into proper types such as mat, gpumat, and float* device_fp that is cuda device memory pointer
+    
+        Be aware of the case that input and output device_fp point to the same memory address. 
+        (a.k.a need to avoid duplicate allocation and fails the program.)
+     */
+
+    static void fft_2d_input_conversion(KernelParams kernel_params, float* h_Data, float* d_PaddedData);
     static void fft_2d_output_conversion(KernelParams kernel_params, float* h_ResultGPU, float* d_PaddedData);
 
     // kernels
