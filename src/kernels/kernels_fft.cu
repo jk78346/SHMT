@@ -64,15 +64,18 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
 void GpuKernel::fft_2d_input_conversion(KernelParams& kernel_params, float* h_Data, float* d_PaddedData){
 // ***** start to integrating fft_2d as the first integration trial *****
     std::cout << __func__ << " starts" << std::endl;
+    
+    //StopWatchInterface *hTimer = NULL;
+    //sdkCreateTimer(&hTimer);
+    
     const int kernelH = 7;
     const int kernelW = 6;
     const int kernelY = 3;
     const int kernelX = 4;
     const int   dataH = kernel_params.params.get_kernel_size();
     const int   dataW = kernel_params.params.get_kernel_size();
- 
-    const int fftH = snapTransformSize(dataH + kernelH - 1); //
-    const int fftW = snapTransformSize(dataW + kernelW - 1); //
+    const int    fftH = snapTransformSize(dataH + kernelH - 1); //
+    const int    fftW = snapTransformSize(dataW + kernelW - 1); //
 
     float* h_Kernel;
     float* d_Data;
@@ -82,24 +85,27 @@ void GpuKernel::fft_2d_input_conversion(KernelParams& kernel_params, float* h_Da
     fComplex* d_DataSpectrum; //
     fComplex* d_KernelSpectrum; //
 
-    cufftHandle fftPlanFwd, fftPlanInv;
+//    cufftHandle fftPlanFwd, fftPlanInv;
 
     // assign input data
     h_Kernel = fft_2d_kernel_array;
 
+    printf("...allocating memory\n");
     timing start = clk::now();
     checkCudaErrors(cudaMalloc((void **)&d_Data, dataH * dataW * sizeof(float)));
     checkCudaErrors(cudaMalloc((void **)&d_Kernel, kernelH * kernelW * sizeof(float)));
+    
     checkCudaErrors(cudaMalloc((void **)&d_PaddedData,   fftH * fftW * sizeof(float)));
     checkCudaErrors(cudaMalloc((void **)&d_PaddedKernel, fftH * fftW * sizeof(float)));
+    
     checkCudaErrors(cudaMalloc((void **)&d_DataSpectrum,   fftH * (fftW / 2 + 1) * sizeof(fComplex)));
     checkCudaErrors(cudaMalloc((void **)&d_KernelSpectrum, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
     checkCudaErrors(cudaMemset(d_KernelSpectrum, 0, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
     timing end = clk::now();
 
     printf("...creating R2C & C2R FFT plans for %i x %i\n", fftH, fftW);
-    checkCudaErrors(cufftPlan2d(&(/*kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanFwd), fftH, fftW, CUFFT_R2C));
-    checkCudaErrors(cufftPlan2d(&(/*kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanInv), fftH, fftW, CUFFT_C2R));
+    checkCudaErrors(cufftPlan2d(&(kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd), fftH, fftW, CUFFT_R2C));
+    checkCudaErrors(cufftPlan2d(&(kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanInv), fftH, fftW, CUFFT_C2R));
     timing end2 = clk::now();
 
     double malloc_ms = get_time_ms(end, start);
@@ -137,7 +143,7 @@ void GpuKernel::fft_2d_input_conversion(KernelParams& kernel_params, float* h_Da
     );
 
     printf("...transforming convolution kernel\n");
-    checkCudaErrors(cufftExecR2C(/*kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanFwd, 
+    checkCudaErrors(cufftExecR2C(kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd, 
                  (cufftReal *)d_PaddedKernel, 
                  (cufftComplex *)d_KernelSpectrum));
 
@@ -169,11 +175,12 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, float* in_device_fp, float* 
     fComplex*   d_DataSpectrum   = kernel_params.cuda_kernel_args.fft_kernel_args.d_DataSpectrum;
     fComplex*   d_KernelSpectrum = kernel_params.cuda_kernel_args.fft_kernel_args.d_KernelSpectrum;
 
-
     d_PaddedData = in_device_fp;
     
     printf("...running GPU FFT convolution\n");
     checkCudaErrors(cudaDeviceSynchronize());
+    //sdkResetTimer(&hTimer);
+    //sdkStartTimer(&hTimer);
 
     checkCudaErrors(cufftExecR2C(kernel_params.cuda_kernel_args.fft_kernel_args.fftPlanFwd, 
                                  (cufftReal *)d_PaddedData, 
@@ -184,7 +191,9 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, float* in_device_fp, float* 
                                  (cufftReal *)d_PaddedData));
  
     checkCudaErrors(cudaDeviceSynchronize());
-
+    //sdkStopTimer(&hTimer);
+    //double gpuTime = sdkGetTimerValue(&hTimer)/iter;
+    //printf("%f MPix/s (%f ms)\n", (double)dataH * (double)dataW * 1e-6 / (gpuTime * 0.001), gpuTime);
     out_device_fp = d_PaddedData;
 
 //    fft_2d_kernel_wrapper(in_img, out_img);

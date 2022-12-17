@@ -15,7 +15,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 set(CMAKE_CUDA_STANDARD 17)
-list(APPEND CUDA_NVCC_FLAGS -O4 -gencode arch=compute_53,code=sm_53)
 
 # Add a series of utils libraries
 add_subdirectory(utils)
@@ -26,7 +25,7 @@ find_package(OpenCV REQUIRED)
 find_package(CUDA 10.2 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
-include_directories(/usr/local/cuda/samples/common/inc) # for helper_cuda.h 
+include_directories(./src/kernels/common/inc) # for helper_cuda.h 
 
 # Find GPTPU library
 find_library(gptpu /usr/local)

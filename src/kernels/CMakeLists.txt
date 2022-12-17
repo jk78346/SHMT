@@ -4,10 +4,14 @@ add_library(kernels ${SRC})
 list(APPEND CUDA_DEV_LIBRARIES
             ${CUDA_cufft_LIBRARY})
 
+# Jetson nano specific flag to ensure optimal warmup performance
+target_compile_options(kernels PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       -gencode arch=compute_53,code=sm_53
+                       >)
+
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
-include_directories(/usr/local/cuda/samples/common/inc) # for helper_cuda.h
-
+include_directories(./common/inc) # for helper_cuda.h
 target_include_directories(kernels PUBLIC include ../../include ../../utils/include ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries(kernels PUBLIC utils ${OpenCV_LIBS} ${CUDA_DEV_LIBRARIES})
