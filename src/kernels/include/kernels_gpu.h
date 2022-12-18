@@ -26,12 +26,10 @@ public:
         this->kernel_params.params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
-//        findCudaDevice();
-        timing start = clk::now();
-        //cudaFree(0);
+//        timing start = clk::now();
         findCudaDevice(1, (const char **)NULL);
-        timing end = clk::now();
-        std::cout << __func__ << " - findCudaDevice() time: " << get_time_ms(end, start) << " (ms) " << std::endl;
+//        timing end = clk::now();
+//        std::cout << __func__ << " - findCudaDevice() time: " << get_time_ms(end, start) << " (ms) " << std::endl;
     };
 
     virtual ~GpuKernel(){};
@@ -57,10 +55,7 @@ public:
 
             // ***** integrating fft_2d conversion as the first trial *****
             if(app_name == "fft_2d"){
-                this->fft_2d_input_conversion(
-                    this->kernel_params, 
-                    this->input_array_type.host_fp,
-                    this->input_array_type.device_fp);
+                this->fft_2d_input_conversion();
             }else{
                 // other fp type of kernels' input conversions
             }
@@ -84,10 +79,7 @@ public:
             mat2array(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             if(app_name == "fft_2d"){
-                this->fft_2d_output_conversion(
-                    this->kernel_params,
-                    this->output_array_type.host_fp,
-                    this->output_array_type.device_fp); 
+                this->fft_2d_output_conversion(); 
             }else{
                 // other fp type of kernels' output conversion
             }
@@ -132,8 +124,8 @@ private:
         timing start = clk::now();
         for(unsigned int i = 0 ; i < iter ; i++){
             this->func_table_fp[this->kernel_params.params.app_name](this->kernel_params, 
-                                                       this->input_array_type.device_fp, 
-                                                       this->output_array_type.device_fp);
+                                                       (void**)&this->input_array_type.device_fp, 
+                                                       (void**)&this->output_array_type.device_fp);
         }
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -151,32 +143,26 @@ private:
     /* 
        kernel_specific input covnersion to actual kernel interfacing arguments
     */
-    struct FftKernelArgs{
-        int fftH;
-        int fftW;
-        float* d_PaddedData;
-        fComplex* d_DataSpectrum;
-        fComplex* d_KernelSpectrum;
-        cufftHandle fftPlanFwd;
-        cufftHandle fftPlanInv;
-    };
+//    struct FftKernelArgs{
+//        float* h_ResultGPU;
+//    };
 
     // generic kernel arguments of cuda type of kernels
-    struct CudaKernelArgs{
-        FftKernelArgs fft_kernel_args;
+//    struct CudaKernelArgs{
+//        FftKernelArgs fft_kernel_args;
         // and others here
-    };
+//    };
 
     // outer params wrapper that includes origin params as well as kernel specific args
     struct KernelParams{
         Params params;
-        CudaKernelArgs cuda_kernel_args;
+//        CudaKernelArgs cuda_kernel_args;
     };
     KernelParams kernel_params;
 
     // function tables
     typedef void (*func_ptr_opencv_cuda)(const cuda::GpuMat, cuda::GpuMat&); // const cuda::GpuMat: input, cuda::GpuMat& : input/output
-    typedef void (*func_ptr_float)(KernelParams&, float*, float*);
+    typedef void (*func_ptr_float)(KernelParams&, void**, void**);
     typedef std::unordered_map<std::string, func_ptr_opencv_cuda> func_table_opencv_cuda;
     typedef std::unordered_map<std::string, func_ptr_float>  func_table_float;
     func_table_opencv_cuda func_table_cv_cuda = {
@@ -210,16 +196,16 @@ private:
         (a.k.a need to avoid duplicate allocation and fails the program.)
      */
 
-    static void fft_2d_input_conversion(KernelParams& kernel_params, float* h_Data, float* d_PaddedData);
-    static void fft_2d_output_conversion(KernelParams& kernel_params, float* h_ResultGPU, float* d_PaddedData);
+    void fft_2d_input_conversion();
+    void fft_2d_output_conversion();
 
     // kernels
     static void minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
-    static void fft_2d(KernelParams& kernel_params, float* input, float* output);
-    static void dct8x8_2d(KernelParams& kernel_params, float* input, float* output);
-    static void blackscholes_2d(KernelParams& kernel_params, float* input, float* output);
+    static void fft_2d(KernelParams& kernel_params, void** input, void** output);
+    static void dct8x8_2d(KernelParams& kernel_params, void** input, void** output);
+    static void blackscholes_2d(KernelParams& kernel_params, void** input, void** output);
 };
 #endif
