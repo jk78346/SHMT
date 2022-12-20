@@ -57,6 +57,10 @@ public:
             if(app_name == "fft_2d"){
                 this->fft_2d_input_conversion();
             }else{
+                /* TODO: curently this is true for both fft and dct8x8, need to
+                    see if separated input conversion functions are needed.
+                 */
+                   this->input_array_type.device_fp = this->input_array_type.host_fp;
                 // other fp type of kernels' input conversions
             }
         }else{
@@ -81,6 +85,8 @@ public:
             if(app_name == "fft_2d"){
                 this->fft_2d_output_conversion(); 
             }else{
+                // TODO: currently this is true for dct8x8
+                this->output_array_type.host_fp = this->output_array_type.device_fp;
                 // other fp type of kernels' output conversion
             }
         }else{
@@ -140,23 +146,9 @@ private:
     };
     ArrayType input_array_type, output_array_type;
 
-    /* 
-       kernel_specific input covnersion to actual kernel interfacing arguments
-    */
-//    struct FftKernelArgs{
-//        float* h_ResultGPU;
-//    };
-
-    // generic kernel arguments of cuda type of kernels
-//    struct CudaKernelArgs{
-//        FftKernelArgs fft_kernel_args;
-        // and others here
-//    };
-
-    // outer params wrapper that includes origin params as well as kernel specific args
     struct KernelParams{
         Params params;
-//        CudaKernelArgs cuda_kernel_args;
+        // other kernel related params or struct
     };
     KernelParams kernel_params;
 

@@ -66,14 +66,13 @@ void GpuKernel::fft_2d_input_conversion(){
 }
 
 void GpuKernel::fft_2d_output_conversion(){
-// crop h_resultGPU[fftW x fftH] to this-<output_array_type.device_fp[dataW x dataH]
     Mat result;
-    const int kernelH = 7;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelH;
-    const int kernelW = 6;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelW;
+    const int kernelH = 7;
+    const int kernelW = 6;
     const int   dataH = kernel_params.params.get_kernel_size();
     const int   dataW = kernel_params.params.get_kernel_size();
-    const int    fftH = snapTransformSize(dataH + kernelH - 1); //
-    const int    fftW = snapTransformSize(dataW + kernelW - 1); //
+    const int    fftH = snapTransformSize(dataH + kernelH - 1); 
+    const int    fftW = snapTransformSize(dataW + kernelW - 1); 
 
     assert(this->output_array_type.device_fp != NULL);
 
@@ -87,66 +86,62 @@ void GpuKernel::fft_2d_output_conversion(){
     Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D.cu
 */
 void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_array){
-// ***** start to integrating fft_2d as the first integration trial *****
     float* h_Data      = reinterpret_cast<float*>(*in_array);
     float* h_ResultGPU = reinterpret_cast<float*>(*out_array);
     
     float* h_Kernel;
     
-    float* d_Data ;//        = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_Data;
-    float* d_PaddedData;//   = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_PaddedData;
-    float* d_Kernel;//       = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_Kernel;
-    float* d_PaddedKernel;// = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_PaddedKernel;
+    float* d_Data ;
+    float* d_PaddedData;
+    float* d_Kernel;
+    float* d_PaddedKernel;
 
-    fComplex* d_DataSpectrum;//   = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_DataSpectrum;
-    fComplex* d_KernelSpectrum;// = this->kernel_params.cuda_kernel_args.fft_kernel_args.d_KernelSpectrum;
+    fComplex* d_DataSpectrum;
+    fComplex* d_KernelSpectrum;
 
     cufftHandle fftPlanFwd, fftPlanInv;
 
-    const int kernelH = 7;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelH;
-    const int kernelW = 6;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelW;
-    const int kernelY = 3;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelY;
-    const int kernelX = 4;//this->kernel_params.cuda_kernel_args.fft_kernel_args.kernelX;
+    const int kernelH = 7;
+    const int kernelW = 6;
+    const int kernelY = 3;
+    const int kernelX = 4;
     const int   dataH = kernel_params.params.get_kernel_size();
     const int   dataW = kernel_params.params.get_kernel_size();
-    const int    fftH = snapTransformSize(dataH + kernelH - 1); //
-    const int    fftW = snapTransformSize(dataW + kernelW - 1); //
+    const int    fftH = snapTransformSize(dataH + kernelH - 1); 
+    const int    fftW = snapTransformSize(dataW + kernelW - 1); 
 
-    printf("...allocating memory\n");
-    timing start = clk::now();
+    //printf("...allocating memory\n");
     h_Kernel = fft_2d_kernel_array;
 
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Data), dataH * dataW * sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Kernel), kernelH * kernelW * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&d_Data, dataH * dataW * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&d_Kernel, kernelH * kernelW * sizeof(float)));
     
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedData),   fftH * fftW * sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedKernel), fftH * fftW * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&d_PaddedData,   fftH * fftW * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&d_PaddedKernel, fftH * fftW * sizeof(float)));
 
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_DataSpectrum),   fftH * (fftW / 2 + 1) * sizeof(fComplex)));
-    checkCudaErrors(cudaMalloc((void **)&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_KernelSpectrum), fftH * (fftW / 2 + 1) * sizeof(fComplex)));
-    checkCudaErrors(cudaMemset(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_KernelSpectrum, 0, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
-    timing end = clk::now();
+    checkCudaErrors(cudaMalloc((void **)&d_DataSpectrum,   fftH * (fftW / 2 + 1) * sizeof(fComplex)));
+    checkCudaErrors(cudaMalloc((void **)&d_KernelSpectrum, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
+    checkCudaErrors(cudaMemset(d_KernelSpectrum, 0, fftH * (fftW / 2 + 1) * sizeof(fComplex)));
 
-    printf("...creating R2C & C2R FFT plans for %i x %i\n", fftH, fftW);
-    checkCudaErrors(cufftPlan2d(&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanFwd), fftH, fftW, CUFFT_R2C));
-    checkCudaErrors(cufftPlan2d(&(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanInv), fftH, fftW, CUFFT_C2R));
-    timing end2 = clk::now();
+    //printf("...creating R2C & C2R FFT plans for %i x %i\n", fftH, fftW);
+    checkCudaErrors(cufftPlan2d(&fftPlanFwd, fftH, fftW, CUFFT_R2C));
+    checkCudaErrors(cufftPlan2d(&fftPlanInv, fftH, fftW, CUFFT_C2R));
 
-    double malloc_ms = get_time_ms(end, start);
-    double cufft_ms = get_time_ms(end2, end);
-
-    std::cout << __func__ << ": malloc time: " << malloc_ms << " (ms), cufftPlan2d time: "  << cufft_ms << " (ms)" << std::endl;
-    printf("...uploading to gpu and padding convolution kernel and input data\n");
-    checkCudaErrors(cudaMemcpy(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Kernel, 
-                               h_Kernel, kernelH * kernelW * sizeof(float), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Data,   
-                               h_Data,   dataH   * dataW *   sizeof(float), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedKernel, 0, fftH * fftW * sizeof(float)));
-    checkCudaErrors(cudaMemset(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedData,   0, fftH * fftW * sizeof(float)));
+    //printf("...uploading to gpu and padding convolution kernel and input data\n");
+    checkCudaErrors(cudaMemcpy(d_Kernel, 
+                               h_Kernel, 
+                               kernelH * kernelW * sizeof(float), 
+                               cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_Data,   
+                               h_Data,   
+                               dataH   * dataW *   sizeof(float), 
+                               cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemset(d_PaddedKernel, 0, fftH * fftW * sizeof(float)));
+    checkCudaErrors(cudaMemset(d_PaddedData,   0, fftH * fftW * sizeof(float)));
 
     padKernel(
-        /*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedKernel,
-        /*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Kernel,
+        d_PaddedKernel,
+        d_Kernel,
         fftH,
         fftW,
         kernelH,
@@ -156,8 +151,8 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_
     );
 
     padDataClampToBorder(
-        /*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedData,
-        /*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_Data,
+        d_PaddedData,
+        d_Data,
         fftH,
         fftW,
         dataH,
@@ -168,30 +163,39 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_
         kernelX
     );
 
-    printf("...transforming convolution kernel\n");
-    checkCudaErrors(cufftExecR2C(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanFwd, 
+    //printf("...transforming convolution kernel\n");
+    checkCudaErrors(cufftExecR2C(fftPlanFwd, 
                  (cufftReal *)d_PaddedKernel, 
                  (cufftComplex *)d_KernelSpectrum));
     
-    printf("...running GPU FFT convolution\n");
+    //printf("...running GPU FFT convolution\n");
     checkCudaErrors(cudaDeviceSynchronize());
     
-    checkCudaErrors(cufftExecR2C(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanFwd, 
-                                 (cufftReal *)/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedData, 
-                                 (cufftComplex *)/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_DataSpectrum));
-    modulateAndNormalize(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_DataSpectrum, 
-                         /*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_KernelSpectrum, fftH, fftW, 1);
-    checkCudaErrors(cufftExecC2R(/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/fftPlanInv, 
-                                 (cufftComplex *)/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_DataSpectrum, 
-                                 (cufftReal *)/*this->kernel_params.cuda_kernel_args.fft_kernel_args.*/d_PaddedData));
+    checkCudaErrors(cufftExecR2C(fftPlanFwd, 
+                                 (cufftReal *)d_PaddedData, 
+                                 (cufftComplex *)d_DataSpectrum));
+    modulateAndNormalize(d_DataSpectrum, d_KernelSpectrum, fftH, fftW, 1);
+    checkCudaErrors(cufftExecC2R(fftPlanInv, 
+                                 (cufftComplex *)d_DataSpectrum, 
+                                 (cufftReal *)d_PaddedData));
  
     checkCudaErrors(cudaDeviceSynchronize());
     
     float* tmp = (float *)malloc(fftH    * fftW * sizeof(float));;
     
-    printf("...reading back GPU convolution results\n");
+    //printf("...reading back GPU convolution results\n");
     checkCudaErrors(cudaMemcpy(tmp, d_PaddedData, fftH * fftW * sizeof(float), cudaMemcpyDeviceToHost)); 
     h_ResultGPU = tmp;
     *out_array = (void*)h_ResultGPU;
+
+    checkCudaErrors(cufftDestroy(fftPlanInv));
+    checkCudaErrors(cufftDestroy(fftPlanFwd));
+
+    checkCudaErrors(cudaFree(d_DataSpectrum));
+    checkCudaErrors(cudaFree(d_KernelSpectrum));
+    checkCudaErrors(cudaFree(d_PaddedData));
+    checkCudaErrors(cudaFree(d_PaddedKernel));
+    checkCudaErrors(cudaFree(d_Data));
+    checkCudaErrors(cudaFree(d_Kernel));
 }
 

@@ -25,7 +25,8 @@ find_package(OpenCV REQUIRED)
 find_package(CUDA 10.2 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
-include_directories(./src/kernels/common/inc) # for helper_cuda.h 
+include_directories(./utils/include) # for Common.h 
+include_directories(./utils/common/inc) # for helper_cuda.h 
 
 # Find GPTPU library
 find_library(gptpu /usr/local)

@@ -1,6 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include "arrays.h"
 #include "utils.h"
+#include "Common.h"
+#include "BmpUtil.h"
 
 /*
     Input array allocation and initialization.
@@ -16,6 +18,70 @@ std::vector<std::string> uint8_t_type_app = {
     "laplacian_2d"
 };
 
+void init_fft(unsigned int input_total_size, void** input_array){
+    printf("...generating random input data\n");
+    srand(2010);
+    float* tmp = reinterpret_cast<float*>(*input_array);
+    for(unsigned int i = 0 ; i < input_total_size ; i++){
+        tmp[i] = (float)(rand() % 16);        
+    }
+}
+
+void init_dct8x8(int rows, int cols, void** input_array){
+    /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu */
+    char SampleImageFname[] = "../data/barbara.bmp";
+    char *pSampleImageFpath = sdkFindFilePath(SampleImageFname, NULL/*argv[0]*/);
+    if (pSampleImageFpath == NULL)
+    {
+        printf("dct8x8 could not locate Sample Image <%s>\nExiting...\n", pSampleImageFpath);
+        exit(EXIT_FAILURE);
+    }
+
+    //preload image (acquire dimensions)
+    int ImgWidth = rows;
+    int ImgHeight = cols;
+    ROI ImgSize;
+    int res = PreLoadBmp(pSampleImageFpath, &ImgWidth, &ImgHeight);
+    ImgSize.width = ImgWidth;
+    ImgSize.height = ImgHeight;
+    if (res)
+    {
+        printf("\nError: Image file not found or invalid!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //check image dimensions are multiples of BLOCK_SIZE
+    if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
+    {
+        printf("\nError: Input image dimensions must be multiples of 8!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("[%d x %d]... ", ImgWidth, ImgHeight);
+
+    //allocate image buffers
+    int ImgStride;
+    byte *ImgSrc = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+//    byte *ImgDstGold1 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+//    byte *ImgDstGold2 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+//    byte *ImgDstCUDA1 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+//    byte *ImgDstCUDA2 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+//    byte *ImgDstCUDAshort = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
+
+    //load sample image
+    LoadBmpAsGray(pSampleImageFpath, ImgStride, ImgSize, ImgSrc);
+
+    /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu: float WrapperCUDA2() function */   
+    //allocate host buffers for DCT and other data
+    int StrideF;
+    float *ImgF1 = MallocPlaneFloat(ImgSize.width, ImgSize.height, &StrideF);
+
+    //convert source image to float representation
+    CopyByte2Float(ImgSrc, ImgStride, ImgF1, StrideF, ImgSize);
+    AddFloatPlane(-128.0f, ImgF1, StrideF, ImgSize);
+    
+    *input_array = ImgF1;
+}
 
 void data_initialization(Params params,
                          void** input_array,
@@ -45,14 +111,10 @@ void data_initialization(Params params,
         *input_array = (float*) malloc(input_total_size * sizeof(float));
         *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
         *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
-
         if(params.app_name == "fft_2d"){
-            printf("...generating random input data\n");
-            srand(2010);
-            float* tmp = reinterpret_cast<float*>(*input_array);
-            for(unsigned int i = 0 ; i < input_total_size ; i++){
-                tmp[i] = (float)(rand() % 16);        
-            }
+            init_fft(input_total_size, input_array);
+        }else if(params.app_name == "dct8x8_2d"){
+            init_dct8x8(rows, cols, input_array);
         }else{
             Mat in_img;
             read_img(params.input_data_path,
