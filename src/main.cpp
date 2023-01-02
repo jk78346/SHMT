@@ -183,9 +183,14 @@ int main(int argc, char* argv[]){
     Quality* quality = new Quality(proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
                                    proposed_params.problem_size, // ldn
+                                   proposed_params.block_size,
+                                   proposed_params.block_size,
                                    unify_proposed_type->float_array, 
                                    unify_baseline_type->float_array);
-    quality->print_results(1/*verbose*/);
+    bool is_tiling = 
+        (baseline_params.problem_size > baseline_params.block_size)?true:false;
+
+    quality->print_results(is_tiling, 1/*verbose*/);
 
     // save result arrays as image files
     std::cout << "saving output results as images..." << std::endl;

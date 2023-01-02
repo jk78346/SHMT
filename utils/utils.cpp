@@ -147,11 +147,11 @@ void dump_to_csv(std::string log_file_path,
                 proposed_time_breakdown->kernel_time_ms) << ","
            << (baseline_time_breakdown->get_total_time_ms(iter) /
                 proposed_time_breakdown->get_total_time_ms(iter)) << ","
-           << quality->rmse(0) / 100 << ","
-           << quality->error_rate(0) / 100 << ","
-           << quality->error_percentage(0) / 100 << ","
-           << quality->ssim(0) << ","
-           << quality->pnsr(0) << ","
+           << quality->rmse() / 100 << ","
+           << quality->error_rate() / 100 << ","
+           << quality->error_percentage() / 100 << ","
+           << quality->ssim() << ","
+           << quality->pnsr() << ","
            << std::ctime(&timestamp) << std::endl; 
 
     myfile.close();
