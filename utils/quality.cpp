@@ -11,6 +11,7 @@ Quality::Quality(int m,
                  int ldn, 
                  int row_blk, 
                  int col_blk,
+                 float* input_mat,
                  float* x,
                  float* y){
 	this->row          = m;
@@ -24,6 +25,7 @@ Quality::Quality(int m,
     this->col_cnt = col / col_blk;
     assert(this->row_cnt >= 1);
     assert(this->col_cnt >= 1);
+    this->input_mat = input_mat;
     this->target_mat   = x;
 	this->baseline_mat = y;
 }
@@ -73,7 +75,7 @@ float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_si
 			sum += pow(x[i*this->ldn+j] - ux, 2);
 		}
 	}
-	return pow((float)(sum / (double)(this->row_blk*this->col_blk)), 0.5);
+	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
 }
 
 float Quality::covariance(int i_start, int j_start, int row_size, int col_size){
@@ -247,10 +249,12 @@ float Quality::pnsr(int i, int j){
 }
 
 void Quality::print_quality(Unit quality){
-    std::cout << quality.rmse << " ";
-    std::cout << quality.error_rate << " ";
-    std::cout << quality.error_percentage << " ";
-    std::cout << quality.ssim << " ";
+    std::cout << "(" << quality.input_dist_stats.mean << ", ";
+    std::cout << quality.input_dist_stats.sdev << ") | ";
+    std::cout << quality.rmse << ", ";
+    std::cout << quality.error_rate << ", ";
+    std::cout << quality.error_percentage << ", ";
+    std::cout << quality.ssim << ", ";
     std::cout << quality.pnsr << std::endl;
 }
 
@@ -260,7 +264,17 @@ void Quality::print_results(bool is_tiling, int verbose){
         this->error_rate(),
         this->error_percentage(),
         this->ssim(),
-        this->pnsr()
+        this->pnsr(),
+        {this->average(this->input_mat, 
+                       0,
+                       0, 
+                       this->row,
+                       this->col),
+         this->sdev(this->input_mat,
+                    0,
+                    0,
+                    this->row,
+                    this->col)}
     };
     std::vector<Unit> tiling_quality;
 
@@ -272,7 +286,17 @@ void Quality::print_results(bool is_tiling, int verbose){
                     this->error_rate(i, j),
                     this->error_percentage(i, j),
                     this->ssim(i, j),
-                    this->pnsr(i, j)
+                    this->pnsr(i, j),
+                    {this->average(this->input_mat, 
+                                   i*this->row_blk,
+                                   j*this->col_blk, 
+                                   this->row_blk,
+                                   this->col_blk),
+                     this->sdev(this->input_mat,
+                                i*this->row_blk,
+                                j*this->col_blk,
+                                this->row_blk,
+                                this->col_blk)}
                 };
                 tiling_quality.push_back(per_quality);
             }
@@ -324,12 +348,12 @@ void Quality::print_results(bool is_tiling, int verbose){
     printf("Quality results(is_tiling?%d)\n", is_tiling);
     printf("=============================================\n");
     std::cout << "total quality: " << std::endl;
-    std::cout << "rmse(\%) error_rate(\%) error_percentage(\%) ssim pnsr(dB)" << std::endl;
+    std::cout << "input(mean, sdev) | rmse(\%), error_rate(\%), error_percentage(\%), ssim, pnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
-        std::cout << "        rmse(\%) error_rate(\%) error_percentage(\%) ssim pnsr(dB)" << std::endl;
+        std::cout << "(i, j) input(mean, sdev) | rmse(\%) error_rate(\%), error_percentage(\%), ssim, pnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";

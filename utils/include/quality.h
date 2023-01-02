@@ -10,6 +10,7 @@ class Quality{
                 int ldn, 
                 int row_blk, 
                 int col_blk, 
+                float* input_mat,
                 float* target_mat, 
                 float* baseline_mat);
 
@@ -33,12 +34,20 @@ class Quality{
         void print_results(bool is_tiling, int verbose);
 
     private:
+        struct DistStats{
+            float mean;
+            float sdev;
+        };
+        
         struct Unit{
             float rmse;
             float error_rate;
             float error_percentage;
             float ssim;
             float pnsr;
+            
+            // input array's statistic
+            DistStats input_dist_stats;
         };
         void print_quality(Unit quality);
 
@@ -66,6 +75,7 @@ class Quality{
         int col_blk;
         int row_cnt;
         int col_cnt;
+        float* input_mat;
         float* target_mat;
 	    float* baseline_mat;
 };

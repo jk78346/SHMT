@@ -172,7 +172,12 @@ int main(int argc, char* argv[]){
 
     std::cout << "Converting output array to float type for quality measurement..." 
               << std::endl;
-    
+    std::cout << "[WARN] now input and output mats are assumed to have the "
+              << "same params setting, " 
+              << "quality result will fail if not so." << std::endl;
+
+    UnifyType* unify_input_type = 
+        new UnifyType(baseline_params, input_array);
     UnifyType* unify_baseline_type = 
         new UnifyType(baseline_params, output_array_baseline);    
     UnifyType* unify_proposed_type = 
@@ -185,6 +190,7 @@ int main(int argc, char* argv[]){
                                    proposed_params.problem_size, // ldn
                                    proposed_params.block_size,
                                    proposed_params.block_size,
+                                   unify_input_type->float_array,
                                    unify_proposed_type->float_array, 
                                    unify_baseline_type->float_array);
     bool is_tiling = 
@@ -219,7 +225,7 @@ int main(int argc, char* argv[]){
               << " (ms), "
               << proposed_time_breakdown->kernel_time_ms/proposed_params.iter 
               << " (ms)"
-              << ", proposed one is averaged over " << proposed_params.iter 
+              << ", averaged over " << proposed_params.iter 
               << " time(s)." << std::endl;
     std::cout << "output conversion time: " 
               << baseline_time_breakdown->output_time_ms << " (ms), " 
