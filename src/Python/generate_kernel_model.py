@@ -50,7 +50,7 @@ class MyDataGen():
         self.model_name         = params.model_name
         # The ground truth function callable
         self.func               = target_func
-        self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in_npy/train/ILSVRC2014_train_0000/", '.npy')[:self.num_samples] 
+        self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
         self.num_imgs           = len(self.input_img_paths)
 
     def random_input_gen(self):
@@ -85,11 +85,14 @@ class MyDataGen():
     def representative_gen(self):
         """ representative dataset generator """
         for j in range(self.num_representative):
+            image = Image.open(self.input_img_paths[j])
+            image = image.resize(self.in_shape)
+            x_slice = np.expand_dims(image, axis=0).astype("uint8")
 #            x_slice = np.load(self.input_img_paths[j])
 #            x_slice = np.expand_dims(x_slice, axis=0)
             num_boundary = 16 if self.model_name == 'fft_2d' else 255
             np.random.seed(j)
-            x_slice = np.random.randint(num_boundary, size=(1,) + self.in_shape, dtype="uint8")
+#            x_slice = np.random.randint(num_boundary, size=(1,) + self.in_shape, dtype="uint8")
             tf.keras.utils.set_random_seed(seed)
             x_slice = np.expand_dims(x_slice, axis=-1)
             x = x_slice.astype('float32')
@@ -220,7 +223,38 @@ def pre_quantize_test(params, target_func):
     cv.imwrite("./ground_truth.png", Y_ground_truth)
     cv.imwrite("./predict.png", Y_predict)
 
-def convert_to_tflite(params, representative_gen):
+def pre_edgetpu_compiler_tflite_test(params, target_func):
+    """ This function test run the pre edgetpu_copiler compiled tflite model on CPU. """
+    # get ground truth
+    if params.model_name == 'fft_2d':
+        X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
+        Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
+    else:
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('uint8') 
+        Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
+
+    interpreter = tf.lite.Interpreter(model_path=params.tflite_model_path)
+    interpreter.allocate_tensors()
+
+    input_details = interpreter.get_input_details()[0]
+    output_details = interpreter.get_output_details()[0]
+    
+    #if input_details['dtype'] == np.uint8:
+    #    input_scale, input_zero_point = input_details["quantization"]
+    #    X_test = X_test / input_scale + input_zero_point
+    
+    X_test = np.expand_dims(X_test, axis=-1)
+    X_test = np.expand_dims(X_test, axis=0).astype(input_details["dtype"])
+    interpreter.set_tensor(input_details["index"], X_test)
+    interpreter.invoke()
+    Y_predict = interpreter.get_tensor(output_details["index"])[0]
+    Y_predict = np.squeeze(Y_predict, axis=-1)
+
+    calc_metrics(Y_ground_truth, Y_predict) 
+
+def convert_to_tflite(params, representative_gen, target_func):
     """ This function converts saved tf model to edgeTPU-compatible tflite model. """
     print("start converting to tflite setting...")
     converter = tf.lite.TFLiteConverter.from_saved_model(params.saved_model_path)
@@ -233,6 +267,8 @@ def convert_to_tflite(params, representative_gen):
     tflite_model = converter.convert()
     with open(params.tflite_model_path, "wb") as f:
         f.write(tflite_model)
+    print("pre-edgetpu_compiler tflite testing...")
+    pre_edgetpu_compiler_tflite_test(params, target_func)
     print("edgetpu_compiler compiling...")
     os.system("edgetpu_compiler -s -m 13 "+params.tflite_model_path+" -o "+params.saved_model_dir)
 
@@ -250,7 +286,7 @@ def main(args):
     if args.skip_pre_test == False:
         pre_quantize_test(params, target_func)
     if args.skip_tflite == False:
-        convert_to_tflite(params, my_data_gen.representative_gen)
+        convert_to_tflite(params, my_data_gen.representative_gen, target_func)
     
 
 if __name__ == "__main__":
