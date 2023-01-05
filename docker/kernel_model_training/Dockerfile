@@ -28,7 +28,8 @@ RUN apt-get update && apt-get -y install vim && \
         apt-get install -y git && \
         python -m pip install scipy && \
         pip install Pillow scikit-image && \
-        apt-get install -y cmake
+        apt-get install -y cmake && \
+        pip install -q tensorflow-model-optimization
 
 # convention setup
 FROM BUILD3 AS BUILD4
