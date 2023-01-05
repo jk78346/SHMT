@@ -252,6 +252,11 @@ def pre_edgetpu_compiler_tflite_test(params, target_func):
     Y_predict = interpreter.get_tensor(output_details["index"])[0]
     Y_predict = np.squeeze(Y_predict, axis=-1)
 
+    print("X_test: ", np.squeeze(np.squeeze(X_test, axis=0), axis=-1))
+    print("Y_ground_truth: ", Y_ground_truth)
+    print("Y_predict: ", Y_predict)
+    input_scale, input_zero_point = input_details["quantization"]
+    print("input_scale: ", input_scale, ", input_zero_point: ", input_zero_point)
     calc_metrics(Y_ground_truth, Y_predict) 
 
 def convert_to_tflite(params, representative_gen, target_func):
