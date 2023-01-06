@@ -71,22 +71,28 @@ class MyDataGen():
                 x_slice = np.random.randint(16, size=self.in_shape, dtype="uint8") 
                 tf.keras.utils.set_random_seed(seed)
                 y_slice = self.func(x_slice, fft_2d_kernel_array)
+                x_max = 15.
+                y_max = 3300.
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
                 tf.keras.utils.set_random_seed(seed)
                 y_slice = self.func(x_slice)
+                x_max = 255.
+                y_max = 255.
 
             x_slice = np.expand_dims(x_slice, axis=-1)
             y_slice = np.expand_dims(y_slice, axis=-1)
-            x[j] = (x_slice.astype('float32') / 255.) 
-            y[j] = (y_slice.astype('float32') / 255.)
+            
+            x[j] = (x_slice.astype('float32') / x_max) 
+            y[j] = (y_slice.astype('float32') / y_max)
         return x, y
     
     def representative_gen(self):
         """ representative dataset generator """
         for j in range(self.num_representative):
-            image = Image.open(self.input_img_paths[j])
+            print("j: ", j, ", j%self.mum_imgs: ", j%self.num_imgs)
+            image = Image.open(self.input_img_paths[j%self.num_imgs])
             image = image.resize(self.in_shape)
             x_slice = np.expand_dims(image, axis=0).astype("uint8")
 #            x_slice = np.load(self.input_img_paths[j])
@@ -139,6 +145,7 @@ def train(params, train_from_scratch, kernel_model, random_input_gen, qat):
     # enable quantization-aware training if the flag is set.
     if qat == True:
         quantize_model = tfmot.quantization.keras.quantize_model
+        #tfmot.quantization.keras.quantize_apply(annotated_model)
         model = quantize_model(model)
         print("===== QAT mode is set. =====")
 
@@ -193,11 +200,15 @@ def pre_quantize_test(params, target_func):
     if params.model_name == 'fft_2d':
         X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
         Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
+        x_scale = 15.
+        y_scale = 3300.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
         X_test = np.asarray(image).astype('uint8') 
         Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
+        x_scale = 255.
+        y_scale = 255.
     
     print("X.shape: ", X_test.shape, ", dtype: ", X_test.dtype, ", max: ", X_test.max(), ", min: ", X_test.min())
     print(X_test)
@@ -211,12 +222,13 @@ def pre_quantize_test(params, target_func):
 
     print("start to evaluate...")
     # get model prediction
-    X_test = (X_test.astype('float32') / 255.) 
+    X_test = (X_test.astype('float32') / x_scale) 
     model.summary()
+    print(X_test[0][:,:,0])
     print("X_test.shape: ", X_test.shape)
     Y_predict = model.predict(X_test, batch_size=1)
     Y_predict = np.asarray(Y_predict)
-    Y_predict = (Y_predict)  * 255.
+    Y_predict = (Y_predict)  * y_scale
     Y_predict = np.squeeze(Y_predict, axis=0)
     Y_predict = np.squeeze(Y_predict, axis=-1)
     print("Y_predict.shape: ", Y_predict.shape, ", dtype: ", Y_predict.dtype, ", max: ", Y_predict.max(), ", min: ", Y_predict.min())
@@ -236,45 +248,55 @@ def pre_edgetpu_compiler_tflite_test(params, target_func):
     if params.model_name == 'fft_2d':
         X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
         Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
+        x_scale = 15.
+        y_scale = 3300.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
         X_test = np.asarray(image).astype('uint8') 
         Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
+        x_scale = 255.
+        y_scale = 255.
 
     interpreter = tf.lite.Interpreter(model_path=params.tflite_model_path)
     interpreter.allocate_tensors()
 
     input_details = interpreter.get_input_details()[0]
     output_details = interpreter.get_output_details()[0]
-    
+   
     #if input_details['dtype'] == np.uint8:
     #    input_scale, input_zero_point = input_details["quantization"]
     #    X_test = X_test / input_scale + input_zero_point
-    
+
     X_test = np.expand_dims(X_test, axis=-1)
-    X_test = np.expand_dims(X_test, axis=0).astype(input_details["dtype"])
+    X_test = np.expand_dims(X_test, axis=0).astype(input_details["dtype"]) / x_scale
     interpreter.set_tensor(input_details["index"], X_test)
     interpreter.invoke()
+    output_details = interpreter.get_output_details()[0]
+
     Y_predict = interpreter.get_tensor(output_details["index"])[0]
-    Y_predict = np.squeeze(Y_predict, axis=-1)
+    Y_predict = np.squeeze(Y_predict, axis=-1)  * y_scale
 
     print("X_test: ", np.squeeze(np.squeeze(X_test, axis=0), axis=-1))
-    print("Y_ground_truth: ", Y_ground_truth)
-    print("Y_predict: ", Y_predict)
+    print("Y_ground_truth: ", Y_ground_truth, ", max: ", Y_ground_truth.max(), ", min: ", Y_ground_truth.min())
+    print("Y_predict: ", Y_predict, ", max: ", Y_predict.max(), ",min: ", Y_predict.min())
     input_scale, input_zero_point = input_details["quantization"]
     print("input_scale: ", input_scale, ", input_zero_point: ", input_zero_point)
     calc_metrics(Y_ground_truth, Y_predict) 
 
-def convert_to_tflite(params, representative_gen, target_func):
+def convert_to_tflite(params, representative_gen, target_func, qat):
     """ This function converts saved tf model to edgeTPU-compatible tflite model. """
-    print("start converting to tflite setting...")
+
+    print("start converting to tflite setting...(QAT = ", qat, ")")
     converter = tf.lite.TFLiteConverter.from_saved_model(params.saved_model_path)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.representative_dataset = representative_gen
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.uint8
-    converter.inference_output_type = tf.uint8
+    
+    if qat == False:
+        converter.representative_dataset = representative_gen
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+        converter.inference_input_type = tf.uint8
+        converter.inference_output_type = tf.uint8
+
     print("converter starts converting...")
     tflite_model = converter.convert()
     with open(params.tflite_model_path, "wb") as f:
@@ -298,7 +320,7 @@ def main(args):
     if args.skip_pre_test == False:
         pre_quantize_test(params, target_func)
     if args.skip_tflite == False:
-        convert_to_tflite(params, my_data_gen.representative_gen, target_func)
+        convert_to_tflite(params, my_data_gen.representative_gen, target_func, args.qat)
     
 
 if __name__ == "__main__":

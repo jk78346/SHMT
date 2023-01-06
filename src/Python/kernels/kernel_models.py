@@ -76,22 +76,40 @@ class KernelModels:
     @staticmethod
     def laplacian_2d(in_shape, out_shape):
         """ This function returns a NN-based Laplacian filter model."""
+        #encoded_dim = 16
+        #inputs = keras.Input(shape=in_shape+(1,))
+        #x = layers.Conv2D(filters=2, kernel_size=(3, 3), padding='same', activation='relu')(inputs)
+        #x = layers.Conv2D(filters=encoded_dim, kernel_size=(3, 3), padding='same', activation='relu')(x)
+        #x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same', activation='relu')(x)
+        #outputs = x
+        #return keras.Model(inputs, outputs)
+        
         encoded_dim = 16
+        init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
         inputs = keras.Input(shape=in_shape+(1,))
-        x = layers.Conv2D(filters=2, kernel_size=(3, 3), padding='same', activation='relu')(inputs)
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3, 3), padding='same', activation='relu')(x)
-        x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same', activation='relu')(x)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(inputs)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
+        x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
         outputs = x
         return keras.Model(inputs, outputs)
 
     @staticmethod
     def fft_2d(in_shape, out_shape):
         """ This function returns a NN-based convolveFFT2D model. """
-        encoded_dim = 4
+        #encoded_dim = 4
         inputs = keras.Input(shape=in_shape+(1,))
         x = layers.Conv2D(filters=1, kernel_size=(7, 7), padding='same', use_bias=False)(inputs)
         outputs = x
         return keras.Model(inputs, outputs)
+        
+        #encoded_dim = 16
+        #init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+        #inputs = keras.Input(shape=in_shape+(1,))
+        #x = layers.Conv2D(filters=2, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(inputs)
+        #x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
+        #x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
+        #outputs = x
+        #return keras.Model(inputs, outputs)
     
     @staticmethod
     def dct8x8_2d(in_shape, out_shape):

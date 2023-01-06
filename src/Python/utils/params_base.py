@@ -26,7 +26,7 @@ class TrainParamsBase():
                  batch_size = 4,
                  epochs = 1000,
                  num_train = 400,
-                 num_representative = 2,
+                 num_representative = 100,
                  optimizer = keras.optimizers.Adam(learning_rate=0.01),
                  loss = keras.losses.MeanSquaredError(),
                  metrics = [keras.metrics.RootMeanSquaredError()],
@@ -115,7 +115,7 @@ class TrainParams(TrainParamsBase):
                                      in_shape=(size, size),
                                      out_shape=(size, size),
                                      min_delta=1e-12,
-                                     optimizer=keras.optimizers.Adam(learning_rate=0.1))
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.01))
         elif model_name == 'dct8x8_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 
