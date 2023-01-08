@@ -251,12 +251,12 @@ def pre_edgetpu_compiler_tflite_test(params, target_func):
         x_scale = 15.
         y_scale = 3300.
     else:
+        x_scale = 255.
+        y_scale = 1.
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
-        X_test = np.asarray(image).astype('uint8') 
+        X_test = np.asarray(image).astype('float32') / x_scale
         Y_ground_truth = target_func(np.asarray(image).astype('uint8'))
-        x_scale = 255.
-        y_scale = 255.
 
     interpreter = tf.lite.Interpreter(model_path=params.tflite_model_path)
     interpreter.allocate_tensors()
@@ -264,18 +264,18 @@ def pre_edgetpu_compiler_tflite_test(params, target_func):
     input_details = interpreter.get_input_details()[0]
     output_details = interpreter.get_output_details()[0]
    
-    #if input_details['dtype'] == np.uint8:
-    #    input_scale, input_zero_point = input_details["quantization"]
-    #    X_test = X_test / input_scale + input_zero_point
+    if input_details['dtype'] == np.uint8:
+        input_scale, input_zero_point = input_details["quantization"]
+        X_test = X_test / input_scale + input_zero_point
 
     X_test = np.expand_dims(X_test, axis=-1)
-    X_test = np.expand_dims(X_test, axis=0).astype(input_details["dtype"]) / x_scale
+    X_test = np.expand_dims(X_test, axis=0).astype(input_details["dtype"])
     interpreter.set_tensor(input_details["index"], X_test)
     interpreter.invoke()
     output_details = interpreter.get_output_details()[0]
 
     Y_predict = interpreter.get_tensor(output_details["index"])[0]
-    Y_predict = np.squeeze(Y_predict, axis=-1)  * y_scale
+    Y_predict = np.squeeze(Y_predict, axis=-1) * y_scale
 
     print("X_test: ", np.squeeze(np.squeeze(X_test, axis=0), axis=-1))
     print("Y_ground_truth: ", Y_ground_truth, ", max: ", Y_ground_truth.max(), ", min: ", Y_ground_truth.min())
@@ -291,11 +291,11 @@ def convert_to_tflite(params, representative_gen, target_func, qat):
     converter = tf.lite.TFLiteConverter.from_saved_model(params.saved_model_path)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     
-    if qat == False:
-        converter.representative_dataset = representative_gen
-        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-        converter.inference_input_type = tf.uint8
-        converter.inference_output_type = tf.uint8
+    #if qat == False:
+    converter.representative_dataset = representative_gen
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.uint8
+    converter.inference_output_type = tf.uint8
 
     print("converter starts converting...")
     tflite_model = converter.convert()

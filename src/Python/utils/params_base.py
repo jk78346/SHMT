@@ -26,7 +26,7 @@ class TrainParamsBase():
                  batch_size = 4,
                  epochs = 1000,
                  num_train = 400,
-                 num_representative = 100,
+                 num_representative = 2,
                  optimizer = keras.optimizers.Adam(learning_rate=0.01),
                  loss = keras.losses.MeanSquaredError(),
                  metrics = [keras.metrics.RootMeanSquaredError()],

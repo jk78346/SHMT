@@ -251,10 +251,10 @@ float Quality::pnsr(int i, int j){
 void Quality::print_quality(Unit quality){
     std::cout << "(" << quality.input_dist_stats.mean << ", ";
     std::cout << quality.input_dist_stats.sdev << ") | ";
-    std::cout << quality.rmse << ", ";
-    std::cout << quality.error_rate << ", ";
-    std::cout << quality.error_percentage << ", ";
-    std::cout << quality.ssim << ", ";
+    std::cout << quality.rmse << "\t, ";
+    std::cout << quality.error_rate << "\t, ";
+    std::cout << quality.error_percentage << "\t, ";
+    std::cout << quality.ssim << "\t, ";
     std::cout << quality.pnsr << std::endl;
 }
 
@@ -348,12 +348,12 @@ void Quality::print_results(bool is_tiling, int verbose){
     printf("Quality results(is_tiling?%d)\n", is_tiling);
     printf("=============================================\n");
     std::cout << "total quality: " << std::endl;
-    std::cout << "input(mean, sdev) | rmse(\%), error_rate(\%), error_percentage(\%), ssim, pnsr(dB)" << std::endl;
+    std::cout << "input(mean, sdev) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tsim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
-        std::cout << "(i, j) input(mean, sdev) | rmse(\%) error_rate(\%), error_percentage(\%), ssim, pnsr(dB)" << std::endl;
+        std::cout << "(i, j) input(mean, sdev) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";

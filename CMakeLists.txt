@@ -29,10 +29,10 @@ include_directories(./utils/include) # for Common.h
 include_directories(./utils/common/inc) # for helper_cuda.h 
 
 # Find GPTPU library
-find_library(gptpu /usr/local)
+find_library(GPTPU_UTILS_LIB gptpu_utils /usr/local/)
+message(STATUS ${GPTPU_UTILS_LIB})
 
 file(GLOB SRC_FILES src/*.cpp)
 add_executable(${PROJ_NAME} ${SRC_FILES})
 target_include_directories(${PROJ_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(${PROJ_NAME} PUBLIC utils kernels ${OpenCV_LIBS} gptpu)
-
+target_link_libraries(${PROJ_NAME} PUBLIC utils kernels ${OpenCV_LIBS} ${GPTPU_UTILS_LIB})
