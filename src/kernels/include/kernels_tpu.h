@@ -33,7 +33,8 @@ public:
     };
 
     virtual ~TpuKernel(){
-        delete this->device_handler;
+        if(this->device_handler != nullptr)
+            delete this->device_handler;
     };
    
     unsigned int get_opened_dev_cnt(){
@@ -58,23 +59,18 @@ public:
             this->params.get_kernel_size() * this->params.get_kernel_size();        
 
         // tflite model input array initialization
-        this->input_kernel  = (uint8_t*) malloc(this->in_size * sizeof(uint8_t));
-        this->output_kernel = (uint8_t*) calloc(this->out_size, sizeof(uint8_t));
         if( std::find(this->kernel_table_uint8.begin(),
                       this->kernel_table_uint8.end(),
                       app_name) !=
             this->kernel_table_uint8.end() ){
-            uint8_t* input_array  = reinterpret_cast<uint8_t*>(this->input);
-
-            // input array conversion
-            for(unsigned int i = 0 ; i < this->in_size ; i++){
-                this->input_kernel[i] = ((int)(input_array[i] /*+ 128*/)) % 256; // uint8_t to int conversion
-            }
+            this->input_kernel  = reinterpret_cast<uint8_t*>(this->input);
             this->output_kernel = reinterpret_cast<uint8_t*>(this->output);
         }else if( std::find(this->kernel_table_fp.begin(),
                             this->kernel_table_fp.end(),
                             app_name) !=
                   this->kernel_table_fp.end() ){
+            this->input_kernel  = (uint8_t*) malloc(this->in_size * sizeof(uint8_t));
+            this->output_kernel = (uint8_t*) calloc(this->out_size, sizeof(uint8_t));
             float* input_array  = reinterpret_cast<float*>(this->input);
 
             // input array conversion
@@ -86,8 +82,11 @@ public:
         }
         
         this->model_id = this->device_handler->build_model(this->kernel_path);
-        this->device_handler->build_interpreter(this->tpuid, this->model_id);
-        this->device_handler->populate_input(this->input_kernel, this->in_size, this->model_id);
+        this->device_handler->build_interpreter(rand()%this->dev_cnt, // random
+                                                this->model_id);
+        this->device_handler->populate_input(this->input_kernel, 
+                                             this->in_size, 
+                                             this->model_id);
 
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -163,7 +162,7 @@ private:
     };
     gptpu_utils::EdgeTpuHandler* device_handler;
     unsigned int dev_cnt = 0;
-    unsigned int tpuid;
+    unsigned int tpuid = 0;
     unsigned int model_id;
 };
 
