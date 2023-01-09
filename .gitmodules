@@ -7,3 +7,6 @@
 [submodule "third_party/concurrentqueue"]
 	path = third_party/concurrentqueue
 	url = git@github.com:cameron314/concurrentqueue.git
+[submodule "edgetpu"]
+	path = edgetpu
+	url = git@github.com:jk78346/edgetpu.git
