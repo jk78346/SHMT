@@ -3,8 +3,8 @@ General-Purposed GPU and TPU project (Jetson nano + edgeTPU). \
 This project contains two major parts: kernel model training scheme and the acutal partition execution scheme. These two schemes require two different cooresponding platforms. 
 
 ## Tested platforms
-The training mode: Ubuntu 20.04 x86_64 12th Gen Intel(R) Core(TM) i9-12900KF (Rayquaza in Escal's environment)
-The partition execution mode: Ubuntu 18.04 aarch64 Cortex-A57 (nano-2 in Escal's environment)
+The kernel model training stage: Ubuntu 20.04 x86_64 12th Gen Intel(R) Core(TM) i9-12900KF (Rayquaza in Escal's environment) \
+The partition execution stage: Ubuntu 18.04 aarch64 Cortex-A57 (nano-2 in Escal's environment)
 
 
 ## Pre-requisites
@@ -51,14 +51,24 @@ sudo systemctl restart docker
 ```
 
 ## Build and execution
-### 1. The kernel model training mode (on Rayquaza as example)
+### 1. Prepare the gptpu_utils shared library
+1. Cross-compile it on x86 machine
+```
+(on x86 host at $GITTOP)$ sh scripts/build_gptpu_utils_on_x86.sh
+```
+2. install the output ```libgptpu_utils.so``` and header ```gptpu_utils.h``` on nano aarch64 machine
+```
+(on aarch64 host at $GITTOP)$ sh scripts/install_gptpu_utils_on_aarch64.sh
+```
+
+### 2. The kernel model training mode (on Rayquaza as example)
 (TBD)
-### 2. The partition execution mode (on Jetson nano-2 as example)
+### 3. The partition execution mode (on Jetson nano-2 as example)
 To build project and run a single CPU v.s. GPU example:
 ```
 (on host at $GITTOP)$ mkdir -p nano_host_build && cd nano_host_build
 (on host at $GITTOP)$ cmake .. && make
-(on host at $GITTOP)$ sudo ./gpgtpu sobel_2d 1024 1 cpu gpu
+(on host at $GITTOP)$ sudo ./gpgtpu sobel_2d 1024 1024 1 cpu gpu ../del.csv
 ```
 
 To build project and run a single CPU v.s. edgeTPU example:
