@@ -108,14 +108,15 @@ void data_initialization(Params params,
                  in_img);
         mat2array(in_img, (uint8_t*)*input_array);
     }else{ // others are default as float type
-        *input_array = (float*) malloc(input_total_size * sizeof(float));
         *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
         *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
         if(params.app_name == "fft_2d"){
+            *input_array = (float*) malloc(input_total_size * sizeof(float));
             init_fft(input_total_size, input_array);
         }else if(params.app_name == "dct8x8_2d"){
             init_dct8x8(rows, cols, input_array);
         }else{
+            *input_array = (float*) malloc(input_total_size * sizeof(float));
             Mat in_img;
             read_img(params.input_data_path,
                     rows,

@@ -61,6 +61,7 @@ public:
                     see if separated input conversion functions are needed.
                  */
                    this->input_array_type.device_fp = this->input_array_type.host_fp;
+                   this->output_array_type.device_fp = this->output_array_type.host_fp;
                 // other fp type of kernels' input conversions
             }
         }else{

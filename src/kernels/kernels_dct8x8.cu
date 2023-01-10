@@ -178,6 +178,11 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
     }
     quantizeGoldFloat(ImgF2, StrideF, width, height);
     computeIDCT8x8Gold2(ImgF2, output, StrideF, width, height);
+
+    ROI Size;
+    Size.width  = params.get_kernel_size();
+    Size.height = params.get_kernel_size();
+    AddFloatPlane(128.0f, output, StrideF, Size);
 }
 
 /*
@@ -186,9 +191,9 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
 */
 void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out_img){
     /* integration code */
-    float* ImgF1 = reinterpret_cast<float*>(*in_img);
+    float* ImgF1   = reinterpret_cast<float*>(*in_img);
+    float* out_tmp = reinterpret_cast<float*>(*out_img);
     // a hard-coded params that used by this kernel.
-    int StrideF = kernel_params.params.get_kernel_size();
     int ImgStride;
 
     //allocate device memory
@@ -196,6 +201,8 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     ROI Size;
     Size.width  = kernel_params.params.get_kernel_size();
     Size.height = kernel_params.params.get_kernel_size();
+    /* integration code */
+    int StrideF = (((int)ceil((Size.width*sizeof(float))/16.0f))*16) / sizeof(float);
     byte *ImgDst = MallocPlaneByte(Size.width, Size.height, &ImgStride);
     size_t DeviceStride;
     checkCudaErrors(cudaMallocPitch((void **)&src, &DeviceStride, Size.width * sizeof(float), Size.height));
@@ -239,18 +246,16 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     CUDAkernel2IDCT<<<GridFullWarps, ThreadsFullWarps >>>(src, dst, (int)DeviceStride);
     checkCudaErrors(cudaDeviceSynchronize());
     getLastCudaError("Kernel execution failed");
-
+    
     //copy quantized image block to host
-    checkCudaErrors(cudaMemcpy2D(ImgF1, StrideF *sizeof(float),
+    checkCudaErrors(cudaMemcpy2D(out_tmp, StrideF *sizeof(float),
                                  src, DeviceStride *sizeof(float),
                                  Size.width *sizeof(float), Size.height,
                                  cudaMemcpyDeviceToHost));
  
     //convert image back to byte representation
-    AddFloatPlane(128.0f, ImgF1, StrideF, Size);
-    CopyFloat2Byte(ImgF1, StrideF, ImgDst, ImgStride, Size);
-
-    *out_img = ImgF1;
+    AddFloatPlane(128.0f, out_tmp, StrideF, Size);
+    CopyFloat2Byte(out_tmp, StrideF, ImgDst, ImgStride, Size);
 
     //clean up memory
     checkCudaErrors(cudaFree(dst));
