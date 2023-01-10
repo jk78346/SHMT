@@ -57,27 +57,32 @@ void init_dct8x8(int rows, int cols, void** input_array){
         exit(EXIT_FAILURE);
     }
 
-    printf("[%d x %d]... ", ImgWidth, ImgHeight);
+    //printf("[%d x %d]... ", ImgWidth, ImgHeight);
 
     //allocate image buffers
     int ImgStride;
     byte *ImgSrc = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-//    byte *ImgDstGold1 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-//    byte *ImgDstGold2 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-//    byte *ImgDstCUDA1 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-//    byte *ImgDstCUDA2 = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-//    byte *ImgDstCUDAshort = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
-
     //load sample image
     LoadBmpAsGray(pSampleImageFpath, ImgStride, ImgSize, ImgSrc);
+
+    /* ImgSrc has to be resized to [rows x cols] */
+    // byte = unsigned char
+    byte *ImgSrc_resized = MallocPlaneByte(rows, cols, &ImgStride);
+    Mat tmp, resized_tmp;
+    array2mat(tmp, ImgSrc, rows, cols);
+    Size size = Size(rows, cols);
+    resize(tmp, resized_tmp, size);
+    mat2array(resized_tmp, ImgSrc_resized);
+    ImgSize.width = rows;
+    ImgSize.height = cols;
 
     /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu: float WrapperCUDA2() function */   
     //allocate host buffers for DCT and other data
     int StrideF;
-    float *ImgF1 = MallocPlaneFloat(ImgSize.width, ImgSize.height, &StrideF);
+    float *ImgF1 = MallocPlaneFloat(rows, cols, &StrideF);
 
     //convert source image to float representation
-    CopyByte2Float(ImgSrc, ImgStride, ImgF1, StrideF, ImgSize);
+    CopyByte2Float(ImgSrc_resized, ImgStride, ImgF1, StrideF, ImgSize);
     AddFloatPlane(-128.0f, ImgF1, StrideF, ImgSize);
     
     *input_array = ImgF1;
