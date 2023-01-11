@@ -37,6 +37,7 @@ class Quality{
         struct DistStats{
             float mean;
             float sdev;
+            float entropy;
         };
         
         struct Unit{
@@ -62,6 +63,7 @@ class Quality{
         float average(float* mat, int i_start, int j_start, int row_size, int col_size);
         float sdev(float* mat, int i_start, int j_start, int row_size, int col_size);
         float covariance(int i_start, int j_start, int row_size, int col_size);
+        float entropy(float* mat, int i_start, int j_start, int row_size, int col_size);
 
         float rmse_kernel(int i_start, int j_start, int row_size, int col_size);
         float error_rate_kernel(int i_start, int j_start, int row_size, int col_size);

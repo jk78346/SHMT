@@ -1,5 +1,6 @@
 #include "quality.h"
 #include "math.h"
+#include <map>
 #include <vector>
 #include <float.h>
 #include <stdio.h>
@@ -78,6 +79,27 @@ float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_si
 	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
 }
 
+float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
+    float ret;
+    std::map<float, long int>counts;
+    std::map<float, long int>::iterator it;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start;  j < j_start+col_size ; j++){
+            counts[x[i*this->ldn+j]]++;
+        }    
+    }
+    it = counts.begin();
+    int elements = row_size * col_size;
+    while(it != counts.end()){
+        float p_x = (float)it->second/elements;
+        if(p_x > 0){
+            ret-= p_x*log(p_x)/log(2);
+        }
+        it++;
+    }
+    return ret;
+}
+
 float Quality::covariance(int i_start, int j_start, int row_size, int col_size){
 	double sum = 0;
 	float ux = this->average(this->target_mat, i_start, j_start, row_size, col_size);
@@ -88,7 +110,6 @@ float Quality::covariance(int i_start, int j_start, int row_size, int col_size){
 		}
 	}
 	return (float)(sum / (double)(row_size*col_size));
-		
 }
 
 float Quality::rmse_kernel(int i_start, int j_start, int row_size, int col_size){
@@ -250,7 +271,8 @@ float Quality::pnsr(int i, int j){
 
 void Quality::print_quality(Unit quality){
     std::cout << "(" << quality.input_dist_stats.mean << ", ";
-    std::cout << quality.input_dist_stats.sdev << ") | ";
+    std::cout << quality.input_dist_stats.sdev << ", ";
+    std::cout << quality.input_dist_stats.entropy << ") | ";
     std::cout << quality.rmse << "\t, ";
     std::cout << quality.error_rate << "\t, ";
     std::cout << quality.error_percentage << "\t, ";
@@ -274,7 +296,12 @@ void Quality::print_results(bool is_tiling, int verbose){
                     0,
                     0,
                     this->row,
-                    this->col)}
+                    this->col),
+         this->entropy(this->input_mat,
+                       0,
+                       0,
+                       this->row,
+                       this->col)}
     };
     std::vector<Unit> tiling_quality;
 
@@ -296,7 +323,12 @@ void Quality::print_results(bool is_tiling, int verbose){
                                 i*this->row_blk,
                                 j*this->col_blk,
                                 this->row_blk,
-                                this->col_blk)}
+                                this->col_blk),
+                     this->entropy(this->input_mat,
+                                   i*this->row_blk,
+                                   j*this->col_blk,
+                                   this->row_blk,
+                                   this->col_blk)}
                 };
                 tiling_quality.push_back(per_quality);
             }
@@ -348,12 +380,12 @@ void Quality::print_results(bool is_tiling, int verbose){
     printf("Quality results(is_tiling?%d)\n", is_tiling);
     printf("=============================================\n");
     std::cout << "total quality: " << std::endl;
-    std::cout << "input(mean, sdev) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tsim,\tpnsr(dB)" << std::endl;
+    std::cout << "input(mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
-        std::cout << "(i, j) input(mean, sdev) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+        std::cout << "(i, j) input(mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";
