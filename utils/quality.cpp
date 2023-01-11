@@ -80,7 +80,7 @@ float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_si
 }
 
 float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
-    float ret;
+    float ret = 0.0;
     std::map<float, long int>counts;
     std::map<float, long int>::iterator it;
     for(int i = i_start ; i < i_start+row_size ; i++){
