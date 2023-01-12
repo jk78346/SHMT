@@ -335,7 +335,7 @@ void Quality::print_results(bool is_tiling, int verbose){
         }
     }
 
-    int size = 5;
+    int size = 10;
 
     float baseline_max = FLT_MIN;
     float baseline_min = FLT_MAX;
