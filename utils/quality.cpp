@@ -5,6 +5,7 @@
 #include <float.h>
 #include <stdio.h>
 #include <assert.h>
+#include <fstream>
 #include <iostream>
 
 Quality::Quality(int m, 
@@ -52,6 +53,38 @@ void Quality::get_minmax(int i_start,
 	}
 	max = curr_max;
 	min = curr_min;
+}
+
+float Quality::max(float* x,
+                   int i_start,
+                   int j_start,
+                   int row_size,
+                   int col_size){
+    float ret = FLT_MIN;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+            if(x[i*this->ldn+j] > ret){
+                ret = x[i*this->ldn+j];
+            }
+        }
+    }
+    return ret;
+}
+
+float Quality::min(float* x,
+                   int i_start,
+                   int j_start,
+                   int row_size,
+                   int col_size){
+    float ret = FLT_MAX;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+            if(x[i*this->ldn+j] < ret){
+                ret = x[i*this->ldn+j];
+            }
+        }
+    }
+    return ret;
 }
 
 float Quality::average(float* x, 
@@ -270,7 +303,9 @@ float Quality::pnsr(int i, int j){
 }
 
 void Quality::print_quality(Unit quality){
-    std::cout << "(" << quality.input_dist_stats.mean << ", ";
+    std::cout << "(" << quality.input_dist_stats.max << ", ";
+    std::cout << quality.input_dist_stats.min << ", ";
+    std::cout << quality.input_dist_stats.mean << ", ";
     std::cout << quality.input_dist_stats.sdev << ", ";
     std::cout << quality.input_dist_stats.entropy << ") | ";
     std::cout << quality.rmse << "\t, ";
@@ -278,6 +313,22 @@ void Quality::print_quality(Unit quality){
     std::cout << quality.error_percentage << "\t, ";
     std::cout << quality.ssim << "\t, ";
     std::cout << quality.pnsr << std::endl;
+
+    std::fstream myfile;
+    std::string file_path = "./quality.csv";
+    myfile.open(file_path.c_str(), std::ios_base::app);
+    assert(myfile.is_open());
+    myfile << ",," << quality.input_dist_stats.max << ", "
+           << quality.input_dist_stats.min << ", "
+           << quality.input_dist_stats.mean << ", "
+           << quality.input_dist_stats.sdev << ", "
+           << quality.input_dist_stats.entropy << ",,"
+           << quality.rmse << "\t, "
+           << quality.error_rate << "\t, "
+           << quality.error_percentage << "\t, "
+           << quality.ssim << "\t, "
+           << quality.pnsr << std::endl;
+
 }
 
 void Quality::print_results(bool is_tiling, int verbose){
@@ -287,7 +338,17 @@ void Quality::print_results(bool is_tiling, int verbose){
         this->error_percentage(),
         this->ssim(),
         this->pnsr(),
-        {this->average(this->input_mat, 
+        {this->max(this->input_mat,
+                   0,
+                   0,
+                   this->row,
+                   this->col),
+         this->min(this->input_mat,
+                   0,
+                   0,
+                   this->row,
+                   this->col),
+         this->average(this->input_mat, 
                        0,
                        0, 
                        this->row,
@@ -314,7 +375,17 @@ void Quality::print_results(bool is_tiling, int verbose){
                     this->error_percentage(i, j),
                     this->ssim(i, j),
                     this->pnsr(i, j),
-                    {this->average(this->input_mat, 
+                    {this->max(this->input_mat,
+                               i*this->row_blk,
+                               j*this->col_blk,
+                               this->row_blk,
+                               this->col_blk),
+                     this->min(this->input_mat,
+                               i*this->row_blk,
+                               j*this->col_blk,
+                               this->row_blk,
+                               this->col_blk),
+                     this->average(this->input_mat, 
                                    i*this->row_blk,
                                    j*this->col_blk, 
                                    this->row_blk,
@@ -380,12 +451,22 @@ void Quality::print_results(bool is_tiling, int verbose){
     printf("Quality results(is_tiling?%d)\n", is_tiling);
     printf("=============================================\n");
     std::cout << "total quality: " << std::endl;
-    std::cout << "input(mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+
+    std::fstream myfile;
+    std::string file_path = "./quality.csv";
+    myfile.open(file_path.c_str(), std::ios_base::app);
+    assert(myfile.is_open());
+    
+    std::cout << "input(max, min, mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+    myfile << "total quality,,,,,,,,,,,," << std::endl;
+    myfile << ",,max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
-        std::cout << "(i, j) input(mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+        std::cout << "(i, j) input(max, min, mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+        myfile << "tiling quality" << std::endl;
+        myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";

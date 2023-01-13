@@ -35,6 +35,8 @@ class Quality{
 
     private:
         struct DistStats{
+            float max;
+            float min;
             float mean;
             float sdev;
             float entropy;
@@ -60,6 +62,9 @@ class Quality{
                         float* x, 
                         float& max,
                         float& min);
+
+        float max(float* mat, int i_start, int j_start, int row_size, int col_size);
+        float min(float* mat, int i_start, int j_start, int row_size, int col_size);
         float average(float* mat, int i_start, int j_start, int row_size, int col_size);
         float sdev(float* mat, int i_start, int j_start, int row_size, int col_size);
         float covariance(int i_start, int j_start, int row_size, int col_size);

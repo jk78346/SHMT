@@ -101,6 +101,12 @@ class MyDataGen():
                 #image = Image.open(self.input_img_paths[j%self.num_imgs])
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
+            elif self.model_name == "dct8x8_2d":
+                print("j: ", j, ", j%self.mum_imgs: ", j%self.num_imgs)
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                #image = Image.open(self.input_img_paths[j%self.num_imgs])
+                image = image.resize(self.in_shape)
+                x_slice = np.expand_dims(image, axis=0).astype("uint8")
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")

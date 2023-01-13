@@ -33,8 +33,8 @@ public:
     };
 
     virtual ~TpuKernel(){
-        if(this->device_handler != nullptr)
-            delete this->device_handler;
+//        if(this->device_handler != nullptr)
+//            delete this->device_handler;
     };
    
     unsigned int get_opened_dev_cnt(){
@@ -140,7 +140,7 @@ public:
             }else{
                 for(unsigned int i = 0 ; i < this->out_size ; i++){
                     float* tmp = reinterpret_cast<float*>(this->output);
-                    tmp[i] = (float)( this->output_kernel[i] /*- zero_point*/ );// * scale;
+                    tmp[i] = (float)( this->output_kernel[i] - zero_point ) * scale * 255.;
                 }
             }
         }else{
