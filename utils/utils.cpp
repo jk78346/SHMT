@@ -1,4 +1,3 @@
-#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <assert.h>
@@ -119,41 +118,88 @@ std::string get_edgetpu_kernel_path(std::string app_name,
 
 void dump_to_csv(std::string log_file_path,
                  std::string app_name,
+                 std::string baseline_mode,
                  std::string proposed_mode,
                  unsigned int problem_size,
                  unsigned int block_size,
                  unsigned int iter,
                  Quality* quality,
                  TimeBreakDown* baseline_time_breakdown,
-                 TimeBreakDown* proposed_time_breakdown){
+                 TimeBreakDown* proposed_time_breakdown,
+                 std::vector<int> proposed_device_sequence){
     std::fstream myfile;
     // simply append baseline and proposed rows
     myfile.open(log_file_path.c_str(), std::ios_base::app);
-    assert(myfile.is_open()); 
-    
-    auto t = std::chrono::system_clock::now();
-    std::time_t timestamp = std::chrono::system_clock::to_time_t(t);
+    assert(myfile.is_open());
 
-    myfile << app_name << ","
+    auto t = std::chrono::system_clock::now();
+    std::time_t ts = std::chrono::system_clock::to_time_t(t);
+    std::string ts_str = std::ctime(&ts);
+
+    // log params and performance
+    myfile << "*****kernel name*****,problem size,block size,kernel iter,--,--,--,--,--,--,-->,timestamp:,"
+           << ts_str
+           << app_name << ","
            << problem_size << ","
            << block_size << ","
-           << proposed_mode << ","
-           << iter << ","
+           << iter << "\n"
+           << "*****performance*****,mode,input_conversion ms, kernel avg ms, output_conversion ms,total ms,"
+           << "kernel speedup, e2e speedup,,\n"
+           << "baseline mode," << baseline_mode << ","
+           << baseline_time_breakdown->input_time_ms << ","
+           << baseline_time_breakdown->kernel_time_ms / iter << ","
+           << baseline_time_breakdown->output_time_ms << ","
+           << baseline_time_breakdown->get_total_time_ms(iter) << ",--,--,\n"
+           << "proposed mode," << proposed_mode << ","
            << proposed_time_breakdown->input_time_ms << ","
            << proposed_time_breakdown->kernel_time_ms / iter << ","
            << proposed_time_breakdown->output_time_ms << ","
            << proposed_time_breakdown->get_total_time_ms(iter) << ","
+           // speedup (proposed over baseline)
            << (baseline_time_breakdown->kernel_time_ms /
                 proposed_time_breakdown->kernel_time_ms) << ","
            << (baseline_time_breakdown->get_total_time_ms(iter) /
-                proposed_time_breakdown->get_total_time_ms(iter)) << ","
-           << quality->rmse() / 100 << ","
-           << quality->error_rate() / 100 << ","
-           << quality->error_percentage() / 100 << ","
+                proposed_time_breakdown->get_total_time_ms(iter)) << ",\n";
+    
+    // log quality metrics
+    myfile << "*****total quality*****,--,input stats,--,--,--,--,--,output quality,"
+           << "\n--,--,max,min,mean,sdev,entropy,--,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n"
+           << "--,--," << quality->in_max() << ","
+           << quality->in_min() << ","
+           << quality->in_mean() << ","
+           << quality->in_sdev() << ","
+           << quality->in_entropy() << ",,"
+           << quality->rmse() << "%,"
+           << quality->error_rate() << "%,"
+           << quality->error_percentage() << "%,"
            << quality->ssim() << ","
-           << quality->pnsr() << ","
-           << std::ctime(&timestamp) << std::endl; 
+           << quality->pnsr() << ",\n";
 
+    bool is_tiling = (problem_size > block_size)?true:false;
+    if(is_tiling){
+        myfile << "*****tiling quality*****,(proposed mode's partition),input stats,--,--,--,--,--,output tiling quality,\n"
+               << "i,j,max,min,mean,sdev,entropy,device type,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
+        int idx = 0;
+        for(int i = 0 ; i < quality->get_row_cnt() ; i++){
+            for(int j = 0 ; j < quality->get_col_cnt() ; j++){
+                idx = i * quality->get_col_cnt() +j;
+                std::cout << __func__ << " (i: " << i << ", j: " << j << ")" << std::endl;
+                myfile << i << "," << j << ","
+                       << quality->in_max(i, j) << ","
+                       << quality->in_min(i, j) << ","
+                       << quality->in_mean(i, j) << ","
+                       << quality->in_sdev(i, j) << ","
+                       << quality->in_entropy(i, j) << ","
+                       << proposed_device_sequence[idx] << ","
+                       << quality->rmse(i, j) << "%,"
+                       << quality->error_rate(i, j) << "%,"
+                       << quality->error_percentage(i, j) << "%,"
+                       << quality->ssim(i, j) << ","
+                       << quality->pnsr(i, j) << ",\n";
+            }
+        }
+    }
+    myfile << "\n";
     myfile.close();
 }
 

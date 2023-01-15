@@ -31,7 +31,66 @@ class Quality{
         float ssim(int i_idx, int j_idx);
         float pnsr(int i_idx, int j_idx);
         
+        //float max(float* mat, int i_start, int j_start, int row_size, int col_size);
+        float in_max(){ return this->max(this->input_mat, 
+                                         0,
+                                         0,
+                                         this->row,
+                                         this->col); };
+        float in_min(){ return this->min(this->input_mat,
+                                         0,
+                                         0,
+                                         this->row,
+                                         this->col); };
+        float in_mean(){ return this->average(this->input_mat,
+                                              0,
+                                              0,
+                                              this->row,
+                                              this->col); };
+        float in_sdev(){ return this->sdev(this->input_mat,
+                                           0,
+                                           0,
+                                           this->row,
+                                           this->col); };
+        float in_entropy(){ return this->entropy(this->input_mat,
+                                                 0,
+                                                 0,
+                                                 this->row,
+                                                 this->col); };
+        
+        float in_max(int i_idx, int j_idx){ return this->max(this->input_mat, 
+                                                             i_idx*this->row_blk,
+                                                             j_idx*this->col_blk,
+                                                             this->row_blk,
+                                                             this->col_blk); };
+        float in_min(int i_idx, int j_idx){ return this->min(this->input_mat, 
+                                                             i_idx*this->row_blk,
+                                                             j_idx*this->col_blk,
+                                                             this->row_blk,
+                                                             this->col_blk); };
+        float in_mean(int i_idx, int j_idx){ return this->average(this->input_mat, 
+                                                                  i_idx*this->row_blk,
+                                                                  j_idx*this->col_blk,
+                                                                  this->row_blk,
+                                                                  this->col_blk); };
+        float in_sdev(int i_idx, int j_idx){ return this->sdev(this->input_mat, 
+                                                               i_idx*this->row_blk,
+                                                               j_idx*this->col_blk,
+                                                               this->row_blk,
+                                                               this->col_blk); };
+        float in_entropy(int i_idx, int j_idx){ return this->entropy(this->input_mat, 
+                                                                     i_idx*this->row_blk,
+                                                                     j_idx*this->col_blk,
+                                                                     this->row_blk,
+                                                                     this->col_blk); };
         void print_results(bool is_tiling, int verbose);
+
+        int get_row(){ return this->row; }
+        int get_col(){ return this->col; }
+        int get_row_blk(){ return this->row_blk; }
+        int get_col_blk(){ return this->col_blk; }
+        int get_row_cnt(){ return this->row_cnt; }
+        int get_col_cnt(){ return this->col_cnt; }
 
     private:
         struct DistStats{

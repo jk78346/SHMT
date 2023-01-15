@@ -12,7 +12,10 @@ PartitionRuntime::PartitionRuntime(Params params,
                                    void* output){
     params.set_tiling_mode(true);
     this->params = params;
+    this->row_cnt = params.get_row_cnt();
+    this->col_cnt = params.get_col_cnt();
     this->block_cnt = params.get_block_cnt();
+    assert(this->row_cnt * this->col_cnt == this->block_cnt);
     this->mode = mode;
     this->input = input;
     this->output = output;
@@ -39,7 +42,7 @@ PartitionRuntime::~PartitionRuntime(){
 
 
 double PartitionRuntime::prepare_partitions(){
-    timing start = clk::now();
+    double ret = 0.0;
     // allocate input partitions and initialization
     array_partition_initialization(this->params,
                                    false,
@@ -57,15 +60,17 @@ double PartitionRuntime::prepare_partitions(){
     this->populate_dynamic_flags();
     
     // assign partitions to corresponding type of kernel handler if is static.
-    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-        if( !this->is_dynamic_block[i] ){
-            auto device_type = this->mix_policy(i);
-            this->create_kernel_by_type(i, device_type);
-            this->generic_kernels[i].kernel_base->input_conversion();
+    for(unsigned int i = 0 ; i < this->row_cnt ; i++){
+        for(unsigned int j = 0; j < this->col_cnt ; j++){
+            unsigned int idx = i*this->col_cnt+j;
+            if( !this->is_dynamic_block[idx] ){
+                auto device_type = this->mix_policy(idx);
+                this->create_kernel_by_type(idx, device_type);
+                ret += this->generic_kernels[idx].kernel_base->input_conversion();
+            }
         }
     }
-    timing end = clk::now();
-    return get_time_ms(end, start);
+    return ret;
 }
 
 void* PartitionRuntime::RunDeviceThread(void *my_args){
@@ -174,15 +179,14 @@ double PartitionRuntime::run_partitions(){
 }
 
 double PartitionRuntime::transform_output(){
-    timing start = clk::now();
+    double ret = 0.0;
     for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-        this->generic_kernels[i].kernel_base->output_conversion();
+        ret +=  this->generic_kernels[i].kernel_base->output_conversion();
     }   
     output_array_partition_gathering(this->params,
                                      &(this->output),
                                      this->output_pars);
-    timing end = clk::now();
-    return get_time_ms(end, start);
+    return ret;;
 }
 
 void PartitionRuntime::create_kernel_by_type(unsigned int i/*block_id*/, 
@@ -260,10 +264,24 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
 
 void PartitionRuntime::show_device_sequence(){
     std::cout << __func__ << ": ";
-    for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
-        std::cout << this->dev_sequence[i] << " ";
+    for(unsigned int  i = 0 ; i < this->row_cnt ; i++){
+        for(unsigned int j = 0 ; j < this->col_cnt ; j++){
+            unsigned int idx = i*this->col_cnt +j;
+            std::cout << this->dev_sequence[idx] << " ";
+        }
     }   
     std::cout << std::endl;
+}
+
+std::vector<DeviceType> PartitionRuntime::get_device_sequence(){
+    std::vector<DeviceType> ret;
+    for(unsigned int i = 0 ; i < this->row_cnt ; i++){
+        for(unsigned int j = 0 ; j < this->col_cnt ; j++){
+            unsigned int idx = i*this->col_cnt+j;
+            ret.push_back(this->dev_sequence[idx]);
+        }
+    }
+    return ret;
 }
 
 void PartitionRuntime::populate_dynamic_flags(){

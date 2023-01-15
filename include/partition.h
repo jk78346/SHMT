@@ -38,6 +38,7 @@ public:
     double run_partitions();
     double transform_output();
     void show_device_sequence();
+    std::vector<DeviceType> get_device_sequence();
     unsigned int dev_type_cnt = 3; // cpu, gpu and tpu
 
 private:
@@ -77,6 +78,8 @@ private:
      */
     bool* is_dynamic_device;
 
+    unsigned int row_cnt = 1;
+    unsigned int col_cnt = 1;
     unsigned int block_cnt = 1; // default no partition
     Params params;
     std::string mode = "cpu_p"; // partition mode, default as cpu_p

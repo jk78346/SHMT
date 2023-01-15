@@ -210,7 +210,8 @@ float Quality::error_percentage_kernel(int i_start, int j_start, int row_size, i
 			}
 		}
 	}
-	return ((float)cnt / (float)(row_size*col_size)) * 100.0;
+    assert(cnt <= (row_size * col_size));
+    return ((float)cnt / (float)(row_size*col_size)) * 100.0;
 }
 
 float Quality::error_percentage(){
@@ -255,7 +256,8 @@ float Quality::ssim_kernel(int i_start, int j_start, int row_size, int col_size)
 	float cov = this->covariance(i_start, j_start, row_size, col_size);
 
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2) + c1) * (pow(vx, 2) + pow(vy, 2) + c2));
-	return ssim;
+    assert(ssim >= 0.0 && ssim <= 1.);
+    return ssim;
 }
 
 float Quality::ssim(){

@@ -29,12 +29,14 @@ std::string get_edgetpu_kernel_path(std::string app_name,
 
 void dump_to_csv(std::string log_file_path,
                  std::string app_name,
+                 std::string baseline_mode,
                  std::string proposed_mode,
                  unsigned int problem_size,
                  unsigned int block_size,
                  unsigned int iter,
                  Quality* quality, 
                  TimeBreakDown* baseline_time_breakdown,
-                 TimeBreakDown* proposed_time_breakdown);
+                 TimeBreakDown* proposed_time_breakdown,
+                 std::vector<int> proposed_device_sequence);
 #endif
 

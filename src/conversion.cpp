@@ -42,12 +42,12 @@ void UnifyType::save_as_img(const std::string file_name,
         Mat mat(rows, cols, CV_8U);
         array2mat(mat, this->char_array, rows, cols);
         assert(!mat.empty());
-        imwrite(file_name, mat);
+        imwrite(file_name.c_str(), mat);
     }else{
         Mat mat(rows, cols, CV_32F);
         array2mat(mat, this->float_array, rows, cols);
         assert(!mat.empty());
-        imwrite(file_name, mat);
+        imwrite(file_name.c_str(), mat);
     }
 }
 
