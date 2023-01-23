@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <opencv2/opencv.hpp>
@@ -45,9 +46,43 @@ void UnifyType::save_as_img(const std::string file_name,
         imwrite(file_name.c_str(), mat);
     }else{
         Mat mat(rows, cols, CV_32F);
+        // TODO: how to show float array?
         array2mat(mat, this->float_array, rows, cols);
         assert(!mat.empty());
         imwrite(file_name.c_str(), mat);
     }
 }
+
+void UnifyType::save_as_csv(const std::string file_name,
+                            unsigned int rows,
+                            unsigned int cols,
+                            void* img){
+    std::fstream myfile;
+    myfile.open(file_name.c_str(), std::ios_base::out | std::ios::binary);
+    assert(myfile.is_open());
+
+    if(std::find(uint8_t_type_app.begin(),
+                uint8_t_type_app.end(),
+                this->params.app_name) !=
+       uint8_t_type_app.end() ){
+        uint8_t* tmp = reinterpret_cast<uint8_t*>(img);    
+        for(unsigned int i = 0 ; i < rows ; i++){
+            for(unsigned int j = 0 ; j < cols ; j++){
+                myfile << std::hex << std::setfill('0') << std::setw(2) 
+                       << (unsigned)tmp[i*cols+j] << " ";        
+            }
+            myfile << std::endl;
+        }    
+    }else{
+        float* tmp = reinterpret_cast<float*>(img);    
+        for(unsigned int i = 0 ; i < rows ; i++){
+            for(unsigned int j = 0 ; j < cols ; j++){
+                myfile << tmp[i*cols+j] << " ";        
+            }
+            myfile << std::endl;
+        }    
+    }
+
+}
+
 

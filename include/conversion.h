@@ -12,6 +12,10 @@ public:
                      unsigned int rows, 
                      unsigned int cols, 
                      void* img);
+    void save_as_csv(const std::string file_name,
+                     unsigned int rows,
+                     unsigned int cols,
+                     void* img);
     float* float_array;
 private:
     Params params;

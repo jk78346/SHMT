@@ -9,6 +9,7 @@
 #include "params.h"
 #include "gptpu_utils.h"
 #include "kernels_base.h"
+//#include "CH3_pixel_operation.h"
 
 using namespace cv;
 
@@ -119,13 +120,13 @@ public:
                       this->kernel_table_uint8.end(),
                       app_name) !=
             this->kernel_table_uint8.end()){
-            if(app_name == "laplacian_2d"){
-                for(unsigned int i = 0 ; i < this->out_size ; i++){
-                    uint8_t* tmp = reinterpret_cast<uint8_t*>(this->output);
-                    tmp[i] = (int)(( this->output_kernel[i] - zero_point ) * (scale * 255.)) % 256;// * scale;
-                }
-            }
-            //this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding
+            //if(app_name == "laplacian_2d"){
+            //    for(unsigned int i = 0 ; i < this->out_size ; i++){
+            //        uint8_t* tmp = reinterpret_cast<uint8_t*>(this->output);
+            //        tmp[i] = (int)(( this->output_kernel[i] - zero_point ) * (scale * 255.)) % 256;// * scale;
+            //    }
+            //}
+            this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding
             //std::cout << __func__ << ": scale * 255. = " << scale * 255. << std::endl;
         }else if( std::find(this->kernel_table_fp.begin(),
                             this->kernel_table_fp.end(),

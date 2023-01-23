@@ -84,6 +84,7 @@ class Quality{
                                                                      this->row_blk,
                                                                      this->col_blk); };
         void print_results(bool is_tiling, int verbose);
+        void print_histogram(float* input);
 
         int get_row(){ return this->row; }
         int get_col(){ return this->col; }

@@ -51,8 +51,10 @@ class MyDataGen():
         self.model_name         = params.model_name
         # The ground truth function callable
         self.func               = target_func
-        self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
-        self.num_imgs           = len(self.input_img_paths)
+        # data/ILSVRC/Data/DET/train/ILSVRC2014_train_0000$
+        #self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
+        #self.input_img_paths    = get_img_paths_list("/mnt/Data/DET/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
+        #self.num_imgs           = len(self.input_img_paths)
 
     def random_input_gen(self):
         """ This function generates random samples for training input. """
@@ -96,15 +98,11 @@ class MyDataGen():
                 x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
                 tf.keras.utils.set_random_seed(seed)
             elif self.model_name == "laplacian_2d":
-                print("j: ", j, ", j%self.mum_imgs: ", j%self.num_imgs)
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
-                #image = Image.open(self.input_img_paths[j%self.num_imgs])
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
             elif self.model_name == "dct8x8_2d":
-                print("j: ", j, ", j%self.mum_imgs: ", j%self.num_imgs)
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
-                #image = Image.open(self.input_img_paths[j%self.num_imgs])
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
             else:

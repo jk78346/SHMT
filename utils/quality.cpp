@@ -1,3 +1,4 @@
+#include "utils.h"
 #include "quality.h"
 #include "math.h"
 #include <map>
@@ -7,6 +8,7 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 Quality::Quality(int m, 
                  int n, 
@@ -333,6 +335,22 @@ void Quality::print_quality(Unit quality){
 
 }
 
+/* print quantized histrogram of mats in integar. */
+void Quality::print_histogram(float* input){
+    cv::Mat mat, b_hist;
+    array2mat(mat, input, this->row, this->col);
+    int histSize = 256;
+    float range[] = {0, 256};
+    const float* histRange[] = {range};
+    bool uniform = true, accumulate=false;
+    calcHist( &mat, 1, 0, cv::Mat(), b_hist, 1, &histSize, histRange, uniform, accumulate );
+    std::cout << __func__ << ": hist of mat: " << std::endl;
+    for(int i = 0 ; i < histSize ; i++){
+        std::cout << b_hist.at<float>(i) << " ";
+    }
+    std::cout << std::endl;
+}
+
 void Quality::print_results(bool is_tiling, int verbose){
     Unit total_quality = {
         this->rmse(),
@@ -476,5 +494,8 @@ void Quality::print_results(bool is_tiling, int verbose){
             }
         }
     }
+
+    print_histogram(this->baseline_mat);
+    print_histogram(this->target_mat);
 }
 

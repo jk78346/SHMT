@@ -15,6 +15,7 @@
 #include "kernels_gpu.h"
 #include "kernels_tpu.h"
 #include "performance.h"
+#include "CH3_pixel_operation.h"
 
 using namespace cv;
 
@@ -181,6 +182,21 @@ int main(int argc, char* argv[]){
                                           proposed_time_breakdown);
     timing proposed_end = clk::now();
 
+    /* A quick plugin test of histogram matching on laplacian_2d */
+    if(app_name == "laplacian_2d"){
+        timing hm_s = clk::now();
+        std::cout << __func__ << ": testing histogram matching..." << std::endl;
+        cv::Mat baseline_mat, proposed_mat;
+        uint8_t* baseline_ptr = reinterpret_cast<uint8_t*>(output_array_baseline);
+        uint8_t* proposed_ptr = reinterpret_cast<uint8_t*>(output_array_proposed);
+        array2mat(baseline_mat, baseline_ptr, problem_size, problem_size);
+        array2mat(proposed_mat, proposed_ptr, problem_size, problem_size);
+        Histst(proposed_mat, baseline_mat); // HS the proposed one based on hist. of baseline.
+        mat2array(proposed_mat, proposed_ptr);
+        timing hm_e = clk::now();
+        std::cout << __func__ << ": hm time: " << get_time_ms(hm_e, hm_s) << " (ms)" << std::endl;
+    }
+
     std::cout << "Converting output array to float type for quality measurement..." 
               << std::endl;
     std::cout << "[WARN] now input and output mats are assumed to have the "
@@ -208,10 +224,17 @@ int main(int argc, char* argv[]){
         (baseline_params.problem_size > baseline_params.block_size)?true:false;
 
     quality->print_results(is_tiling, 1/*verbose*/);
+    
+    /* print hist of input */
+    std::cout << __func__ << ": print hist of input array" << std::endl;
+    quality->print_histogram(unify_input_type->float_array);
 
     // save result arrays as image files
     std::cout << "saving output results as images..." << std::endl;
-    const std::string path_prefix = proposed_params.app_name + "_" 
+    const std::string path_prefix = proposed_params.app_name + "/"
+                                   +std::to_string(proposed_params.problem_size) + "x"
+                                   +std::to_string(proposed_params.problem_size) + "/"
+                                   +proposed_params.app_name + "_" 
                                    +std::to_string(proposed_params.problem_size) + "_"
                                    +std::to_string(proposed_params.block_size) + "_"
                                    +std::to_string(proposed_params.iter) + "_"
@@ -226,13 +249,36 @@ int main(int argc, char* argv[]){
     std::string cmd = "mkdir -p ../log/" + path_prefix;
     system(cmd.c_str());    
 
-    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_baseline"+".png", 
+    // save as png images
+    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_baseline.png", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
                                     output_array_baseline);
-    unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_proposed"+".png", 
+    unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_proposed.png", 
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,
+                                    output_array_proposed);
+    
+    // save as pixel arrays
+    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_baseline.txt", 
+                                    baseline_params.problem_size,
+                                    baseline_params.problem_size,
+                                    output_array_baseline);
+    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_proposed.txt", 
+                                    proposed_params.problem_size,
+                                    proposed_params.problem_size,
+                                    output_array_proposed);
+    
+    // save as pixel arrays for the first 100x100 block
+    // FOr easy visual check
+    assert(proposed_params.problem_size >= 50);
+    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_50_baseline.txt", 
+                                    50,
+                                    50,
+                                    output_array_baseline);
+    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_50_proposed.txt", 
+                                    50,
+                                    50,
                                     output_array_proposed);
     
     std::string log_file_path = "../log/" + path_prefix + "/"
