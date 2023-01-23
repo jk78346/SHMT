@@ -1,3 +1,4 @@
+#include <string>
 #include <opencv2/opencv.hpp>
 #include "arrays.h"
 #include "utils.h"
@@ -88,6 +89,50 @@ void init_dct8x8(int rows, int cols, void** input_array){
     *input_array = ImgF1;
 }
 
+void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* file){
+    int i;//, index;
+    FILE *fp;
+    int STR_SIZE = 256;
+    char str[STR_SIZE];
+    float val;
+     
+    fp = fopen (file, "r");
+    if (!fp){
+        std::cout << __func__ << ": file could not be opened for reading" << std::endl;
+        exit(0);
+    }
+    for (i=0; i < grid_rows * grid_cols; i++) {
+        fgets(str, STR_SIZE, fp);
+        if (feof(fp)){
+            std::cout << __func__ << ": not enough lines in file" << std::endl;
+            exit(0);
+        }
+        if ((sscanf(str, "%f", &val) != 1) ){
+            std::cout << __func__ << ": invalid file format" << std::endl;
+            exit(0);
+        }
+        vect[i] = val;
+    }
+     
+    fclose(fp);
+}
+
+void init_hotspot(int rows, int cols, void** input_array){
+    // concate temp and power into input array
+    int input_total_size = 2 * rows * cols;
+    *input_array = (float*) malloc(input_total_size * sizeof(float));   
+    float* float_ptr = reinterpret_cast<float*>(*input_array);
+
+    std::string tfile = "../data/hotspot/temp_"+std::to_string(rows);
+    std::string pfile = "../data/hotspot/power_"+std::to_string(rows);
+
+    read_hotspot_file(float_ptr, rows, cols, tfile.c_str());
+    int offset = rows * cols;
+    // concate temp and power arrays into input_array
+    read_hotspot_file(&float_ptr[offset], rows, cols, pfile.c_str());
+
+}
+
 void data_initialization(Params params,
                          void** input_array,
                          void** output_array_baseline,
@@ -140,6 +185,8 @@ void data_initialization(Params params,
             init_fft(input_total_size, input_array);
         }else if(params.app_name == "dct8x8_2d"){
             init_dct8x8(rows, cols, input_array);
+        }else if(params.app_name == "hotspot_2d"){
+            init_hotspot(rows, cols, input_array);
         }else{
             *input_array = (float*) malloc(input_total_size * sizeof(float));
             Mat in_img;
