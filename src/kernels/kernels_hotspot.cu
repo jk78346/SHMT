@@ -360,5 +360,4 @@ void GpuKernel::hotspot_2d(KernelParams& kernel_params, void** input, void** out
     cudaFree(MatrixPower);
     cudaFree(MatrixTemp[0]);
     cudaFree(MatrixTemp[1]);
-    free(MatrixOut);
 }

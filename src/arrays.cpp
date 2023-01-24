@@ -118,9 +118,6 @@ void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* fi
 }
 
 void init_hotspot(int rows, int cols, void** input_array){
-    // concate temp and power into input array
-    int input_total_size = 2 * rows * cols;
-    *input_array = (float*) malloc(input_total_size * sizeof(float));   
     float* float_ptr = reinterpret_cast<float*>(*input_array);
 
     std::string tfile = "../data/hotspot/temp_"+std::to_string(rows);
@@ -186,6 +183,7 @@ void data_initialization(Params params,
         }else if(params.app_name == "dct8x8_2d"){
             init_dct8x8(rows, cols, input_array);
         }else if(params.app_name == "hotspot_2d"){
+            *input_array = (float*) malloc(2 * input_total_size * sizeof(float));   
             init_hotspot(rows, cols, input_array);
         }else{
             *input_array = (float*) malloc(input_total_size * sizeof(float));

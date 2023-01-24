@@ -191,7 +191,7 @@ int main(int argc, char* argv[]){
         uint8_t* proposed_ptr = reinterpret_cast<uint8_t*>(output_array_proposed);
         array2mat(baseline_mat, baseline_ptr, problem_size, problem_size);
         array2mat(proposed_mat, proposed_ptr, problem_size, problem_size);
-        Histst(proposed_mat, baseline_mat); // HS the proposed one based on hist. of baseline.
+        assert(Histst(proposed_mat, baseline_mat)); // HS the proposed one based on hist. of baseline.
         mat2array(proposed_mat, proposed_ptr);
         timing hm_e = clk::now();
         std::cout << __func__ << ": hm time: " << get_time_ms(hm_e, hm_s) << " (ms)" << std::endl;
@@ -322,7 +322,7 @@ int main(int argc, char* argv[]){
     
     // convert device sequence type 
     std::vector<int> proposed_device_type;
-    for(int i = 0 ; i < proposed_device_sequence.size() ; i++){
+    for(unsigned int i = 0 ; i < proposed_device_sequence.size() ; i++){
         proposed_device_type.push_back(int(proposed_device_sequence[i]));
     }
     
