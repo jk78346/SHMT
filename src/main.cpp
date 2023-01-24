@@ -15,7 +15,6 @@
 #include "kernels_gpu.h"
 #include "kernels_tpu.h"
 #include "performance.h"
-#include "CH3_pixel_operation.h"
 
 using namespace cv;
 
@@ -182,19 +181,21 @@ int main(int argc, char* argv[]){
                                           proposed_time_breakdown);
     timing proposed_end = clk::now();
 
+    // convert device sequence type 
+    std::vector<int> proposed_device_type;
+    for(unsigned int i = 0 ; i < proposed_device_sequence.size() ; i++){
+        proposed_device_type.push_back(int(proposed_device_sequence[i]));
+    }
+    
     /* A quick plugin test of histogram matching on laplacian_2d */
     if(app_name == "laplacian_2d"){
-        timing hm_s = clk::now();
-        std::cout << __func__ << ": testing histogram matching..." << std::endl;
-        cv::Mat baseline_mat, proposed_mat;
-        uint8_t* baseline_ptr = reinterpret_cast<uint8_t*>(output_array_baseline);
-        uint8_t* proposed_ptr = reinterpret_cast<uint8_t*>(output_array_proposed);
-        array2mat(baseline_mat, baseline_ptr, problem_size, problem_size);
-        array2mat(proposed_mat, proposed_ptr, problem_size, problem_size);
-        assert(Histst(proposed_mat, baseline_mat)); // HS the proposed one based on hist. of baseline.
-        mat2array(proposed_mat, proposed_ptr);
-        timing hm_e = clk::now();
-        std::cout << __func__ << ": hm time: " << get_time_ms(hm_e, hm_s) << " (ms)" << std::endl;
+        histogram_matching(output_array_baseline, 
+                           output_array_proposed,
+                           problem_size,
+                           problem_size,
+                           block_size,
+                           block_size,
+                           proposed_device_type);
     }
 
     std::cout << "Converting output array to float type for quality measurement..." 
@@ -320,11 +321,6 @@ int main(int argc, char* argv[]){
               << baseline_e2e_ms << " (ms), " 
               << proposed_e2e_ms << " (ms), (iteration included)" << std::endl;
     
-    // convert device sequence type 
-    std::vector<int> proposed_device_type;
-    for(unsigned int i = 0 ; i < proposed_device_sequence.size() ; i++){
-        proposed_device_type.push_back(int(proposed_device_sequence[i]));
-    }
     
     // dump record to csv file
     std::cout << "dumping measurement results into file: " 

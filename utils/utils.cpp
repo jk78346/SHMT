@@ -2,6 +2,7 @@
 #include <iostream>
 #include <assert.h>
 #include "utils.h"
+#include "CH3_pixel_operation.h"
 
 /* Mat type info:
     https://stackoverflow.com/questions/10167534/how-to-find-out-what-type-of-a-mat-object-is-with-mattype-in-opencv
@@ -114,6 +115,65 @@ std::string get_edgetpu_kernel_path(std::string app_name,
                         __func__ << ": edgeTPU kernel file: " 
                                  << path << " doesn't exist.");
     return path;
+}
+
+/* plugin function for adjusting laplacian_2d's quality. */
+void histogram_matching(void* output_array_baseline,
+                        void* output_array_proposed,
+                        int rows,
+                        int cols,
+                        int blk_rows,
+                        int blk_cols,
+                        std::vector<int> dev_sequence){
+    
+    std::cout << __func__ << ": testing histogram matching..." << std::endl;
+    assert(rows % blk_rows == 0);
+    assert(cols % blk_cols == 0);
+    unsigned int row_cnt = rows / blk_rows;
+    unsigned int col_cnt = cols / blk_cols;
+    assert(dev_sequence.size() == (row_cnt * col_cnt));
+
+    /* partition the output and determine which blocks need HM. */
+    Mat baseline_mat, proposed_mat;
+    Mat baseline_tmp(blk_rows, blk_cols, CV_32F);
+    Mat proposed_tmp(blk_rows, blk_cols, CV_32F);
+    
+    float* baseline_ptr = reinterpret_cast<float*>(output_array_baseline);
+    float* proposed_ptr = reinterpret_cast<float*>(output_array_proposed);
+
+    array2mat(baseline_mat, baseline_ptr, rows, cols);
+    array2mat(proposed_mat, proposed_ptr, rows, cols);
+    
+    unsigned int block_total_size = blk_rows * blk_cols;
+
+    // vector of partitions allocation
+    std::vector<void*> proposed_pars;
+    proposed_pars.resize(dev_sequence.size());
+    for(unsigned int i = 0 ; i < row_cnt ; i++){
+        for(unsigned int j = 0 ; j < col_cnt ; j++){
+            unsigned int idx = i * col_cnt + j;
+ 
+            // partition allocation
+            proposed_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
+ 
+            // partition initialization
+            Rect roi(i*blk_rows, j*blk_cols, blk_rows, blk_cols);
+            baseline_mat(roi).copyTo(baseline_tmp);
+            proposed_mat(roi).copyTo(proposed_tmp);
+    
+            // tiling HM
+            std::cout << __func__ << ": dev_sequence[" << idx << "]: " << dev_sequence[idx] <<std::endl;
+            if(dev_sequence[idx] == 3){ // tpu
+                assert(Histst(proposed_tmp, baseline_tmp)); // HS the proposed one based on hist. of baseline.
+            } // for others, proposed block should remain un-touched.
+            mat2array(proposed_tmp, (float*)((proposed_pars[idx])));
+        }
+    }
+
+    
+    timing hm_s = clk::now();
+    timing hm_e = clk::now();
+    std::cout << __func__ << ": hm time: " << get_time_ms(hm_e, hm_s) << " (ms)" << std::endl;
 }
 
 void dump_to_csv(std::string log_file_path,
