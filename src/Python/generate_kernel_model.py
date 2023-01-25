@@ -9,13 +9,16 @@ assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
 import time
 import keras
+import ctypes
 import random
 import argparse
 import cv2 as cv
 import subprocess
 import numpy as np
+from ctypes import *
 from PIL import Image
 from scipy.stats import binom
+from numpy.ctypeslib import ndpointer
 from utils.params_base import TrainParams
 from utils.utils import (
         get_imgs_count, 
@@ -55,6 +58,14 @@ class MyDataGen():
         #self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
         #self.input_img_paths    = get_img_paths_list("/mnt/Data/DET/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
         #self.num_imgs           = len(self.input_img_paths)
+        so_file = "/home/src/kernels/function_hotspot.so"
+        lib = ctypes.cdll.LoadLibrary(so_file)
+        self.hotspot_read_data = lib.read_data
+        self.hotspot_read_data.argtypes = [c_int, \
+                                           c_int, \
+                                           ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                                           ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.hotspot_read_data.retype = None
 
     def random_input_gen(self):
         """ This function generates random samples for training input. """
@@ -81,8 +92,13 @@ class MyDataGen():
                 y_max = 3300.
             elif self.model_name == 'hotspot_2d':
                 np.random.seed(j)
-                temp_slice  = np.random.random(self.in_shape).astype("float32") * 22 + 322
-                power_slice = np.random.random(self.in_shape).astype("float32") * 22 + 322
+#                temp_slice  = np.random.random(self.in_shape).astype("float32") * 22 + 322
+#                power_slice = np.random.random(self.in_shape).astype("float32")
+                temp_slice  = np.empty(self.in_shape).astype("float32")
+                power_slice = np.empty(self.in_shape).astype("float32")
+                self.hotspot_read_data(self.in_shape[0], \
+                                       self.in_shape[1], \
+                                       temp_slice, power_slice)
                 tf.keras.utils.set_random_seed(seed)
                 x_slice = np.concatenate((temp_slice, power_slice))
                 y_slice = self.func(x_slice)
@@ -235,7 +251,7 @@ def pre_quantize_test(params, target_func, logfile):
         y_scale = 3300.
     elif params.model_name == 'hotspot_2d':
         temp_slice  = np.random.random(params.in_shape).astype("float32") * 22 + 322
-        power_slice = np.random.random(params.in_shape).astype("float32") * 22 + 322
+        power_slice = np.random.random(params.in_shape).astype("float32")
         X_test = np.concatenate((temp_slice, power_slice))
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
@@ -268,6 +284,9 @@ def pre_quantize_test(params, target_func, logfile):
     Y_predict = np.asarray(Y_predict)
     print("Y_predict raw:", Y_predict)
     Y_predict = (Y_predict)  * y_scale
+    if params.model_name == "hotspot_2d":
+        Y_predict = (Y_predict)  + 0
+
     Y_predict = np.squeeze(Y_predict, axis=0)
     Y_predict = np.squeeze(Y_predict, axis=-1)
 

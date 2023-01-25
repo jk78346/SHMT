@@ -128,6 +128,33 @@ void init_hotspot(int rows, int cols, void** input_array){
     // concate temp and power arrays into input_array
     read_hotspot_file(&float_ptr[offset], rows, cols, pfile.c_str());
 
+    float temp_max = FLT_MIN;
+    float temp_min = FLT_MAX;
+    float power_max = FLT_MIN;
+    float power_min = FLT_MAX;
+
+    float power_sum = 0.0;
+
+    for(int i = 0 ; i < rows * cols ; i++){
+        if(float_ptr[i] > temp_max){
+            temp_max = float_ptr[i];
+        }
+        if(float_ptr[i] < temp_min){
+            temp_min = float_ptr[i];
+        }
+        if(float_ptr[i+offset] > power_max){
+            power_max = float_ptr[i+offset];
+        }
+        if(float_ptr[i+offset] < power_min){
+            power_min = float_ptr[i+offset];
+        }
+        power_sum += float_ptr[i+offset];
+    }
+    std::cout << __func__ << ": temp max: " << temp_max
+                          << ", min: " << temp_min << std::endl;
+    std::cout << __func__ << ": power max: " << power_max
+                          << ", min: " << power_min << std::endl;
+    std::cout << __func__ << ": power sum: " << power_sum << std::endl;
 }
 
 void data_initialization(Params params,

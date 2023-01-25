@@ -122,11 +122,13 @@ class KernelModels:
     @staticmethod
     def hotspot_2d(in_shape, out_shape):
         """ This function returns a NN-based hotspot model. """
+        encoded_dim = 16
         inputs = keras.Input(shape=(in_shape[0]*2, in_shape[1])+(1,))
-        x0 = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
-        x1 = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
-        x = layers.Add()([x0, x1])
+        x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same')(x)
         x = layers.MaxPooling2D((2, 1))(x)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same')(x)
+        x = layers.Conv2D(filters=1, kernel_size=(3,3), padding='same')(x)
         outputs = x
         return keras.Model(inputs, outputs)
 
