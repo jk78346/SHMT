@@ -1,6 +1,9 @@
 import scipy
+import ctypes 
 import cv2 as cv
 import numpy as np
+from ctypes import *
+from numpy.ctypeslib import ndpointer
 from scipy.fftpack import dct, idct
 
 class Applications:
@@ -103,6 +106,26 @@ class Applications:
 
         ret = np.concatenate((x0, x1, x2, x3), axis=None)
         return ret
+    
+    @staticmethod
+    def hotspot_2d(src):
+        """ This function returns hotspot's C implementation.  """    
+        # C wrapper related setup 
+        so_file = "/home/src/kernels/function_hotspot.so"
+        lib = ctypes.cdll.LoadLibrary(so_file)
+        func = lib.hotspot_2d
+        func.argtypes = [c_int, \
+                         c_int, \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        func.retype = None
+        assert src.shape[0]% 2 == 0,\
+                """ hotspot_2d ground truth func: the first dim is not \
+                    an even number. There should be temp and power."""
+        dst = np.empty((int(src.shape[0]/2), src.shape[1])).astype("float32")
+        func(int(src.shape[0]/2), src.shape[1], src, dst)
+        return dst
+
 
 
 

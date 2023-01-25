@@ -120,6 +120,17 @@ class KernelModels:
         return keras.Model(inputs, outputs)
 
     @staticmethod
+    def hotspot_2d(in_shape, out_shape):
+        """ This function returns a NN-based hotspot model. """
+        inputs = keras.Input(shape=(in_shape[0]*2, in_shape[1])+(1,))
+        x0 = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
+        x1 = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
+        x = layers.Add()([x0, x1])
+        x = layers.MaxPooling2D((2, 1))(x)
+        outputs = x
+        return keras.Model(inputs, outputs)
+
+    @staticmethod
     def histogram256(in_shape, out_shape):
         """ This function returns a NN-based hist256 model. """
         inputs = keras.Input(shape=in_shape+(1,))
@@ -131,7 +142,5 @@ class KernelModels:
         x = layers.Dense(256*4)(x)
 #        x = layers.Dense(512*4)(x)
 #        x = layers.Lambda(lambda x: backend.sum(x, axis=1))(x)
-
-
         outputs = x
         return keras.Model(inputs, outputs)

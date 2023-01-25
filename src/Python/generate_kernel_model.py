@@ -58,7 +58,11 @@ class MyDataGen():
 
     def random_input_gen(self):
         """ This function generates random samples for training input. """
-        x = np.zeros((self.num_samples,) + self.in_shape + (1,) , dtype="float32")
+        if self.model_name == "hotspot_2d":
+            x = np.zeros((self.num_samples,) + (self.in_shape[0] * 2, self.in_shape[1]) + (1,) , dtype="float32")
+        else:
+            x = np.zeros((self.num_samples,) + self.in_shape + (1,) , dtype="float32")
+
         y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         
         for j in range(self.num_samples):
@@ -75,6 +79,15 @@ class MyDataGen():
                 y_slice = self.func(x_slice, fft_2d_kernel_array)
                 x_max = 15.
                 y_max = 3300.
+            elif self.model_name == 'hotspot_2d':
+                np.random.seed(j)
+                temp_slice  = np.random.random(self.in_shape).astype("float32") * 22 + 322
+                power_slice = np.random.random(self.in_shape).astype("float32") * 22 + 322
+                tf.keras.utils.set_random_seed(seed)
+                x_slice = np.concatenate((temp_slice, power_slice))
+                y_slice = self.func(x_slice)
+                x_max = x_slice.max()
+                y_max = y_slice.max()
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
@@ -105,6 +118,10 @@ class MyDataGen():
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
+            elif self.model_name == "hotspot_2d":
+                np.random.seed(j)
+                x_slice = np.random.randint(255, size=(1,) + (self.in_shape[0] * 2, self.in_shape[1]), dtype="uint8")
+                tf.keras.utils.set_random_seed(seed)
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
@@ -210,14 +227,19 @@ def calc_metrics(Y_ground_truth, Y_predict, logfile):
         f.write(line)
 
 def pre_quantize_test(params, target_func, logfile):
-# Now only image type of applications are supported now.
-    
     # get ground truth
     if params.model_name == 'fft_2d':
         X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
         Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
         x_scale = 15.
         y_scale = 3300.
+    elif params.model_name == 'hotspot_2d':
+        temp_slice  = np.random.random(params.in_shape).astype("float32") * 22 + 322
+        power_slice = np.random.random(params.in_shape).astype("float32") * 22 + 322
+        X_test = np.concatenate((temp_slice, power_slice))
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -233,9 +255,9 @@ def pre_quantize_test(params, target_func, logfile):
     np.set_printoptions(edgeitems=5, precision=3, linewidth=120)
     model = tf.keras.models.load_model(params.saved_model_dir)
     print(model.get_weights())
-
+    
     X_test = np.expand_dims(X_test, axis=(0, len(params.in_shape)+1))
-
+    
     print("start to evaluate...")
     # get model prediction
     X_test = (X_test.astype('float32') / x_scale) 
@@ -248,6 +270,7 @@ def pre_quantize_test(params, target_func, logfile):
     Y_predict = (Y_predict)  * y_scale
     Y_predict = np.squeeze(Y_predict, axis=0)
     Y_predict = np.squeeze(Y_predict, axis=-1)
+
     print("Y_predict.shape: ", Y_predict.shape, ", dtype: ", Y_predict.dtype, ", max: ", Y_predict.max(), ", min: ", Y_predict.min())
     print(Y_predict)
 
@@ -270,6 +293,13 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         Y_ground_truth = target_func(X_test, fft_2d_kernel_array)
         x_scale = 15.
         y_scale = 3300. * (16./255.)
+    elif params.model_name == 'hotspot_2d':
+        temp_slice  = np.random.randint(256, size=params.in_shape, dtype="uint8")
+        power_slice = np.random.randint(256, size=params.in_shape, dtype="uint8")
+        X_test = np.concatenate((temp_slice, power_slice))
+        Y_ground_truth = target_func(X_test.astype("float32"))
+        x_scale = 1.
+        y_scale = 1.
     else:
         x_scale = 255.
         y_scale = 1.
@@ -298,8 +328,8 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
     Y_predict = np.squeeze(Y_predict, axis=-1) * y_scale
 
     print("X_test: ", np.squeeze(np.squeeze(X_test, axis=0), axis=-1))
-    print("Y_ground_truth: ", Y_ground_truth, ", max: ", Y_ground_truth.max(), ", min: ", Y_ground_truth.min())
-    print("Y_predict: ", Y_predict, ", max: ", Y_predict.max(), ",min: ", Y_predict.min())
+    print("Y_ground_truth: ", Y_ground_truth, ", max: ", Y_ground_truth.max(), ", min: ", Y_ground_truth.min(), ", shape: ", Y_ground_truth.shape)
+    print("Y_predict: ", Y_predict, ", max: ", Y_predict.max(), ",min: ", Y_predict.min(), ",shape: ", Y_predict.shape)
     input_scale, input_zero_point = input_details["quantization"]
     print("input_scale: ", input_scale, ", input_zero_point: ", input_zero_point)
     with open(logfile, 'a') as f:
