@@ -137,9 +137,11 @@ void histogram_matching(void* output_array_baseline,
     Mat baseline_mat, proposed_mat;
     Mat baseline_tmp(blk_rows, blk_cols, CV_32F);
     Mat proposed_tmp(blk_rows, blk_cols, CV_32F);
-    
-    float* baseline_ptr = reinterpret_cast<float*>(output_array_baseline);
-    float* proposed_ptr = reinterpret_cast<float*>(output_array_proposed);
+   
+    float* baseline_ptr = (float*) malloc( rows * cols * sizeof(float));
+    float* proposed_ptr = (float*) malloc( rows * cols * sizeof(float));
+    std::memcpy(baseline_ptr, (float*)output_array_baseline, rows * cols * sizeof(float));
+    std::memcpy(proposed_ptr, (float*)output_array_proposed, rows * cols * sizeof(float));
 
     array2mat(baseline_mat, baseline_ptr, rows, cols);
     array2mat(proposed_mat, proposed_ptr, rows, cols);
@@ -147,33 +149,41 @@ void histogram_matching(void* output_array_baseline,
     unsigned int block_total_size = blk_rows * blk_cols;
 
     // vector of partitions allocation
-    std::vector<void*> proposed_pars;
-    proposed_pars.resize(dev_sequence.size());
+    //std::vector<void*> proposed_pars;
+    //proposed_pars.resize(dev_sequence.size());
+    float hm_time_ms = 0.0;
+
     for(unsigned int i = 0 ; i < row_cnt ; i++){
         for(unsigned int j = 0 ; j < col_cnt ; j++){
             unsigned int idx = i * col_cnt + j;
  
             // partition allocation
-            proposed_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
+            //proposed_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
  
             // partition initialization
             Rect roi(i*blk_rows, j*blk_cols, blk_rows, blk_cols);
             baseline_mat(roi).copyTo(baseline_tmp);
             proposed_mat(roi).copyTo(proposed_tmp);
-    
+            baseline_tmp.convertTo(baseline_tmp, CV_8U);
+            proposed_tmp.convertTo(proposed_tmp, CV_8U);
+
             // tiling HM
             std::cout << __func__ << ": dev_sequence[" << idx << "]: " << dev_sequence[idx] <<std::endl;
             if(dev_sequence[idx] == 3){ // tpu
+                timing hm_s = clk::now();
                 assert(Histst(proposed_tmp, baseline_tmp)); // HS the proposed one based on hist. of baseline.
+                timing hm_e = clk::now();
+                hm_time_ms += get_time_ms(hm_e, hm_s);
             } // for others, proposed block should remain un-touched.
-            mat2array(proposed_tmp, (float*)((proposed_pars[idx])));
+            proposed_tmp.convertTo(proposed_tmp, CV_32F);
+            //mat2array(proposed_tmp, (float*)((proposed_pars[idx])));
+        
+            //write current block back to out array
+            proposed_tmp.copyTo(proposed_mat(roi));
         }
     }
-
-    
-    timing hm_s = clk::now();
-    timing hm_e = clk::now();
-    std::cout << __func__ << ": hm time: " << get_time_ms(hm_e, hm_s) << " (ms)" << std::endl;
+    mat2array(proposed_mat, (float*)output_array_proposed);
+    std::cout << __func__ << ": hm time: " << hm_time_ms << " (ms)" << std::endl;
 }
 
 void dump_to_csv(std::string log_file_path,

@@ -500,7 +500,9 @@ void Quality::print_results(bool is_tiling, int verbose){
         }
     }
 
+    std::cout << __func__ << ": baseline hist.:" << std::endl;
     print_histogram(this->baseline_mat);
+    std::cout << __func__ << ": target hist.:" << std::endl;
     print_histogram(this->target_mat);
 }
 
