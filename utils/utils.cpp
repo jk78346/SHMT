@@ -135,13 +135,11 @@ void histogram_matching(void* output_array_baseline,
 
     /* partition the output and determine which blocks need HM. */
     Mat baseline_mat, proposed_mat;
-    Mat baseline_tmp(blk_rows, blk_cols, CV_32F);
-    Mat proposed_tmp(blk_rows, blk_cols, CV_32F);
+    Mat baseline_tmp(blk_rows, blk_cols, CV_8U);
+    Mat proposed_tmp(blk_rows, blk_cols, CV_8U);
    
-    float* baseline_ptr = (float*) malloc( rows * cols * sizeof(float));
-    float* proposed_ptr = (float*) malloc( rows * cols * sizeof(float));
-    std::memcpy(baseline_ptr, (float*)output_array_baseline, rows * cols * sizeof(float));
-    std::memcpy(proposed_ptr, (float*)output_array_proposed, rows * cols * sizeof(float));
+    uint8_t* baseline_ptr = reinterpret_cast<uint8_t*>(output_array_baseline);
+    uint8_t* proposed_ptr = reinterpret_cast<uint8_t*>(output_array_proposed);
 
     array2mat(baseline_mat, baseline_ptr, rows, cols);
     array2mat(proposed_mat, proposed_ptr, rows, cols);
@@ -164,8 +162,6 @@ void histogram_matching(void* output_array_baseline,
             Rect roi(i*blk_rows, j*blk_cols, blk_rows, blk_cols);
             baseline_mat(roi).copyTo(baseline_tmp);
             proposed_mat(roi).copyTo(proposed_tmp);
-            baseline_tmp.convertTo(baseline_tmp, CV_8U);
-            proposed_tmp.convertTo(proposed_tmp, CV_8U);
 
             // tiling HM
             std::cout << __func__ << ": dev_sequence[" << idx << "]: " << dev_sequence[idx] <<std::endl;
@@ -175,14 +171,13 @@ void histogram_matching(void* output_array_baseline,
                 timing hm_e = clk::now();
                 hm_time_ms += get_time_ms(hm_e, hm_s);
             } // for others, proposed block should remain un-touched.
-            proposed_tmp.convertTo(proposed_tmp, CV_32F);
             //mat2array(proposed_tmp, (float*)((proposed_pars[idx])));
         
             //write current block back to out array
             proposed_tmp.copyTo(proposed_mat(roi));
         }
     }
-    mat2array(proposed_mat, (float*)output_array_proposed);
+    mat2array(proposed_mat, (uint8_t*)output_array_proposed);
     std::cout << __func__ << ": hm time: " << hm_time_ms << " (ms)" << std::endl;
 }
 
