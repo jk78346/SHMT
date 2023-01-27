@@ -17,6 +17,8 @@ public:
     unsigned int get_col_cnt();
     unsigned int get_block_cnt();
     unsigned int get_kernel_size();
+    void set_downsampling_rate(float r){this->downsampling_rate = r; };
+    float get_downsampling_rate(){ return this->downsampling_rate; };
 
     std::string app_name;
     int problem_size;
@@ -29,5 +31,6 @@ private:
     unsigned int row_cnt = 0;
     unsigned int col_cnt = 0;
     unsigned int block_cnt = 0;
+    float downsampling_rate = 0.25;
 };
 #endif

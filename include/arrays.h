@@ -14,5 +14,10 @@ void data_initialization(Params params,
                          void** input_array, 
                          void** output_array_baseline, 
                          void** output_array_proposed);
+
+void array_partition_downsampling(Params params,
+                                  bool skip_init,
+                                  std::vector<void*> input_pars,
+                                  std::vector<void*>& input_sampling_pars);
 #endif
 

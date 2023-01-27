@@ -42,6 +42,11 @@ public:
     unsigned int dev_type_cnt = 3; // cpu, gpu and tpu
 
 private:
+    /* The sampling pre-processing to determine criticality on tiling blocks. 
+        Return is timing overhead in ms.
+     */
+    double run_sampling();
+
     /* The main algorithm to determine tiling tasks to specific device(s). */
     DeviceType mix_policy(unsigned int i);
     
@@ -53,13 +58,25 @@ private:
     
     void create_kernel_by_type(unsigned int block_id, DeviceType device_type);
 
+    /* To determine if each type of devices is static or dynamic
+        by setting the the following arrays:
+        bool* is_dynamic_device
+     */
+    void setup_dynamic_devices();
+    
     /* To determine if each tiling block is static or dynamic
         by setting the the following arrays:
         bool* is_dynamic_block
-        bool* any_static_block_per_device
-        bool* is_dynamic_device.
+
+        If criticality has length zero, then sampling is off.
      */
-    void populate_dynamic_flags();
+    void setup_dynamic_blocks();
+
+    // For sampling policy use only
+    std::vector<bool> criticality;
+    
+    // A helper function to check if mode is criticality mode
+    bool is_criticality_mode();
 
     /*
         To indicate if the ith tiling block is under dynamic partitioning mode. 

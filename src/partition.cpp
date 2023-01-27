@@ -1,7 +1,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include "arrays.h"
+#include "quality.h"
 #include "partition.h"
+#include "conversion.h"
 
 std::atomic<int> doneProducers(0);
 std::atomic<int> doneConsumers(0);
@@ -15,6 +17,7 @@ PartitionRuntime::PartitionRuntime(Params params,
     this->row_cnt = params.get_row_cnt();
     this->col_cnt = params.get_col_cnt();
     this->block_cnt = params.get_block_cnt();
+    this->criticality.resize(this->block_cnt);
     assert(this->row_cnt * this->col_cnt == this->block_cnt);
     this->mode = mode;
     this->input = input;
@@ -25,7 +28,6 @@ PartitionRuntime::PartitionRuntime(Params params,
     this->is_dynamic_device = new bool[this->dev_type_cnt+1]; // enum is 1-index. 
     // For rand_p partition mode
     srand(time(NULL));
-    
 };
 
 PartitionRuntime::~PartitionRuntime(){
@@ -38,8 +40,89 @@ PartitionRuntime::~PartitionRuntime(){
     delete this->is_dynamic_device;
     this->input_pars.clear();
     this->output_pars.clear();
+    this->criticality.clear();
 }
 
+double PartitionRuntime::run_sampling(){
+    std::cout << __func__ << ": start sampling run..." << std::endl;
+    /* Downsampling tiling blocks and assign them to edgetpu. */
+    std::vector<void*> input_sampling_pars;
+    std::vector<void*> cpu_output_sampling_pars;
+    std::vector<void*> tpu_output_sampling_pars;
+    
+    array_partition_downsampling(this->params,
+                                 false,
+                                 this->input_pars,
+                                 input_sampling_pars);
+    
+    array_partition_downsampling(this->params,
+                                 true, // skip_init
+                                 this->output_pars,
+                                 cpu_output_sampling_pars);
+    
+    array_partition_downsampling(this->params,
+                                 true, // skip_init
+                                 this->output_pars,
+                                 tpu_output_sampling_pars);
+
+    double sampling_overhead = 0.0;
+
+    /* run downsampled tiling blocks on edgetpu and get quality result. */
+    for(unsigned int i = 0 ; i < this->row_cnt ; i++){
+        for(unsigned int j = 0; j < this->col_cnt ; j++){
+            unsigned int idx = i*this->col_cnt+j;
+            Params params = this->params;
+            params.block_size = this->params.block_size * params.get_downsampling_rate();
+
+            // cpu part
+             CpuKernel* cpu_kernel_ptr = new CpuKernel(params,
+                                                       input_sampling_pars[idx],
+                                                       cpu_output_sampling_pars[idx]);
+            sampling_overhead += cpu_kernel_ptr->input_conversion();
+            sampling_overhead += cpu_kernel_ptr->run_kernel(params.iter);
+            sampling_overhead += cpu_kernel_ptr->output_conversion();
+
+            // tpu part
+            TpuKernel* tpu_kernel_ptr = new TpuKernel(params,
+                                                      input_sampling_pars[idx],
+                                                      tpu_output_sampling_pars[idx]);
+            sampling_overhead += tpu_kernel_ptr->input_conversion();
+            sampling_overhead += tpu_kernel_ptr->run_kernel(params.iter);
+            sampling_overhead += tpu_kernel_ptr->output_conversion();
+        
+            UnifyType* unify_input_type = 
+                new UnifyType(params, input_sampling_pars[idx]);          
+            UnifyType* unify_cpu_output_type =
+                new UnifyType(params, cpu_output_sampling_pars[idx]);
+            UnifyType* unify_tpu_output_type =
+                new UnifyType(params, tpu_output_sampling_pars[idx]);
+                
+            Quality* quality = new Quality(params.block_size, // m
+                                           params.block_size, // n
+                                           params.block_size, // ldn
+                                           params.block_size,
+                                           params.block_size,
+                                           unify_input_type->float_array,
+                                           unify_tpu_output_type->float_array,
+                                           unify_cpu_output_type->float_array);
+            std::cout << __func__ << ": block[" << i << ", " << j << "]: "
+                      << "rmse: " << quality->rmse()
+                      << ", error_rate: " << quality->error_rate()
+                      << ", error_percentage: " << quality->error_percentage()
+                      << ", ssim: " << quality->ssim()
+                      << ", pnsr: " << quality->pnsr() << std::endl;
+        }
+    }
+
+    std::cout << __func__ << ": sampling timing overhead: " << sampling_overhead << " (ms)" << std::endl;
+    /* criticality policy to determine which tiling block(s) are critical. */
+    
+    // If a block is critical, then it must be static and assigned to GPU.
+    // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
+    // In this way, work stealing is used during runtime.
+    
+    return sampling_overhead;
+}
 
 double PartitionRuntime::prepare_partitions(){
     double ret = 0.0;
@@ -54,10 +137,15 @@ double PartitionRuntime::prepare_partitions(){
                                    true, // skip_init
                                    &(this->output),
                                    this->output_pars);
-    
+
+    if(is_criticality_mode()){
+        ret += this->run_sampling();
+    }
+    this->setup_dynamic_devices();
+
     /* This is the latest moment to determine if each tiling block and device is 
        dynamic or static. */
-    this->populate_dynamic_flags();
+    this->setup_dynamic_blocks();
     
     // assign partitions to corresponding type of kernel handler if is static.
     for(unsigned int i = 0 ; i < this->row_cnt ; i++){
@@ -186,7 +274,7 @@ double PartitionRuntime::transform_output(){
     output_array_partition_gathering(this->params,
                                      &(this->output),
                                      this->output_pars);
-    return ret;;
+    return ret;
 }
 
 void PartitionRuntime::create_kernel_by_type(unsigned int i/*block_id*/, 
@@ -218,7 +306,9 @@ void PartitionRuntime::create_kernel_by_type(unsigned int i/*block_id*/,
             this->generic_kernels[i].device_type = tpu;
         }else{
            std::cout << __func__ << ": undefined device type: "
-                     << device_type << ", program exits."
+                     << device_type 
+                     << " on block id: " << i
+                     << ", program exits."
                      << std::endl;
            exit(0);
         }
@@ -252,6 +342,8 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
            block is dynamic (determined by SPMC at runtime). No need to 
            pre-determine here so do nothing.
          */
+    }else if(this->mode == "gt_c"){ // criticality mode on GPU/TPU mixing
+        ret = (this->criticality[i] == true)?gpu:undefine; // non-critical blocks are dynamic
     }else{
         std::cout << __func__ << ": undefined partition mode: "
                   << this->mode << ", program exits."
@@ -284,14 +376,39 @@ std::vector<DeviceType> PartitionRuntime::get_device_sequence(){
     return ret;
 }
 
-void PartitionRuntime::populate_dynamic_flags(){
+bool PartitionRuntime::is_criticality_mode(){
+    bool ret = false;
+    unsigned int delimiter_loc = this->mode.find("_");
+    if(delimiter_loc != std::string::npos && 
+        this->mode.length() > delimiter_loc &&
+        this->mode.substr(delimiter_loc+1, 1) == "c"){
+        ret = true;
+    }
+    return ret;
+}
+
+/* Setup default dynamic flag based on this->mode */
+void PartitionRuntime::setup_dynamic_blocks(){
+    
+    if(is_criticality_mode()){
+        assert(this->criticality.size() == this->block_cnt);    
+        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+            this->is_dynamic_block[i] = (this->criticality[i] == true)?false:true;
+        }
+    }else{ // all other non criticality aware non-sampling policies
+        // default as static
+        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+            this->is_dynamic_block[i] = false;
+        }
+    }
+}
+
+/* Setup default dynamic flag based on this->mode */
+void PartitionRuntime::setup_dynamic_devices(){
     unsigned int delimiter_loc = this->mode.find("_");
     
     // default as static
-    for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-        this->is_dynamic_block[i] = false;
-    }
-    for(unsigned int i = 0 ; i < this->dev_type_cnt+1 ; i++){
+    for(unsigned int i = 0 ; i < this->dev_type_cnt+1/*enum is 1-index*/ ; i++){
         this->is_dynamic_device[i] = false;
     }
 
@@ -299,10 +416,6 @@ void PartitionRuntime::populate_dynamic_flags(){
         this->mode.length() > delimiter_loc &&
         this->mode.substr(delimiter_loc+1, 1) == "b"){
         
-        // switch all blocks to dynamic.
-        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-            this->is_dynamic_block[i] = true;
-        }
         // switch each device to dynamic if detected.
         std::string sub_mode = this->mode.substr(0, delimiter_loc);
         if(sub_mode.find("c") != std::string::npos){ // found cpu type
