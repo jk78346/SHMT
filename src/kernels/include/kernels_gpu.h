@@ -41,10 +41,17 @@ public:
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             uint8_t* input_array  = 
                 reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
-            array2mat(this->input_array_type.gpumat, 
-                      input_array, 
-                      this->kernel_params.params.get_kernel_size(), 
-                      this->kernel_params.params.get_kernel_size());
+            if(app_name == "laplacian_2d"){
+                array2mat_uchar2CV_32F(this->input_array_type.gpumat, 
+                                       input_array, 
+                                       this->kernel_params.params.get_kernel_size(), 
+                                       this->kernel_params.params.get_kernel_size());
+            }else{
+                array2mat(this->input_array_type.gpumat, 
+                          input_array, 
+                          this->kernel_params.params.get_kernel_size(), 
+                          this->kernel_params.params.get_kernel_size());
+            }
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             float* input_array  = 
                 reinterpret_cast<float*>(this->input_array_type.ptr);
@@ -78,10 +85,14 @@ public:
         if(if_kernel_in_table(this->func_table_cv_cuda, app_name)){
             uint8_t* output_array = 
                 reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
-            this->output_array_type.gpumat.convertTo(
-                this->output_array_type.gpumat, 
-                CV_8U);
-            mat2array(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
+            if(app_name == "laplacian_2d"){
+                mat2array_CV_32F2uchar(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
+            }else{
+                this->output_array_type.gpumat.convertTo(
+                    this->output_array_type.gpumat, 
+                    CV_8U);
+                mat2array(this->output_array_type.gpumat, output_array); // more than 95% of conversion time
+            }
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             if(app_name == "fft_2d"){
                 this->fft_2d_output_conversion(); 
@@ -162,7 +173,8 @@ private:
         std::make_pair<std::string, func_ptr_opencv_cuda> ("minimum_2d", this->minimum_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("sobel_2d", this->sobel_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("mean_2d", this->mean_2d),
-        std::make_pair<std::string, func_ptr_opencv_cuda> ("laplacian_2d", this->laplacian_2d)
+        std::make_pair<std::string, func_ptr_opencv_cuda> ("laplacian_2d", this->laplacian_2d),
+        std::make_pair<std::string, func_ptr_opencv_cuda> ("kmeans_2d", this->kmeans_2d)
     };
     func_table_float func_table_fp = {
         std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d),
@@ -198,6 +210,7 @@ private:
     static void sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
+    static void kmeans_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void fft_2d(KernelParams& kernel_params, void** input, void** output);
     static void dct8x8_2d(KernelParams& kernel_params, void** input, void** output);
     static void blackscholes_2d(KernelParams& kernel_params, void** input, void** output);

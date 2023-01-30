@@ -16,7 +16,8 @@
 std::vector<std::string> uint8_t_type_app = {
     "sobel_2d",
     "mean_2d",
-    "laplacian_2d"
+    "laplacian_2d",
+    "kmeans_2d"
 };
 
 void init_fft(unsigned int input_total_size, void** input_array){

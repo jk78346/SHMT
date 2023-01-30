@@ -19,10 +19,14 @@ void mat2array(Mat img, uint8_t* data);
 void mat2array(Mat img, float* data);
 void mat2array(cuda::GpuMat img, uint8_t* data);
 void mat2array(cuda::GpuMat img, float* data);
+void mat2array_CV_32F2uchar(cuda::GpuMat img, uint8_t* data);
+
 void array2mat(Mat& img, float* data, int rows, int cols);
 void array2mat(Mat& img, uint8_t* data, int rows, int cols);
 void array2mat(cuda::GpuMat& img, float* data, int rows, int cols);
 void array2mat(cuda::GpuMat& img, uint8_t* data, int rows, int cols);
+void array2mat_uchar2CV_32F(cuda::GpuMat& img, uint8_t* data, int rows, int cols);
+
 std::string get_edgetpu_kernel_path(std::string app_name, 
                                     int shape0, 
                                     int shape1);

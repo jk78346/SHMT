@@ -127,7 +127,8 @@ private:
         std::make_pair<std::string, func_ptr_opencv> ("minimum_2d", this->minimum_2d),
         std::make_pair<std::string, func_ptr_opencv> ("sobel_2d", this->sobel_2d),
         std::make_pair<std::string, func_ptr_opencv> ("mean_2d", this->mean_2d),
-        std::make_pair<std::string, func_ptr_opencv> ("laplacian_2d", this->laplacian_2d)
+        std::make_pair<std::string, func_ptr_opencv> ("laplacian_2d", this->laplacian_2d),
+        std::make_pair<std::string, func_ptr_opencv> ("kmeans_2d", this->kmeans_2d)
     };
     func_table_float func_table_fp = {
         std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d),
@@ -141,6 +142,7 @@ private:
     static void sobel_2d(const Mat in_img, Mat& out_img);
     static void mean_2d(const Mat in_img, Mat& out_img);
     static void laplacian_2d(const Mat in_img, Mat& out_img);
+    static void kmeans_2d(const Mat in_img, Mat& out_img);
     static void fft_2d(Params params, float* input, float* output);
     static void dct8x8_2d(Params params, float* input, float* output); 
     static void blackscholes_2d(Params params, float* input, float* output); 
