@@ -193,7 +193,7 @@ void* PartitionRuntime::RunDeviceThread(void *my_args){
             while(p_run_ptr->q.try_dequeue(curr_node)){
                 itemsLeft = true;
             /*  Start to consume one tiling block.
-                Current implementation has to includes inut conversion overhead 
+                Current implementation has to include input conversion overhead 
                 since device type is not determined until now.
             */
             unsigned int block_id = curr_node.block_id;
@@ -270,7 +270,7 @@ double PartitionRuntime::transform_output(){
     double ret = 0.0;
     for(unsigned int  i = 0 ; i < this->block_cnt ; i++){
         ret +=  this->generic_kernels[i].kernel_base->output_conversion();
-    }   
+    }  
     output_array_partition_gathering(this->params,
                                      &(this->output),
                                      this->output_pars);
@@ -355,14 +355,14 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
 }
 
 void PartitionRuntime::show_device_sequence(){
-    std::cout << __func__ << ": ";
+    std::cout << __func__ << ": (in [i, j] indexing)" << std::endl;
     for(unsigned int  i = 0 ; i < this->row_cnt ; i++){
         for(unsigned int j = 0 ; j < this->col_cnt ; j++){
             unsigned int idx = i*this->col_cnt +j;
             std::cout << this->dev_sequence[idx] << " ";
         }
+        std::cout << std::endl;
     }   
-    std::cout << std::endl;
 }
 
 std::vector<DeviceType> PartitionRuntime::get_device_sequence(){
@@ -389,12 +389,21 @@ bool PartitionRuntime::is_criticality_mode(){
 
 /* Setup default dynamic flag based on this->mode */
 void PartitionRuntime::setup_dynamic_blocks(){
+    unsigned int delimiter_loc = this->mode.find("_");
     
     if(is_criticality_mode()){
         assert(this->criticality.size() == this->block_cnt);    
         for(unsigned int i = 0 ; i < this->block_cnt ; i++){
             this->is_dynamic_block[i] = (this->criticality[i] == true)?false:true;
         }
+    }else if(delimiter_loc != std::string::npos && 
+             this->mode.length() > delimiter_loc &&
+             this->mode.substr(delimiter_loc+1, 1) == "b"){
+        // default as dynamic
+        for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+            this->is_dynamic_block[i] = true;
+        }
+    
     }else{ // all other non criticality aware non-sampling policies
         // default as static
         for(unsigned int i = 0 ; i < this->block_cnt ; i++){
@@ -412,9 +421,10 @@ void PartitionRuntime::setup_dynamic_devices(){
         this->is_dynamic_device[i] = false;
     }
 
-    if(delimiter_loc != std::string::npos && 
+    if((delimiter_loc != std::string::npos && 
         this->mode.length() > delimiter_loc &&
-        this->mode.substr(delimiter_loc+1, 1) == "b"){
+        this->mode.substr(delimiter_loc+1, 1) == "b") ||
+        this->is_criticality_mode()){
         
         // switch each device to dynamic if detected.
         std::string sub_mode = this->mode.substr(0, delimiter_loc);
