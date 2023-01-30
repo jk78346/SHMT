@@ -105,9 +105,14 @@ class MyDataGen():
                 x_max = x_slice.max()
                 y_max = y_slice.max()
             else:
-                np.random.seed(j)
-                x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
-                tf.keras.utils.set_random_seed(seed)
+                #np.random.seed(j)
+                #x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
+                #tf.keras.utils.set_random_seed(seed)
+                
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                image = image.resize(self.in_shape)
+                x_slice = np.asarray(image)
+
                 y_slice = self.func(x_slice)
                 x_max = x_slice.max()
                 y_max = y_slice.max()

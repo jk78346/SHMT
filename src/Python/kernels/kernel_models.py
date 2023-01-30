@@ -89,7 +89,7 @@ class KernelModels:
         inputs = keras.Input(shape=in_shape+(1,))
         x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(inputs)
         x = layers.Conv2D(filters=encoded_dim, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
-        x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='relu', kernel_initializer=init)(x)
+        x = layers.Conv2D(filters=1, kernel_size=3, padding='same', activation='sigmoid', kernel_initializer=init)(x)
         outputs = x
         return keras.Model(inputs, outputs)
 

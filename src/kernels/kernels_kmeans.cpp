@@ -1,4 +1,5 @@
 #include "kernels_cpu.h"
+#include "kernels_gpu.h"
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
 
@@ -12,10 +13,10 @@ void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
     cv::kmeans(in_tmp, // kmeans only takes CV_32F data type 
                k, 
                labels, 
-               cv::TermCriteria(TermCriteria::MAX_ITER|TermCriteria::EPS, 
+               cv::TermCriteria(TermCriteria::MAX_ITER/*|TermCriteria::EPS*/, 
                                 10, // max iteration 
                                 1.0), // epsilon
-               1, // attempts
+               3, // attempts
                cv::KMEANS_PP_CENTERS,
                centers);
     for (unsigned int i = 0; i < size; i++) {
@@ -25,3 +26,5 @@ void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
     out_img.convertTo(out_img, CV_8U);
 }
 
+void GpuKernel::kmeans_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+}

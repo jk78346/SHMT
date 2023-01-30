@@ -188,7 +188,7 @@ int main(int argc, char* argv[]){
     }
     
     /* A quick plugin test of histogram matching on laplacian_2d */
-    if(app_name == "laplacian_2d"){
+    if(0 && app_name == "laplacian_2d"){
         histogram_matching(output_array_baseline, 
                            output_array_proposed,
                            problem_size,
