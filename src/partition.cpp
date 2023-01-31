@@ -40,11 +40,54 @@ PartitionRuntime::~PartitionRuntime(){
     delete this->is_dynamic_device;
     this->input_pars.clear();
     this->output_pars.clear();
+    this->sampling_qualities.clear();
     this->criticality.clear();
 }
 
-double PartitionRuntime::run_sampling(){
-    std::cout << __func__ << ": start sampling run..." << std::endl;
+bool sortByVal(const std::pair<int , float> &a, const std::pair<int, float> &b){
+    return a.second < b.second;
+}
+
+/*
+ This is the main function to determine criticality of each tiling block based on
+ sampling quality.
+ */
+void PartitionRuntime::criticality_kernel(){
+    std::vector<std::pair<int, float>> order;
+
+    for(unsigned int i = 0 ; i < this->sampling_qualities.size() ; i++){
+        std::cout << __func__ << ": i: " << i << ", rmse: " << this->sampling_qualities[i].rmse()
+                  << ", error rate: " << this->sampling_qualities[i].error_rate()
+                  << ", error %: " << this->sampling_qualities[i].error_percentage()
+                  << ", ssim: " << this->sampling_qualities[i].ssim()
+                  << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
+        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+    }
+    sort(order.begin(), order.end(), sortByVal);
+
+    /*
+        Current design: mark one third of the worst blocks (error_rate worst) to be critical.
+        TODO: design the criticality decision 
+     */
+    int threshold = int(2 * order.size() / 3);
+    int cnt = 0;
+    for(auto p: order){
+        this->criticality[p.first] = (cnt < threshold)?false:true;
+        cnt++;
+        std::cout << __func__ << ": i: " << p.first << ", error rate: " << p.second << std::endl;
+    }
+
+    // show criticality
+    std::cout << __func__ << ": criticality: ";
+    for(auto c: this->criticality){
+        std::cout << c << " ";
+    }
+    std::cout << std::endl;
+}
+
+double PartitionRuntime::run_sampling(SamplingMode mode){
+    this->params.set_sampling_mode(mode);
+    std::cout << __func__ << ": start sampling run, mode: " << this->params.get_sampling_mode() << std::endl;
     /* Downsampling tiling blocks and assign them to edgetpu. */
     std::vector<void*> input_sampling_pars;
     std::vector<void*> cpu_output_sampling_pars;
@@ -97,26 +140,35 @@ double PartitionRuntime::run_sampling(){
             UnifyType* unify_tpu_output_type =
                 new UnifyType(params, tpu_output_sampling_pars[idx]);
                 
-            Quality* quality = new Quality(params.block_size, // m
-                                           params.block_size, // n
-                                           params.block_size, // ldn
-                                           params.block_size,
-                                           params.block_size,
-                                           unify_input_type->float_array,
-                                           unify_tpu_output_type->float_array,
-                                           unify_cpu_output_type->float_array);
-            std::cout << __func__ << ": block[" << i << ", " << j << "]: "
-                      << "rmse: " << quality->rmse()
-                      << ", error_rate: " << quality->error_rate()
-                      << ", error_percentage: " << quality->error_percentage()
-                      << ", ssim: " << quality->ssim()
-                      << ", pnsr: " << quality->pnsr() << std::endl;
+//            Quality* quality = new Quality(params.block_size, // m
+//                                           params.block_size, // n
+//                                           params.block_size, // ldn
+//                                           params.block_size,
+//                                           params.block_size,
+//                                           unify_input_type->float_array,
+//                                           unify_tpu_output_type->float_array,
+//                                           unify_cpu_output_type->float_array);
+            this->sampling_qualities.push_back(Quality(params.block_size,
+                                                       params.block_size,
+                                                       params.block_size,
+                                                       params.block_size,
+                                                       params.block_size,
+                                                       unify_input_type->float_array,
+                                                       unify_tpu_output_type->float_array,
+                                                       unify_cpu_output_type->float_array));
+//            std::cout << __func__ << ": block[" << i << ", " << j << "]: "
+//                      << "rmse: " << quality->rmse()
+//                      << ", error_rate: " << quality->error_rate()
+//                      << ", error_percentage: " << quality->error_percentage()
+//                      << ", ssim: " << quality->ssim()
+//                      << ", pnsr: " << quality->pnsr() << std::endl;
         }
     }
 
     std::cout << __func__ << ": sampling timing overhead: " << sampling_overhead << " (ms)" << std::endl;
     /* criticality policy to determine which tiling block(s) are critical. */
-    
+    this->criticality_kernel(); 
+
     // If a block is critical, then it must be static and assigned to GPU.
     // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
     // In this way, work stealing is used during runtime.
@@ -139,7 +191,8 @@ double PartitionRuntime::prepare_partitions(){
                                    this->output_pars);
 
     if(is_criticality_mode()){
-        ret += this->run_sampling();
+        SamplingMode mode = center_crop;
+        ret += this->run_sampling(mode);
     }
     this->setup_dynamic_devices();
 

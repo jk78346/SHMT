@@ -326,6 +326,32 @@ void output_array_partition_gathering(Params params,
     }    
 }
 
+void sampling_kernel(Params params, Mat& in, Mat& out, int downsample_block_size){
+    auto mode = params.get_sampling_mode();
+    if(mode == cv_resize){
+        cv::resize(in,
+                   out, 
+                   cv::Size(downsample_block_size, downsample_block_size), 
+                   0, 
+                   0, 
+                   cv::INTER_LINEAR);
+    
+    }else{ // other cropping types
+        int i_start = 0;
+        int j_start = 0;
+        if(mode == init_crop){
+            i_start = j_start = 0;
+        }else if(mode == center_crop){ // assume both square sizes
+            i_start = j_start = (in.rows- downsample_block_size)/2;
+        }else if(mode == random_crop){
+            i_start = int(rand() % (in.rows - downsample_block_size));
+            j_start = int(rand() % (in.rows - downsample_block_size));
+        }
+        Rect roi(i_start, j_start, downsample_block_size, downsample_block_size); 
+        in(roi).copyTo(out);
+    }
+}
+
 void array_partition_downsampling(Params params,
                                   bool skip_init,
                                   std::vector<void*> input_pars,
@@ -362,12 +388,7 @@ void array_partition_downsampling(Params params,
                               downsample_block_size);
         
                     // actual downsampling
-                    cv::resize(tmp,
-                               sampling_tmp, 
-                               cv::Size(downsample_block_size, downsample_block_size), 
-                               0, 
-                               0, 
-                               cv::INTER_LINEAR);
+                    sampling_kernel(params, tmp, sampling_tmp, downsample_block_size);
                 
                     // store back to input_sampling_pars[idx]
                     mat2array(sampling_tmp, (uint8_t*)input_sampling_pars[idx]);

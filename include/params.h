@@ -2,6 +2,8 @@
 #define __PARAMS_H__
 #include <string>
 
+enum SamplingMode {cv_resize, center_crop, init_crop, random_crop};
+
 class Params{
 public:
     Params(std::string app_name="sobel_2d",
@@ -19,18 +21,21 @@ public:
     unsigned int get_kernel_size();
     void set_downsampling_rate(float r){this->downsampling_rate = r; };
     float get_downsampling_rate(){ return this->downsampling_rate; };
+    void set_sampling_mode(SamplingMode mode){ this->sampling_mode = mode; };
+    SamplingMode get_sampling_mode(){ return this->sampling_mode; };
 
     std::string app_name;
     int problem_size;
     int block_size;
     bool tiling_mode;
     unsigned int iter;
-    std::string input_data_path;
+    std::string input_data_path; 
 
 private:        
     unsigned int row_cnt = 0;
     unsigned int col_cnt = 0;
     unsigned int block_cnt = 0;
     float downsampling_rate = 0.25;
+    SamplingMode sampling_mode = cv_resize;
 };
 #endif

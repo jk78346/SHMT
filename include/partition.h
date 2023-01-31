@@ -45,7 +45,7 @@ private:
     /* The sampling pre-processing to determine criticality on tiling blocks. 
         Return is timing overhead in ms.
      */
-    double run_sampling();
+    double run_sampling(SamplingMode mode);
 
     /* The main algorithm to determine tiling tasks to specific device(s). */
     DeviceType mix_policy(unsigned int i);
@@ -57,6 +57,14 @@ private:
     moodycamel::ConcurrentQueue<struct node_data> q;
     
     void create_kernel_by_type(unsigned int block_id, DeviceType device_type);
+    
+    // For sampling policy use only
+    std::vector<Quality> sampling_qualities;
+    std::vector<bool> criticality;
+    // A helper function to check if mode is criticality mode
+    bool is_criticality_mode();
+    // The main criticality determine function based on sampling qualities.
+    void criticality_kernel();
 
     /* To determine if each type of devices is static or dynamic
         by setting the the following arrays:
@@ -71,12 +79,6 @@ private:
         If criticality has length zero, then sampling is off.
      */
     void setup_dynamic_blocks();
-
-    // For sampling policy use only
-    std::vector<bool> criticality;
-    
-    // A helper function to check if mode is criticality mode
-    bool is_criticality_mode();
 
     /*
         To indicate if the ith tiling block is under dynamic partitioning mode. 
