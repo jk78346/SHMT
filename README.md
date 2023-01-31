@@ -50,6 +50,9 @@ sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
 
+### 3. Install opencv2 (on jetson nano)
+Reference : https://qengineering.eu/install-opencv-4.5-on-jetson-nano.html
+
 ## Build and execution
 ### 1. Prepare the gptpu_utils shared library
 1. Cross-compile it on x86 machine
