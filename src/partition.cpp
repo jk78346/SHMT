@@ -66,10 +66,11 @@ void PartitionRuntime::criticality_kernel(){
     sort(order.begin(), order.end(), sortByVal);
 
     /*
-        Current design: mark one third of the worst blocks (error_rate worst) to be critical.
+        Current design: mark (no more than) one third of the worst blocks 
+            (error_rate worst) to be critical.
         TODO: design the criticality decision 
      */
-    int threshold = int(2 * order.size() / 3);
+    int threshold = ceil(order.size() * (2./3.));
     int cnt = 0;
     for(auto p: order){
         this->criticality[p.first] = (cnt < threshold)?false:true;
@@ -87,7 +88,10 @@ void PartitionRuntime::criticality_kernel(){
 
 double PartitionRuntime::run_sampling(SamplingMode mode){
     this->params.set_sampling_mode(mode);
-    std::cout << __func__ << ": start sampling run, mode: " << this->params.get_sampling_mode() << std::endl;
+    std::cout << __func__ << ": start sampling run, mode: " 
+              << this->params.get_sampling_mode() 
+              << ", downsampling rate: "
+              << this->params.get_downsampling_rate() << std::endl;
     /* Downsampling tiling blocks and assign them to edgetpu. */
     std::vector<void*> input_sampling_pars;
     std::vector<void*> cpu_output_sampling_pars;
@@ -122,7 +126,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                                                        input_sampling_pars[idx],
                                                        cpu_output_sampling_pars[idx]);
             sampling_overhead += cpu_kernel_ptr->input_conversion();
-            sampling_overhead += cpu_kernel_ptr->run_kernel(params.iter);
+            sampling_overhead += cpu_kernel_ptr->run_kernel(1);
             sampling_overhead += cpu_kernel_ptr->output_conversion();
 
             // tpu part
@@ -130,9 +134,11 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                                                       input_sampling_pars[idx],
                                                       tpu_output_sampling_pars[idx]);
             sampling_overhead += tpu_kernel_ptr->input_conversion();
-            sampling_overhead += tpu_kernel_ptr->run_kernel(params.iter);
+            sampling_overhead += tpu_kernel_ptr->run_kernel(1);
             sampling_overhead += tpu_kernel_ptr->output_conversion();
-        
+
+            params.problem_size = params.block_size;
+            
             UnifyType* unify_input_type = 
                 new UnifyType(params, input_sampling_pars[idx]);          
             UnifyType* unify_cpu_output_type =

@@ -36,6 +36,6 @@ private:
     unsigned int col_cnt = 0;
     unsigned int block_cnt = 0;
     float downsampling_rate = 0.25;
-    SamplingMode sampling_mode = cv_resize;
+    SamplingMode sampling_mode = center_crop;
 };
 #endif
