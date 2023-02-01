@@ -43,6 +43,24 @@ from utils.params_base import (
 from kernels.kernel_models import KernelModels
 from kernels.ground_truth_functions import Applications
 
+def load_hotspot_data(in_shape):
+    """ A helper function to load temp and power matrices 
+    of application hotspot. """    
+    so_file = "/home/src/kernels/function_hotspot.so"
+    lib = ctypes.cdll.LoadLibrary(so_file)
+    hotspot_read_data = lib.read_data
+    hotspot_read_data.argtypes = [c_int, \
+                                  c_int, \
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+    hotspot_read_data.retype = None
+    temp_slice  = np.empty(in_shape).astype("float32")
+    power_slice = np.empty(in_shape).astype("float32")
+    hotspot_read_data(in_shape[0], \
+                      in_shape[1], \
+                      temp_slice, power_slice)
+    return temp_slice, power_slice
+
 class MyDataGen():
     """ A customized data generator """
     def __init__(self, params, target_func):
@@ -58,14 +76,6 @@ class MyDataGen():
         #self.input_img_paths    = get_img_paths_list("/mnt/Data/Sobel_2048/in/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
         #self.input_img_paths    = get_img_paths_list("/mnt/Data/DET/train/ILSVRC2014_train_0000/", '.JPEG')[:self.num_samples] 
         #self.num_imgs           = len(self.input_img_paths)
-        so_file = "/home/src/kernels/function_hotspot.so"
-        lib = ctypes.cdll.LoadLibrary(so_file)
-        self.hotspot_read_data = lib.read_data
-        self.hotspot_read_data.argtypes = [c_int, \
-                                           c_int, \
-                                           ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
-                                           ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.hotspot_read_data.retype = None
 
     def random_input_gen(self):
         """ This function generates random samples for training input. """
@@ -91,19 +101,12 @@ class MyDataGen():
                 x_max = 15.
                 y_max = 3300.
             elif self.model_name == 'hotspot_2d':
-                np.random.seed(j)
-#                temp_slice  = np.random.random(self.in_shape).astype("float32") * 22 + 322
-#                power_slice = np.random.random(self.in_shape).astype("float32")
-                temp_slice  = np.empty(self.in_shape).astype("float32")
-                power_slice = np.empty(self.in_shape).astype("float32")
-                self.hotspot_read_data(self.in_shape[0], \
-                                       self.in_shape[1], \
-                                       temp_slice, power_slice)
-                tf.keras.utils.set_random_seed(seed)
+                temp_slice, power_slice = load_hotspot_data(self.in_shape)
                 x_slice = np.concatenate((temp_slice, power_slice))
                 y_slice = self.func(x_slice)
-                x_max = x_slice.max()
+                x_max = 1. #x_slice.max()
                 y_max = y_slice.max()
+                #print("x_max: " ,x_max, ", y_max: ", y_max)
             else:
                 #np.random.seed(j)
                 #x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
@@ -117,11 +120,23 @@ class MyDataGen():
                 x_max = x_slice.max()
                 y_max = y_slice.max()
 
-            x_slice = np.expand_dims(x_slice, axis=-1)
-            y_slice = np.expand_dims(y_slice, axis=-1)
+            if self.model_name == 'hotspot_2d':
+                temp_slice -= temp_slice.min()
+                temp_slice /= temp_slice.max()
+                power_slice -= power_slice.min()
+                power_slice /= power_slice.max()
+                x_slice = np.concatenate((temp_slice, power_slice))
+                x_slice = np.expand_dims(x_slice, axis=-1)
+                y_slice = np.expand_dims(y_slice, axis=-1)
             
-            x[j] = (x_slice.astype('float32') / x_max) 
-            y[j] = (y_slice.astype('float32') / y_max)
+                x[j] = (x_slice.astype('float32')) 
+                y[j] = (y_slice.astype('float32') / y_max)
+            else:
+                x_slice = np.expand_dims(x_slice, axis=-1)
+                y_slice = np.expand_dims(y_slice, axis=-1)
+            
+                x[j] = (x_slice.astype('float32') / x_max) 
+                y[j] = (y_slice.astype('float32') / y_max)
         return x, y
     
     def representative_gen(self):
@@ -140,9 +155,13 @@ class MyDataGen():
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
             elif self.model_name == "hotspot_2d":
-                np.random.seed(j)
-                x_slice = np.random.randint(255, size=(1,) + (self.in_shape[0] * 2, self.in_shape[1]), dtype="uint8")
-                tf.keras.utils.set_random_seed(seed)
+                temp_slice, power_slice = load_hotspot_data(self.in_shape)
+                temp_slice -= temp_slice.min()
+                temp_slice /= temp_slice.max()
+                power_slice -= power_slice.min()
+                power_slice /= power_slice.max()
+                x_slice = np.concatenate((temp_slice, power_slice))
+                x_slice = np.expand_dims(x_slice, axis=0)
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
@@ -255,12 +274,16 @@ def pre_quantize_test(params, target_func, logfile):
         x_scale = 15.
         y_scale = 3300.
     elif params.model_name == 'hotspot_2d':
-        temp_slice  = np.random.random(params.in_shape).astype("float32") * 22 + 322
-        power_slice = np.random.random(params.in_shape).astype("float32")
+        temp_slice, power_slice = load_hotspot_data(params.in_shape)
         X_test = np.concatenate((temp_slice, power_slice))
         Y_ground_truth = target_func(X_test)
+        temp_slice -= temp_slice.min()
+        temp_slice /= temp_slice.max()
+        power_slice -= power_slice.min()
+        power_slice /= power_slice.max()
+        X_test = np.concatenate((temp_slice, power_slice))
         x_scale = 1.
-        y_scale = 1.
+        y_scale = 343.76224
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -318,11 +341,15 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         x_scale = 15.
         y_scale = 3300. * (16./255.)
     elif params.model_name == 'hotspot_2d':
-        temp_slice  = np.random.randint(256, size=params.in_shape, dtype="uint8")
-        power_slice = np.random.randint(256, size=params.in_shape, dtype="uint8")
+        temp_slice, power_slice = load_hotspot_data(params.in_shape)
+        #temp_slice -= temp_slice.min()
+        #temp_slice /= temp_slice.max()
+        #power_slice -= power_slice.min()
+        #power_slice /= power_slice.max()
         X_test = np.concatenate((temp_slice, power_slice))
         Y_ground_truth = target_func(X_test.astype("float32"))
-        x_scale = 1.
+        X_test = (X_test * 1.).astype('uint8')
+        x_scale = 255.
         y_scale = 1.
     else:
         x_scale = 255.

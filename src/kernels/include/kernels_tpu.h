@@ -86,7 +86,7 @@ public:
             }else{
             // input array conversion
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
-                    this->input_kernel[i] = ((int)(input_array[i] /*+ 128*/)) % 256; // float to int conversion
+                    this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
                 }
             }
         }else{

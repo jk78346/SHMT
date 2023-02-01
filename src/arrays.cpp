@@ -352,53 +352,64 @@ void sampling_kernel(Params params, Mat& in, Mat& out, int downsample_block_size
     }
 }
 
+template <typename T>
+void downsampling_wrapper(Params params,
+                          bool skip_init,
+                          std::vector<void*> input_pars,
+                          std::vector<void*>& input_sampling_pars){
+    float rate = params.get_downsampling_rate();
+    input_sampling_pars.resize(params.get_block_cnt());
+
+    for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+        for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+            unsigned int idx = i * params.get_col_cnt() + j;
+
+            unsigned int downsample_block_size = params.block_size * rate;
+            unsigned int block_total_size = 
+                downsample_block_size * downsample_block_size;
+
+            // downsampling partition allocation
+            input_sampling_pars[idx] = 
+                (T*) calloc(block_total_size, sizeof(T));
+                
+            if(!skip_init){
+                Mat tmp, sampling_tmp;
+                array2mat(tmp,
+                          (T*)input_pars[idx],
+                          params.block_size,
+                          params.block_size);
+                array2mat(sampling_tmp, 
+                          (T*)input_sampling_pars[idx], 
+                          downsample_block_size, 
+                          downsample_block_size);
+        
+                // actual downsampling
+                sampling_kernel(params, tmp, sampling_tmp, downsample_block_size);
+                
+                // store back to input_sampling_pars[idx]
+                mat2array(sampling_tmp, (T*)input_sampling_pars[idx]);
+            }
+        }
+    }
+}
+
 void array_partition_downsampling(Params params,
                                   bool skip_init,
                                   std::vector<void*> input_pars,
                                   std::vector<void*>& input_sampling_pars){
-    float rate = params.get_downsampling_rate();
     if( std::find(uint8_t_type_app.begin(), 
                   uint8_t_type_app.end(), 
                   params.app_name) !=
         uint8_t_type_app.end() ){
-
-        input_sampling_pars.resize(params.get_block_cnt());
-
-        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
-            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
-                unsigned int idx = i * params.get_col_cnt() + j;
-
-                unsigned int downsample_block_size = params.block_size * rate;
-                unsigned int block_total_size = 
-                    downsample_block_size * downsample_block_size;
-
-                // downsampling partition allocation
-                input_sampling_pars[idx] = 
-                    (uint8_t*) calloc(block_total_size, sizeof(uint8_t));
-                
-                if(!skip_init){
-                    Mat tmp, sampling_tmp;
-                    array2mat(tmp,
-                              (uint8_t*)input_pars[idx],
-                              params.block_size,
-                              params.block_size);
-                    array2mat(sampling_tmp, 
-                              (uint8_t*)input_sampling_pars[idx], 
-                              downsample_block_size, 
-                              downsample_block_size);
-        
-                    // actual downsampling
-                    sampling_kernel(params, tmp, sampling_tmp, downsample_block_size);
-                
-                    // store back to input_sampling_pars[idx]
-                    mat2array(sampling_tmp, (uint8_t*)input_sampling_pars[idx]);
-                }
-            }
-        }
+        downsampling_wrapper<uint8_t>(params,
+                                      skip_init,
+                                      input_pars,
+                                      input_sampling_pars);
     }else{
-        std::cout << __func__ 
-                  << ": downsampling on float type is not implemented yet." 
-                  << std::endl;
+        downsampling_wrapper<float>(params,
+                                    skip_init,
+                                    input_pars,
+                                    input_sampling_pars);
     }
 }
 

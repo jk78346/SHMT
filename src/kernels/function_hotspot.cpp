@@ -122,44 +122,6 @@ void single_iteration(float* result,
     }
 }
 
-extern "C" void hotspot_2d(int rows, int cols, float* input, float* output){
-
-    int num_iterations = 1;
-
-    /* interface */
-    int row = rows;
-    int col = cols;
-    float* result = output;
-    float* temp = input;
-    float* power = &input[rows * cols];
-
-    float grid_height = chip_height / row;
-    float grid_width  = chip_width  / col;
-    float Cap = FACTOR_CHIP * SPEC_HEAT_SI * t_chip * grid_width * grid_height;
-    float Rx = grid_width / (2.0 * K_SI * t_chip * grid_height);
-    float Ry = grid_height / (2.0 * K_SI * t_chip * grid_width);
-    float Rz = t_chip / (K_SI * grid_height * grid_width);
-
-    float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
-    float step = PRECISION / max_slope / 1000.0;
-
-    float Rx_1=1.f/Rx;
-    float Ry_1=1.f/Ry;
-    float Rz_1=1.f/Rz;
-    float Cap_1 = step/Cap;
-
-    //int array_size = row * col;
-
-    float* r = result;
-    float* t = temp;
-    for (int i = 0; i < num_iterations ; i++){
-        single_iteration(r, t, power, row, col, Cap_1, Rx_1, Ry_1, Rz_1, step);
-        float* tmp = t;
-        t = r;
-        r = tmp;
-    }
-}
-
 void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* file){
     int i;//, index;
     FILE *fp;
@@ -196,4 +158,45 @@ extern "C" void read_data(int rows, int cols, float* temp, float* power){
     int offset = rows * cols;
     // concate temp and power arrays into input_array
     read_hotspot_file(power, rows, cols, pfile.c_str());
+}
+
+extern "C" void hotspot_2d(int rows, int cols, float* input, float* output){
+    int num_iterations = 1;
+
+    /* interface */
+    int row = rows;
+    int col = cols;
+    float* result = output;
+    float* temp = input;
+//    float* power = (float*) malloc(rows * cols * sizeof(float));
+    float* power = &input[rows * cols];
+    
+//    std::string pfile = "/home/data/hotspot/power_" + std::to_string(rows);
+//    read_hotspot_file(power, rows, cols, pfile.c_str());
+
+    float grid_height = chip_height / row;
+    float grid_width  = chip_width  / col;
+    float Cap = FACTOR_CHIP * SPEC_HEAT_SI * t_chip * grid_width * grid_height;
+    float Rx = grid_width / (2.0 * K_SI * t_chip * grid_height);
+    float Ry = grid_height / (2.0 * K_SI * t_chip * grid_width);
+    float Rz = t_chip / (K_SI * grid_height * grid_width);
+
+    float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
+    float step = PRECISION / max_slope / 1000.0;
+
+    float Rx_1=1.f/Rx;
+    float Ry_1=1.f/Ry;
+    float Rz_1=1.f/Rz;
+    float Cap_1 = step/Cap;
+
+    //int array_size = row * col;
+
+    float* r = result;
+    float* t = temp;
+    for (int i = 0; i < num_iterations ; i++){
+        single_iteration(r, t, power, row, col, Cap_1, Rx_1, Ry_1, Rz_1, step);
+        float* tmp = t;
+        t = r;
+        r = tmp;
+    }
 }

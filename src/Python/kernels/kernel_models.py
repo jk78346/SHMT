@@ -124,11 +124,17 @@ class KernelModels:
         """ This function returns a NN-based hotspot model. """
         encoded_dim = 16
         inputs = keras.Input(shape=(in_shape[0]*2, in_shape[1])+(1,))
-        x = layers.Conv2D(filters=1, kernel_size=(3, 3), padding='same')(inputs)
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same')(x)
-        x = layers.MaxPooling2D((2, 1))(x)
-        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same')(x)
-        x = layers.Conv2D(filters=1, kernel_size=(3,3), padding='same')(x)
+        # temp slice part
+        x = tf.slice(inputs, [0, 0, 0, 0], [1, in_shape[0], in_shape[1], 1])
+        #x = layers.Conv2D(filters=1, kernel_size=(3,3), padding='same', activation='relu')(x)
+        x = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same', activation='relu')(x)
+        # power slice part
+        y = tf.slice(inputs, [0, in_shape[0], 0, 0], [1, in_shape[0], in_shape[1], 1])
+        #y = layers.Conv2D(filters=1, kernel_size=(3,3), padding='same', activation='relu')(y)
+        y = layers.Conv2D(filters=encoded_dim, kernel_size=(3,3), padding='same', activation='relu')(y)
+        
+        x = layers.Add()([x, y])
+        x = layers.Conv2D(filters=1, kernel_size=(1,1), padding='same', activation='relu')(x)
         outputs = x
         return keras.Model(inputs, outputs)
 
