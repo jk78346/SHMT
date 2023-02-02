@@ -1,4 +1,5 @@
 #include <string>
+#include <cassert>
 #include <iostream>
 
 #ifdef RD_WG_SIZE_0_0                                                            
@@ -151,12 +152,14 @@ void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* fi
 }
 
 extern "C" void read_data(int rows, int cols, float* temp, float* power){
-    std::string tfile = "/home/data/hotspot/temp_" + std::to_string(rows);
-    std::string pfile = "/home/data/hotspot/power_" + std::to_string(rows);
+    assert(rows == cols); // only supports square input now
+    int internal_rows = (rows >= 256)?rows:256;
+    int internal_cols = (cols >= 256)?cols:256;
+
+    std::string tfile = "/home/data/hotspot/temp_" + std::to_string(internal_rows);
+    std::string pfile = "/home/data/hotspot/power_" + std::to_string(internal_rows);
 
     read_hotspot_file(temp, rows, cols, tfile.c_str());
-    int offset = rows * cols;
-    // concate temp and power arrays into input_array
     read_hotspot_file(power, rows, cols, pfile.c_str());
 }
 

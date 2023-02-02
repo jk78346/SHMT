@@ -1,11 +1,15 @@
 import os
 import math
+import ctypes
 import subprocess
 import numpy as np
+from ctypes import *
 from skimage.metrics import(
         structural_similarity,
         peak_signal_noise_ratio
 )
+from numpy.ctypeslib import ndpointer
+
 def get_gittop():
     """ This function returns the absolute path of current git repo root. """
     return subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], \
@@ -19,6 +23,24 @@ def get_img_paths_list(path, ext, sort=True):
     """ This function returns list of 'ext' type of files under 'path' dir. """
     ret = [os.path.join(path, fname) for fname in os.listdir(path) if fname.endswith(ext)]
     return sorted(ret) if sort == True else ret
+
+def load_hotspot_data(in_shape):
+    """ A helper function to load temp and power matrices 
+    of application hotspot. """
+    so_file = "/home/src/kernels/function_hotspot.so"
+    lib = ctypes.cdll.LoadLibrary(so_file)
+    hotspot_read_data = lib.read_data
+    hotspot_read_data.argtypes = [c_int, \
+                                  c_int, \
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"    ), \
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"    )]
+    hotspot_read_data.retype = None
+    temp_slice  = np.empty(in_shape).astype("float32")
+    power_slice = np.empty(in_shape).astype("float32")
+    hotspot_read_data(in_shape[0], \
+                      in_shape[1], \
+                      temp_slice, power_slice)
+    return temp_slice, power_slice
 
 class Quality:
     """ This class collects all quality metircs for evaluating model output compared against ground truth. """

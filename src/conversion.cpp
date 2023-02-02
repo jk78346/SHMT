@@ -44,7 +44,23 @@ void UnifyType::save_as_img(const std::string file_name,
         array2mat(mat, this->char_array, rows, cols);
         assert(!mat.empty());
         imwrite(file_name.c_str(), mat);
+    }else if(this->params.app_name == "hotspot_2d"){
+        std::cout << __func__ << ": saved image is only for visualization, "
+                  << "and it doesn't reflect actual value(s)." << std::endl;
+        Mat mat(rows, cols, CV_8U);
+        uint8_t* tmp = (uint8_t*) malloc(rows * cols * sizeof(uint8_t));
+        float min = 322.;
+        float range = 22.;
+        for(unsigned int i = 0 ; i < rows ; i++){
+            for(unsigned int j = 0 ; j < cols ; j++){
+                tmp[i * cols + j] = (uint8_t)((this->float_array[i * cols + j] - min) * (255./range));
+            }
+        }
+        array2mat(mat, tmp, rows, cols);
+        assert(!mat.empty());
+        imwrite(file_name.c_str(), mat);
     }else{
+        std::cout << __func__ << ": unprocessed float type image." << std::endl;
         Mat mat(rows, cols, CV_32F);
         // TODO: how to show float array?
         array2mat(mat, this->float_array, rows, cols);

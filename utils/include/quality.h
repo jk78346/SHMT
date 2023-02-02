@@ -127,7 +127,7 @@ class Quality{
         float min(float* mat, int i_start, int j_start, int row_size, int col_size);
         float average(float* mat, int i_start, int j_start, int row_size, int col_size);
         float sdev(float* mat, int i_start, int j_start, int row_size, int col_size);
-        float covariance(int i_start, int j_start, int row_size, int col_size);
+        float covariance(float* x, float* y, int i_start, int j_start, int row_size, int col_size);
         float entropy(float* mat, int i_start, int j_start, int row_size, int col_size);
 
         float rmse_kernel(int i_start, int j_start, int row_size, int col_size);

@@ -135,13 +135,13 @@ float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col
     return ret;
 }
 
-float Quality::covariance(int i_start, int j_start, int row_size, int col_size){
+float Quality::covariance(float* x, float* y, int i_start, int j_start, int row_size, int col_size){
 	double sum = 0;
 	float ux = this->average(this->target_mat, i_start, j_start, row_size, col_size);
 	float uy = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
 	for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
-			sum += (this->target_mat[i*this->ldn+j] - ux) * (this->baseline_mat[i*this->ldn+j] - uy);
+			sum += (x[i*this->ldn+j] - ux) * (y[i*this->ldn+j] - uy);
 		}
 	}
 	return (float)(sum / (double)(row_size*col_size));
@@ -242,7 +242,12 @@ float Quality::ssim_kernel(int i_start, int j_start, int row_size, int col_size)
                      this->target_mat,
                      target_max,
                      target_min);
-	
+    if(target_max > 255.){
+        std::cout << __func__ 
+                  << ": [WARN] should ignore ssim since array.max = " 
+                  << target_max << std::endl;
+    }
+
 	// update dynamic range
 	L = fabs(target_max - target_min); 
 	c1 = (k1*L)*(k1*L);
@@ -255,7 +260,7 @@ float Quality::ssim_kernel(int i_start, int j_start, int row_size, int col_size)
 	float uy = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
 	float vx = this->sdev(this->target_mat, i_start, j_start, row_size, col_size);
 	float vy = this->sdev(this->baseline_mat, i_start, j_start, row_size, col_size);
-	float cov = this->covariance(i_start, j_start, row_size, col_size);
+	float cov = this->covariance(this->target_mat, this->baseline_mat, i_start, j_start, row_size, col_size);
 
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2) + c1) * (pow(vx, 2) + pow(vy, 2) + c2));
     //assert(ssim >= 0.0 && ssim <= 1.);

@@ -9,20 +9,18 @@ assert 'IS_GPGTPU_CONTAINER' in os.environ, \
            f" Kernel model generating script is not running within GPGTPU container. "
 import time
 import keras
-import ctypes
 import random
 import argparse
 import cv2 as cv
 import subprocess
 import numpy as np
-from ctypes import *
 from PIL import Image
 from scipy.stats import binom
-from numpy.ctypeslib import ndpointer
 from utils.params_base import TrainParams
 from utils.utils import (
         get_imgs_count, 
         get_img_paths_list,
+        load_hotspot_data,
         Quality,    
 )
 from keras.callbacks import (
@@ -42,24 +40,6 @@ from utils.params_base import (
 )
 from kernels.kernel_models import KernelModels
 from kernels.ground_truth_functions import Applications
-
-def load_hotspot_data(in_shape):
-    """ A helper function to load temp and power matrices 
-    of application hotspot. """    
-    so_file = "/home/src/kernels/function_hotspot.so"
-    lib = ctypes.cdll.LoadLibrary(so_file)
-    hotspot_read_data = lib.read_data
-    hotspot_read_data.argtypes = [c_int, \
-                                  c_int, \
-                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
-                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-    hotspot_read_data.retype = None
-    temp_slice  = np.empty(in_shape).astype("float32")
-    power_slice = np.empty(in_shape).astype("float32")
-    hotspot_read_data(in_shape[0], \
-                      in_shape[1], \
-                      temp_slice, power_slice)
-    return temp_slice, power_slice
 
 class MyDataGen():
     """ A customized data generator """
@@ -342,15 +322,17 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         y_scale = 3300. * (16./255.)
     elif params.model_name == 'hotspot_2d':
         temp_slice, power_slice = load_hotspot_data(params.in_shape)
-        #temp_slice -= temp_slice.min()
-        #temp_slice /= temp_slice.max()
-        #power_slice -= power_slice.min()
-        #power_slice /= power_slice.max()
         X_test = np.concatenate((temp_slice, power_slice))
         Y_ground_truth = target_func(X_test.astype("float32"))
-        X_test = (X_test * 1.).astype('uint8')
+        
+        temp_slice -= temp_slice.min()
+        temp_slice /= temp_slice.max()
+        power_slice -= power_slice.min()
+        power_slice /= power_slice.max()
+        X_test = np.concatenate((temp_slice, power_slice))
+        X_test = (X_test * 255.).astype('uint8')
         x_scale = 255.
-        y_scale = 1.
+        y_scale = 343.76224 / 255.
     else:
         x_scale = 255.
         y_scale = 1.

@@ -80,17 +80,20 @@ public:
 
             if(app_name == "fft_2d"){
                 //this->fft_2d_input_conversion();
+                float scale = 255./16.;
+#pragma omp parallel for
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
-                    this->input_kernel[i] = (unsigned)(input_array[i] * (255./16.));
+                    this->input_kernel[i] = (unsigned)(input_array[i] * scale);
                 }
             }else{
-            // input array conversion
+#pragma omp parallel for
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
                     this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
                 }
             }
         }else{
-            // app_name not found in any table. 
+            std::cout << __func__ << " [WARN] app: " << app_name 
+                      << "is not found in table" << std::endl;
         }
         
         this->model_id = this->device_handler->build_model(this->kernel_path);
@@ -120,32 +123,27 @@ public:
                       this->kernel_table_uint8.end(),
                       app_name) !=
             this->kernel_table_uint8.end()){
-            //if(app_name == "laplacian_2d"){
-            //    for(unsigned int i = 0 ; i < this->out_size ; i++){
-            //        uint8_t* tmp = reinterpret_cast<uint8_t*>(this->output);
-            //        tmp[i] = (int)(( this->output_kernel[i] - zero_point ) * (scale * 255.)) % 256;// * scale;
-            //    }
-            //}
             this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding
-            //std::cout << __func__ << ": scale * 255. = " << scale * 255. << std::endl;
         }else if( std::find(this->kernel_table_fp.begin(),
                             this->kernel_table_fp.end(),
                             app_name) !=
                   this->kernel_table_fp.end() ){
+            float adj_scale = 1.;
             if(app_name == "fft_2d"){
-                for(unsigned int i = 0 ; i < this->out_size ; i++){
-                    float* tmp = reinterpret_cast<float*>(this->output);
-                    //tmp[i] = (float)( this->output_kernel[i] /*- zero_point*/ ) /** scale */* (3600./255.);
-                    tmp[i] = (float)( this->output_kernel[i] - zero_point ) * scale * 3300.;// * (3300.*(16./255.));
-                }
+                adj_scale = scale * 3300.;
+            }else if(app_name == "hotspot_2d"){
+                adj_scale = scale * 343.76224;
             }else{
-                for(unsigned int i = 0 ; i < this->out_size ; i++){
-                    float* tmp = reinterpret_cast<float*>(this->output);
-                    tmp[i] = (float)( this->output_kernel[i] - zero_point ) * scale * 255.;
-                }
+                adj_scale = scale * 255.;
+            }
+            float* tmp = reinterpret_cast<float*>(this->output);
+#pragma omp parallel for
+            for(unsigned int i = 0 ; i < this->out_size ; i++){
+                tmp[i] = (float)( this->output_kernel[i] - zero_point ) * adj_scale;
             }
         }else{
-            // app_name not found in any table. 
+            std::cout << __func__ << " [WARN] app: " << app_name 
+                      << "is not found in table" << std::endl;
         }
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -186,7 +184,9 @@ private:
     std::vector<std::string> kernel_table_fp = {
         "fft_2d",
         "dct8x8_2d",
-        "blackscholes_2d"
+        "blackscholes_2d",
+        "hotspot_2d",
+        "srad_2d"
     };
     gptpu_utils::EdgeTpuHandler* device_handler;
     unsigned int dev_cnt = 0;
