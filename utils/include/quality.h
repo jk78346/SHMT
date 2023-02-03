@@ -20,12 +20,14 @@ class Quality{
             block sizes are used by this->row_blk, this->col_blk.
          */
         float rmse(); 
+        float rmse_percentage();
         float error_rate();
         float error_percentage();
         float ssim();
         float pnsr();
         
         float rmse(int i_idx, int j_idx);
+        float rmse_percentage(int i_idx, int j_idx);
         float error_rate(int i_idx, int j_idx);
         float error_percentage(int i_idx, int j_idx);
         float ssim(int i_idx, int j_idx);
@@ -104,6 +106,7 @@ class Quality{
         
         struct Unit{
             float rmse;
+            float rmse_percentage;
             float error_rate;
             float error_percentage;
             float ssim;
@@ -133,12 +136,6 @@ class Quality{
         float sdev(float* mat, int i_start, int j_start, int row_size, int col_size);
         float covariance(float* x, float* y, int i_start, int j_start, int row_size, int col_size);
         float entropy(float* mat, int i_start, int j_start, int row_size, int col_size);
-
-        float rmse_kernel(int i_start, int j_start, int row_size, int col_size);
-        float error_rate_kernel(int i_start, int j_start, int row_size, int col_size);
-        float error_percentage_kernel(int i_start, int j_start, int row_size, int col_size);
-        float ssim_kernel(int i_start, int j_start, int row_size, int col_size);
-        float pnsr_kernel(int i_start, int j_start, int row_size, int col_size);
         
         // common quality kernel
         void common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size);

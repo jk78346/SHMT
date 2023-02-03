@@ -51,6 +51,88 @@ Quality::Quality(int m,
     }    
 }
 
+void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size){
+    double mse = 0;
+	double mean = this->average(this->baseline_mat, 
+                                i_start,
+                                j_start, 
+                                row_size, 
+                                col_size);
+    float baseline_max, baseline_min;
+	this->get_minmax(i_start, 
+                     j_start,
+                     row_size,
+                     col_size,
+                     this->baseline_mat,
+                     baseline_max,
+                     baseline_min);
+    double rate = 0;
+	int cnt = 0;
+	int error_percentage_cnt = 0;
+	for(int i = i_start ; i < i_start+row_size ; i++){
+		for(int j = j_start ; j < j_start+col_size ; j++){
+			int idx = i*this->ldn+j;
+			mse = (mse * cnt + pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) / (cnt + 1);
+			rate = (rate * cnt + fabs(this->target_mat[idx] - this->baseline_mat[idx])) / (cnt + 1);
+			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
+				error_percentage_cnt++;
+			}
+			cnt++;	
+		}
+	}
+    assert(error_percentage_cnt <= (row_size * col_size));
+	
+    // SSIM default parameters
+	int    L = 255.0; // 2^(# of bits) - 1
+	float k1 = 0.01;
+	float k2 = 0.03;
+	float c1 = 6.5025;  // (k1*L)^2
+	float c2 = 58.5225; // (k2*L)^2
+	float target_max, target_min;
+	this->get_minmax(i_start, 
+                     j_start,
+                     row_size,
+                     col_size,
+                     this->target_mat,
+                     target_max,
+                     target_min);
+    if(target_max > 255.){
+        std::cout << __func__ 
+                  << ": [WARN] should ignore ssim since array.max = " 
+                  << target_max << std::endl;
+    }
+
+	// update dynamic range
+	L = fabs(target_max - target_min); 
+	c1 = (k1*L)*(k1*L);
+	c2 = (k2*L)*(k2*L);
+
+	// main calculation
+	float ssim = 0.0;
+	
+	float ux = this->average(this->target_mat, i_start, j_start, row_size, col_size);
+	float uy = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
+	float vx = this->sdev(this->target_mat, i_start, j_start, row_size, col_size);
+	float vy = this->sdev(this->baseline_mat, i_start, j_start, row_size, col_size);
+	float cov = this->covariance(this->target_mat, this->baseline_mat, i_start, j_start, row_size, col_size);
+
+	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2) + c1) * (pow(vx, 2) + pow(vy, 2) + c2));
+    //assert(ssim >= 0.0 && ssim <= 1.);
+    if(ssim < 0.0 || ssim > 1.){
+        std::cout << __func__ << " [WARN] ssim is out of bound. It may due to wrong value or"
+                  << " the result of this benchmark isn't suitable for doing ssim (float type)"
+                  << std::endl;
+    }
+	
+    // assign results
+    result.rmse = sqrt(mse);
+	result.rmse_percentage = (result.rmse/mean) * 100.0;
+	result.error_rate = (rate / mean) * 100.0;
+    result.error_percentage = ((float)error_percentage_cnt / (float)(row_size*col_size)) * 100.0;
+    result.ssim = ssim;
+	result.pnsr = 20*log10(baseline_max) - 10*log10(mse/mean);
+}
+
 void Quality::get_minmax(int i_start, 
                          int j_start,
                          int row_size,
@@ -124,6 +206,23 @@ float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_si
 	double sum = 0;
 	float ux = this->average(x, i_start, j_start, row_size, col_size);
 	for(int i = i_start ; i < i_start+row_size ; i++){
+		for(int j = j_start ; j < j_start+col_size ; j++){
+			sum += pow(x[i*this->ldn+j] - ux, 2);
+		}
+	}
+	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
+}
+
+float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
+    float ret = 0.0;
+    std::map<float, long int>counts;
+    std::map<float, long int>::iterator it;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start;  j < j_start+col_size ; j++){
+            counts[x[i*this->ldn+j]]++;
+        }    
+    }
+    it = counts.begin();
     int elements = row_size * col_size;
     while(it != counts.end()){
         float p_x = (float)it->second/elements;
@@ -147,173 +246,53 @@ float Quality::covariance(float* x, float* y, int i_start, int j_start, int row_
 	return (float)(sum / (double)(row_size*col_size));
 }
 
-float Quality::rmse_kernel(int i_start, int j_start, int row_size, int col_size){
-    double mse = 0;
-	double mean = this->average(this->baseline_mat, 
-                                i_start,
-                                j_start, 
-                                row_size, 
-                                col_size);
-	int cnt = 0;
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			int idx = i*this->ldn+j;
-			mse = (mse * cnt + pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) / (cnt + 1);
-			cnt++;	
-		}
-	}
-	return (sqrt(mse)/mean) * 100.0;
-
-}
-
 float Quality::rmse(){
-    return this->rmse_kernel(0, 0, this->row, this->col);
+    return this->result.rmse;
 }
 
 float Quality::rmse(int i, int j){
-    return this->rmse_kernel(i*this->row_blk, 
-                             j*this->col_blk,
-                             this->row_blk, 
-                             this->col_blk);
+    return this->result_pars[i * this->col_cnt + j].rmse;
 } 
 
-float Quality::error_rate_kernel(int i_start, int j_start, int row_size, int col_size){
-	double rate = 0;
-	double mean = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
-	int cnt = 0;
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			int idx = i*this->ldn+j;
-			rate = (rate * cnt + fabs(this->target_mat[idx] - this->baseline_mat[idx])) / (cnt + 1);
-			cnt++;	
-		}
-	}
-	return (rate / mean) * 100.0;
+float Quality::rmse_percentage(){
+    return this->result.rmse_percentage;
 }
 
+float Quality::rmse_percentage(int i, int j){
+    return this->result_pars[i * this->col_cnt + j].rmse_percentage;
+} 
+
 float Quality::error_rate(){
-    return this->error_rate_kernel(0, 0, this->row, this->col);
+    return this->result.error_rate;
 }
 
 float Quality::error_rate(int i, int j){
-    return this->error_rate_kernel(i*this->row_blk, 
-                                   j*this->col_blk,
-                                   this->row_blk, 
-                                   this->col_blk);
-}
-
-float Quality::error_percentage_kernel(int i_start, int j_start, int row_size, int col_size){
-	int cnt = 0;
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			int idx = i*this->ldn+j;
-			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
-				cnt++;
-			}
-		}
-	}
-    assert(cnt <= (row_size * col_size));
-    return ((float)cnt / (float)(row_size*col_size)) * 100.0;
+    return this->result_pars[i * this->col_cnt + j].error_rate;
 }
 
 float Quality::error_percentage(){
-    return this->error_percentage_kernel(0, 0, this->row, this->col);
+    return this->result.error_percentage;
+    //return this->error_percentage_kernel(0, 0, this->row, this->col);
 }
 
 float Quality::error_percentage(int i, int j){
-    return this->error_percentage_kernel(i*this->row_blk,
-                                         j*this->col_blk,
-                                         this->row_blk,
-                                         this->col_blk);
-}
-
-float Quality::ssim_kernel(int i_start, int j_start, int row_size, int col_size){
-	// SSIM default parameters
-	int    L = 255.0; // 2^(# of bits) - 1
-	float k1 = 0.01;
-	float k2 = 0.03;
-	float c1 = 6.5025;  // (k1*L)^2
-	float c2 = 58.5225; // (k2*L)^2
-	float target_max, target_min;
-	this->get_minmax(i_start, 
-                     j_start,
-                     row_size,
-                     col_size,
-                     this->target_mat,
-                     target_max,
-                     target_min);
-    if(target_max > 255.){
-        std::cout << __func__ 
-                  << ": [WARN] should ignore ssim since array.max = " 
-                  << target_max << std::endl;
-    }
-
-	// update dynamic range
-	L = fabs(target_max - target_min); 
-	c1 = (k1*L)*(k1*L);
-	c2 = (k2*L)*(k2*L);
-
-	// main calculation
-	float ssim = 0.0;
-	
-	float ux = this->average(this->target_mat, i_start, j_start, row_size, col_size);
-	float uy = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
-	float vx = this->sdev(this->target_mat, i_start, j_start, row_size, col_size);
-	float vy = this->sdev(this->baseline_mat, i_start, j_start, row_size, col_size);
-	float cov = this->covariance(this->target_mat, this->baseline_mat, i_start, j_start, row_size, col_size);
-
-	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2) + c1) * (pow(vx, 2) + pow(vy, 2) + c2));
-    //assert(ssim >= 0.0 && ssim <= 1.);
-    if(ssim < 0.0 || ssim > 1.){
-        std::cout << __func__ << " [WARN] ssim is out of bound. It may due to wrong value or"
-                  << " the result of this benchmark isn't suitable for doing ssim (float type)"
-                  << std::endl;
-    }
-    return ssim;
+    return this->result_pars[i*this->col_cnt + j].error_percentage;
 }
 
 float Quality::ssim(){
-    return this->ssim_kernel(0, 0 , this->row, this->col);
+    return this->result.ssim;
 }
 
 float Quality::ssim(int i, int j){
-    return this->ssim_kernel(i*this->row_blk, 
-                             j*this->col_blk,
-                             this->row_blk,
-                             this->col_blk);
-}
-
-float Quality::pnsr_kernel(int i_start, int j_start, int row_size, int col_size){
-	float baseline_max, baseline_min;
-	this->get_minmax(i_start, 
-                     j_start,
-                     row_size,
-                     col_size,
-                     this->baseline_mat,
-                     baseline_max,
-                     baseline_min);
-	double mse = 0;
-	double mean = this->average(this->baseline_mat, i_start, j_start, row_size, col_size);
-	int cnt = 0;
-	for(int i = i_start; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			int idx = i*this->ldn+j;
-			mse = (mse * cnt + pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) / (cnt + 1);
-			cnt++;	
-		}
-	}
-	return 20*log10(baseline_max) - 10*log10(mse/mean);
+    return this->result_pars[i*this->col_cnt + j].ssim;
 }
 
 float Quality::pnsr(){
-    return this->pnsr_kernel(0, 0, this->row, this->col);
+    return this->result.pnsr;
 }
 
 float Quality::pnsr(int i, int j){
-    return this->pnsr_kernel(i*this->row_blk,
-                             j*this->col_blk, 
-                             this->row_blk,
-                             this->col_blk);
+    return this->result_pars[i*this->col_cnt + j].pnsr;
 }
 
 void Quality::print_quality(Unit quality){
@@ -364,6 +343,7 @@ void Quality::print_histogram(float* input){
 void Quality::print_results(bool is_tiling, int verbose){
     Unit total_quality = {
         this->rmse(),
+        this->rmse_percentage(),
         this->error_rate(),
         this->error_percentage(),
         this->ssim(),
@@ -401,6 +381,7 @@ void Quality::print_results(bool is_tiling, int verbose){
             for(int j = 0 ; j < this->col_cnt ; j++){
                 Unit per_quality = {
                     this->rmse(i, j),
+                    this->rmse_percentage(i, j),
                     this->error_rate(i, j),
                     this->error_percentage(i, j),
                     this->ssim(i, j),
@@ -511,120 +492,3 @@ void Quality::print_results(bool is_tiling, int verbose){
     print_histogram(this->target_mat);
 }
 
-#include "utils.h"
-#include "quality.h"
-#include "math.h"
-#include <map>
-#include <vector>
-#include <float.h>
-#include <stdio.h>
-#include <assert.h>
-#include <fstream>
-#include <iostream>
-#include <opencv2/opencv.hpp>
-
-Quality::Quality(int m, 
-                 int n, 
-                 int ldn, 
-                 int row_blk, 
-                 int col_blk,
-                 float* input_mat,
-                 float* x,
-                 float* y){
-	this->row          = m;
-	this->col          = n;
-	this->ldn          = ldn;
-    this->row_blk      = row_blk;
-    this->col_blk      = col_blk;
-    assert(row % row_blk == 0);
-    assert(col % col_blk == 0);
-    this->row_cnt = row / row_blk;
-    this->col_cnt = col / col_blk;
-    assert(this->row_cnt >= 1);
-    assert(this->col_cnt >= 1);
-    this->input_mat = input_mat;
-    this->target_mat   = x;
-	this->baseline_mat = y;
-}
-
-void Quality::get_minmax(int i_start, 
-                         int j_start,
-                         int row_size,
-                         int col_size, 
-                         float* x,
-                         float& max, 
-                         float& min){
-	float curr_max = FLT_MIN;
-	float curr_min = FLT_MAX;
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			if(x[i*this->ldn+j] > curr_max){
-				curr_max = x[i*this->ldn+j];
-			}
-			if(x[i*this->ldn+j] < curr_min){
-				curr_min = x[i*this->ldn+j];
-			}
-		}
-	}
-	max = curr_max;
-	min = curr_min;
-}
-
-float Quality::max(float* x,
-                   int i_start,
-                   int j_start,
-                   int row_size,
-                   int col_size){
-    float ret = FLT_MIN;
-    for(int i = i_start ; i < i_start+row_size ; i++){
-        for(int j = j_start ; j < j_start+col_size ; j++){
-            if(x[i*this->ldn+j] > ret){
-                ret = x[i*this->ldn+j];
-            }
-        }
-    }
-    return ret;
-}
-
-float Quality::min(float* x,
-                   int i_start,
-                   int j_start,
-                   int row_size,
-                   int col_size){
-    float ret = FLT_MAX;
-    for(int i = i_start ; i < i_start+row_size ; i++){
-        for(int j = j_start ; j < j_start+col_size ; j++){
-            if(x[i*this->ldn+j] < ret){
-                ret = x[i*this->ldn+j];
-            }
-        }
-    }
-    return ret;
-}
-
-float Quality::average(float* x, 
-                       int i_start,
-                       int j_start, 
-                       int row_size,
-                       int col_size){
-	double sum = 0.0;
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			sum += x[i*this->ldn+j];
-		}
-	}
-	return (float)(sum / (double)(row_size*col_size));
-}
-
-float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_size){
-	double sum = 0;
-	float ux = this->average(x, i_start, j_start, row_size, col_size);
-	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			sum += pow(x[i*this->ldn+j] - ux, 2);
-		}
-	}
-	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
-}
-
-float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
