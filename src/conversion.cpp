@@ -19,12 +19,9 @@ UnifyType::UnifyType(Params params, void* in){
         this->float_array = (float*) malloc(params.problem_size * 
                                             params.problem_size * 
                                             sizeof(float));
-        
-        for(int i = 0 ; i < params.problem_size ; i++){
-            for(int j = 0 ; j < params.problem_size ; j++){
-                this->float_array[i*params.problem_size+j] = 
-                    tmp[i*params.problem_size+j]; // uint8_t to float conversion
-            }
+#pragma omp parallel for 
+        for(int i = 0 ; i < params.problem_size * params.problem_size; i++){
+                this->float_array[i] = tmp[i]; // uint8_t to float conversion
         }
         this->char_array = tmp; // record the uint8_t pointer
     }else{ // others are default as float type
@@ -51,10 +48,9 @@ void UnifyType::save_as_img(const std::string file_name,
         uint8_t* tmp = (uint8_t*) malloc(rows * cols * sizeof(uint8_t));
         float min = 322.;
         float range = 22.;
-        for(unsigned int i = 0 ; i < rows ; i++){
-            for(unsigned int j = 0 ; j < cols ; j++){
-                tmp[i * cols + j] = (uint8_t)((this->float_array[i * cols + j] - min) * (255./range));
-            }
+#pragma omp parallel for
+        for(unsigned int i = 0 ; i < rows * cols ; i++){
+            tmp[i] = (uint8_t)((this->float_array[i] - min) * (255./range));
         }
         array2mat(mat, tmp, rows, cols);
         assert(!mat.empty());

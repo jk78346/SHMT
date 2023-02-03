@@ -56,7 +56,9 @@ void PartitionRuntime::criticality_kernel(){
     std::vector<std::pair<int, float>> order;
 
     for(unsigned int i = 0 ; i < this->sampling_qualities.size() ; i++){
-        std::cout << __func__ << ": i: " << i << ", rmse: " << this->sampling_qualities[i].rmse()
+        std::cout << __func__ << ": i: " << i 
+                  << ", rmse: " << this->sampling_qualities[i].rmse()
+                  << ", rmse %: " << this->sampling_qualities[i].rmse_percentage()
                   << ", error rate: " << this->sampling_qualities[i].error_rate()
                   << ", error %: " << this->sampling_qualities[i].error_percentage()
                   << ", ssim: " << this->sampling_qualities[i].ssim()

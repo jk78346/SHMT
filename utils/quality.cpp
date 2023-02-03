@@ -35,51 +35,138 @@ Quality::Quality(int m,
     
     this->result_pars.resize(this->row_cnt * this->col_cnt);
 
+    std::cout << __func__ << ": calculating metrices..." << std::endl;
     // global quality
+    std::cout << "global quality..." << std::endl;
     this->common_kernel(this->result, 0, 0, this->row, this->col);
+    this->common_stats_kernel(this->result.input_dist_stats, 
+                              this->input_mat, 
+                              0, 
+                              0, 
+                              this->row, 
+                              this->col);
+    bool is_tiling = (this->row > this->row_blk)?true:false;
+    
+    if(is_tiling){
+        // tiling quality
+        for(int i = 0 ; i < this->row_cnt ; i++){
+            for(int j = 0 ; j < this->col_cnt ; j++){
+                int idx = i * this->col_cnt + j;
+                std::cout << "tiling quality(" << i << ", " << j << ")..." << std::endl;
+                this->common_kernel(this->result_pars[idx], 
+                                    i*this->row_blk,
+                                    j*this->col_blk,
+                                    this->row_blk,
+                                    this->col_blk);
+              this->common_stats_kernel(this->result_pars[idx].input_dist_stats, 
+                                        this->input_mat, 
+                                        i*this->row_blk, 
+                                        j*this->col_blk, 
+                                        this->row_blk, 
+                                        this->col_blk);
+            }
+        }    
+    }
+}
 
-    // tiling quality
-    for(int i = 0 ; i < this->row_cnt ; i++){
-        for(int j = 0 ; j < this->col_cnt ; j++){
-            int idx = i * this->col_cnt + j;
-            this->common_kernel(this->result_pars[idx], 
-                                i*this->row_blk,
-                                j*this->col_blk,
-                                this->row_blk,
-                                this->col_blk);
+void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j_start, int row_size, int col_size){
+    float max = FLT_MIN;
+    float min = FLT_MAX;
+    double sum = 0.0;
+	double square_sum = 0.0;
+    float entropy = 0.0;
+    std::map<float, long int>counts;
+    std::map<float, long int>::iterator it;
+    it = counts.begin();
+    int elements = row_size * col_size;
+   
+    std::cout << __func__ << "main" << std::endl;
+    // max, min, average, entropy(1)
+#pragma omp parallel for collapse(2)
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+			int idx = i*this->ldn+j;
+            sum += x[idx];
+            max = (x[idx] > max)?x[idx]:max;
+            min = (x[idx] < min)?x[idx]:min;
+            counts[x[idx]]++;
         }
-    }    
+    }
+    stats.max = max;
+    stats.min = min;
+	stats.mean = (float)(sum / (double)(elements));
+    
+    std::cout << __func__ << "sdev" << std::endl;
+    // sdev
+#pragma omp parallel for collapse(2)
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+			square_sum += pow(x[i*this->ldn+j] - stats.mean, 2);
+        }
+    }
+    
+	stats.sdev = pow((float)(sum / (double)(elements)), 0.5);
+
+    std::cout << __func__ << "entropy" << std::endl;
+    // entropy(2)
+    while(it != counts.end()){
+        float p_x = (float)it->second/elements;
+        if(p_x > 0){
+            entropy-= p_x*log(p_x)/log(2);
+        }
+        it++;
+    }
+    stats.entropy = entropy;
 }
 
 void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size){
+    
     double mse = 0;
-	double mean = this->average(this->baseline_mat, 
-                                i_start,
-                                j_start, 
-                                row_size, 
-                                col_size);
-    float baseline_max, baseline_min;
-	this->get_minmax(i_start, 
-                     j_start,
-                     row_size,
-                     col_size,
-                     this->baseline_mat,
-                     baseline_max,
-                     baseline_min);
+	double mean; 
+    float baseline_max = FLT_MIN, baseline_min = FLT_MAX;
+    float target_max = FLT_MIN, target_min = FLT_MAX;
     double rate = 0;
 	int cnt = 0;
 	int error_percentage_cnt = 0;
-	for(int i = i_start ; i < i_start+row_size ; i++){
+    double baseline_sum = 0.0;
+#pragma omp parallel for collapse(2)
+    for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
 			int idx = i*this->ldn+j;
-			mse = (mse * cnt + pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) / (cnt + 1);
-			rate = (rate * cnt + fabs(this->target_mat[idx] - this->baseline_mat[idx])) / (cnt + 1);
+			baseline_sum += this->baseline_mat[idx];
+            baseline_max = 
+                (this->baseline_mat[idx] > baseline_max)?
+                this->baseline_mat[idx]:
+                baseline_max;
+            baseline_min = 
+                (this->baseline_mat[idx] < baseline_min)?
+                this->baseline_mat[idx]:
+                baseline_min;
+            target_max = 
+                (this->target_mat[idx] > target_max)?
+                this->target_mat[idx]:
+                target_max;
+            target_min = 
+                (this->target_mat[idx] < target_min)?
+                this->target_mat[idx]:
+                target_min;
+            mse = 
+                (mse * cnt + 
+                 pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) 
+                / (cnt + 1);
+			rate = 
+                (rate * cnt + 
+                 fabs(this->target_mat[idx] - this->baseline_mat[idx])) 
+                / (cnt + 1);
 			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
 				error_percentage_cnt++;
 			}
 			cnt++;	
 		}
 	}
+
+    mean = (float)(baseline_sum / (double)(row_size*col_size));
+    
     assert(error_percentage_cnt <= (row_size * col_size));
 	
     // SSIM default parameters
@@ -88,14 +175,6 @@ void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size
 	float k2 = 0.03;
 	float c1 = 6.5025;  // (k1*L)^2
 	float c2 = 58.5225; // (k2*L)^2
-	float target_max, target_min;
-	this->get_minmax(i_start, 
-                     j_start,
-                     row_size,
-                     col_size,
-                     this->target_mat,
-                     target_max,
-                     target_min);
     if(target_max > 255.){
         std::cout << __func__ 
                   << ": [WARN] should ignore ssim since array.max = " 
@@ -302,6 +381,7 @@ void Quality::print_quality(Unit quality){
     std::cout << quality.input_dist_stats.sdev << ", ";
     std::cout << quality.input_dist_stats.entropy << ") | ";
     std::cout << quality.rmse << "\t, ";
+    std::cout << quality.rmse_percentage << "\t, ";
     std::cout << quality.error_rate << "\t, ";
     std::cout << quality.error_percentage << "\t, ";
     std::cout << quality.ssim << "\t, ";
@@ -317,6 +397,7 @@ void Quality::print_quality(Unit quality){
            << quality.input_dist_stats.sdev << ", "
            << quality.input_dist_stats.entropy << ",,"
            << quality.rmse << "\t, "
+           << quality.rmse_percentage << "\t, "
            << quality.error_rate << "\t, "
            << quality.error_percentage << "\t, "
            << quality.ssim << "\t, "
@@ -468,7 +549,7 @@ void Quality::print_results(bool is_tiling, int verbose){
     myfile.open(file_path.c_str(), std::ios_base::app);
     assert(myfile.is_open());
     
-    std::cout << "input(max, min, mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+    std::cout << "input(max, min, mean, sdev, entropy) | rmse, rmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     myfile << "total quality,,,,,,,,,,,," << std::endl;
     myfile << ",,max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
@@ -477,7 +558,7 @@ void Quality::print_results(bool is_tiling, int verbose){
         std::cout << "tiling quality: " << std::endl;
         std::cout << "(i, j) input(max, min, mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         myfile << "tiling quality" << std::endl;
-        myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+        myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";

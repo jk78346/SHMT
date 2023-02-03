@@ -225,7 +225,7 @@ void dump_to_csv(std::string log_file_path,
     std::string ts_str = std::ctime(&ts);
 
     // log params and performance
-    myfile << "*****kernel name*****,problem size,block size,kernel iter,--,--,--,--,--,--,-->,timestamp:,"
+    myfile << "*****kernel name*****,problem size,block size,kernel iter,--,--,--,--,--,--,--,-->,timestamp:,"
            << ts_str
            << app_name << ","
            << problem_size << ","
@@ -251,13 +251,15 @@ void dump_to_csv(std::string log_file_path,
     
     // log quality metrics
     myfile << "*****total quality*****,--,input stats,--,--,--,--,--,output quality,"
-           << "\n--,--,max,min,mean,sdev,entropy,--,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n"
-           << "--,--," << quality->in_max() << ","
+           << "\n--,--,max,min,mean,sdev,entropy,--,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n"
+           << "--,--," 
+           << quality->in_max() << ","
            << quality->in_min() << ","
            << quality->in_mean() << ","
            << quality->in_sdev() << ","
            << quality->in_entropy() << ",,"
-           << quality->rmse() << "%,"
+           << quality->rmse() << ","
+           << quality->rmse_percentage() << "%,"
            << quality->error_rate() << "%,"
            << quality->error_percentage() << "%,"
            << quality->ssim() << ","
@@ -266,12 +268,11 @@ void dump_to_csv(std::string log_file_path,
     bool is_tiling = (problem_size > block_size)?true:false;
     if(is_tiling){
         myfile << "*****tiling quality*****,(proposed mode's partition),input stats,--,--,--,--,--,output tiling quality,\n"
-               << "i,j,max,min,mean,sdev,entropy,device type,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
+               << "i,j,max,min,mean,sdev,entropy,device type,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
         int idx = 0;
         for(int i = 0 ; i < quality->get_row_cnt() ; i++){
             for(int j = 0 ; j < quality->get_col_cnt() ; j++){
                 idx = i * quality->get_col_cnt() +j;
-                std::cout << __func__ << " (i: " << i << ", j: " << j << ")" << std::endl;
                 myfile << i << "," << j << ","
                        << quality->in_max(i, j) << ","
                        << quality->in_min(i, j) << ","
@@ -279,7 +280,8 @@ void dump_to_csv(std::string log_file_path,
                        << quality->in_sdev(i, j) << ","
                        << quality->in_entropy(i, j) << ","
                        << proposed_device_sequence[idx] << ","
-                       << quality->rmse(i, j) << "%,"
+                       << quality->rmse(i, j) << ","
+                       << quality->rmse_percentage(i, j) << "%,"
                        << quality->error_rate(i, j) << "%,"
                        << quality->error_percentage(i, j) << "%,"
                        << quality->ssim(i, j) << ","
