@@ -112,6 +112,10 @@ class Quality{
             // input array's statistic
             DistStats input_dist_stats;
         };
+
+        Unit result;
+        std::vector<Unit> result_pars;
+
         void print_quality(Unit quality);
 
         // internal helper functions
@@ -135,6 +139,10 @@ class Quality{
         float error_percentage_kernel(int i_start, int j_start, int row_size, int col_size);
         float ssim_kernel(int i_start, int j_start, int row_size, int col_size);
         float pnsr_kernel(int i_start, int j_start, int row_size, int col_size);
+        
+        // common quality kernel
+        void common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size);
+        
         int row;
 	    int col;
 	    int ldn;

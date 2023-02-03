@@ -32,6 +32,23 @@ Quality::Quality(int m,
     this->input_mat = input_mat;
     this->target_mat   = x;
 	this->baseline_mat = y;
+    
+    this->result_pars.resize(this->row_cnt * this->col_cnt);
+
+    // global quality
+    this->common_kernel(this->result, 0, 0, this->row, this->col);
+
+    // tiling quality
+    for(int i = 0 ; i < this->row_cnt ; i++){
+        for(int j = 0 ; j < this->col_cnt ; j++){
+            int idx = i * this->col_cnt + j;
+            this->common_kernel(this->result_pars[idx], 
+                                i*this->row_blk,
+                                j*this->col_blk,
+                                this->row_blk,
+                                this->col_blk);
+        }
+    }    
 }
 
 void Quality::get_minmax(int i_start, 
@@ -107,23 +124,6 @@ float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_si
 	double sum = 0;
 	float ux = this->average(x, i_start, j_start, row_size, col_size);
 	for(int i = i_start ; i < i_start+row_size ; i++){
-		for(int j = j_start ; j < j_start+col_size ; j++){
-			sum += pow(x[i*this->ldn+j] - ux, 2);
-		}
-	}
-	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
-}
-
-float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
-    float ret = 0.0;
-    std::map<float, long int>counts;
-    std::map<float, long int>::iterator it;
-    for(int i = i_start ; i < i_start+row_size ; i++){
-        for(int j = j_start;  j < j_start+col_size ; j++){
-            counts[x[i*this->ldn+j]]++;
-        }    
-    }
-    it = counts.begin();
     int elements = row_size * col_size;
     while(it != counts.end()){
         float p_x = (float)it->second/elements;
@@ -511,3 +511,120 @@ void Quality::print_results(bool is_tiling, int verbose){
     print_histogram(this->target_mat);
 }
 
+#include "utils.h"
+#include "quality.h"
+#include "math.h"
+#include <map>
+#include <vector>
+#include <float.h>
+#include <stdio.h>
+#include <assert.h>
+#include <fstream>
+#include <iostream>
+#include <opencv2/opencv.hpp>
+
+Quality::Quality(int m, 
+                 int n, 
+                 int ldn, 
+                 int row_blk, 
+                 int col_blk,
+                 float* input_mat,
+                 float* x,
+                 float* y){
+	this->row          = m;
+	this->col          = n;
+	this->ldn          = ldn;
+    this->row_blk      = row_blk;
+    this->col_blk      = col_blk;
+    assert(row % row_blk == 0);
+    assert(col % col_blk == 0);
+    this->row_cnt = row / row_blk;
+    this->col_cnt = col / col_blk;
+    assert(this->row_cnt >= 1);
+    assert(this->col_cnt >= 1);
+    this->input_mat = input_mat;
+    this->target_mat   = x;
+	this->baseline_mat = y;
+}
+
+void Quality::get_minmax(int i_start, 
+                         int j_start,
+                         int row_size,
+                         int col_size, 
+                         float* x,
+                         float& max, 
+                         float& min){
+	float curr_max = FLT_MIN;
+	float curr_min = FLT_MAX;
+	for(int i = i_start ; i < i_start+row_size ; i++){
+		for(int j = j_start ; j < j_start+col_size ; j++){
+			if(x[i*this->ldn+j] > curr_max){
+				curr_max = x[i*this->ldn+j];
+			}
+			if(x[i*this->ldn+j] < curr_min){
+				curr_min = x[i*this->ldn+j];
+			}
+		}
+	}
+	max = curr_max;
+	min = curr_min;
+}
+
+float Quality::max(float* x,
+                   int i_start,
+                   int j_start,
+                   int row_size,
+                   int col_size){
+    float ret = FLT_MIN;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+            if(x[i*this->ldn+j] > ret){
+                ret = x[i*this->ldn+j];
+            }
+        }
+    }
+    return ret;
+}
+
+float Quality::min(float* x,
+                   int i_start,
+                   int j_start,
+                   int row_size,
+                   int col_size){
+    float ret = FLT_MAX;
+    for(int i = i_start ; i < i_start+row_size ; i++){
+        for(int j = j_start ; j < j_start+col_size ; j++){
+            if(x[i*this->ldn+j] < ret){
+                ret = x[i*this->ldn+j];
+            }
+        }
+    }
+    return ret;
+}
+
+float Quality::average(float* x, 
+                       int i_start,
+                       int j_start, 
+                       int row_size,
+                       int col_size){
+	double sum = 0.0;
+	for(int i = i_start ; i < i_start+row_size ; i++){
+		for(int j = j_start ; j < j_start+col_size ; j++){
+			sum += x[i*this->ldn+j];
+		}
+	}
+	return (float)(sum / (double)(row_size*col_size));
+}
+
+float Quality::sdev(float* x, int i_start, int j_start, int row_size, int col_size){
+	double sum = 0;
+	float ux = this->average(x, i_start, j_start, row_size, col_size);
+	for(int i = i_start ; i < i_start+row_size ; i++){
+		for(int j = j_start ; j < j_start+col_size ; j++){
+			sum += pow(x[i*this->ldn+j] - ux, 2);
+		}
+	}
+	return pow((float)(sum / (double)(row_size*col_size)), 0.5);
+}
+
+float Quality::entropy(float* x, int i_start, int j_start, int row_size, int col_size){
