@@ -41,6 +41,18 @@ public:
                 reinterpret_cast<float*>(this->output_array_type.ptr);
             this->input_array_type.fp  = input_array;
             this->output_array_type.fp = output_array;
+            if(app_name == "dct8x8_2d"){
+                int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
+                // ***** float shifting *****
+                //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
+                std::cout << __func__ << ": cpu: init to input conversion" << std::endl;
+#pragma omp parallel for collapse(2)
+                for (unsigned int i = 0; i < this->params.get_kernel_size(); i++){
+                    for (unsigned int j = 0; j < this->params.get_kernel_size(); j++){
+                        this->input_array_type.fp[i*StrideF+j] += -128.0f;
+                    }
+                }
+            }
         }else{
             // app_name not found in any table. 
         }

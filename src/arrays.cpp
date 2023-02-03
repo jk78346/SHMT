@@ -85,7 +85,7 @@ void init_dct8x8(int rows, int cols, void** input_array){
 
     //convert source image to float representation
     CopyByte2Float(ImgSrc_resized, ImgStride, ImgF1, StrideF, ImgSize);
-    AddFloatPlane(-128.0f, ImgF1, StrideF, ImgSize);
+    //AddFloatPlane(-128.0f, ImgF1, StrideF, ImgSize);
     
     *input_array = ImgF1;
 }

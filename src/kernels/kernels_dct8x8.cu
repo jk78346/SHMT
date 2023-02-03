@@ -172,7 +172,7 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
     float* ImgF2 = (float*) malloc(width * height * sizeof(float));  
     
     assert(width%8==0 && height%8==0);
-    
+
     for(int i = 0 ; i < BENCHMARK_SIZE ; i++){
         computeDCT8x8Gold2(input, ImgF2, StrideF, width, height);
     }
@@ -194,7 +194,7 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     float* ImgF1   = reinterpret_cast<float*>(*in_img);
     float* out_tmp = reinterpret_cast<float*>(*out_img);
     // a hard-coded params that used by this kernel.
-    int ImgStride;
+    //int ImgStride;
 
     //allocate device memory
     float *src, *dst;
@@ -203,7 +203,7 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     Size.height = kernel_params.params.get_kernel_size();
     /* integration code */
     int StrideF = (((int)ceil((Size.width*sizeof(float))/16.0f))*16) / sizeof(float);
-    byte *ImgDst = MallocPlaneByte(Size.width, Size.height, &ImgStride);
+ //   byte *ImgDst = MallocPlaneByte(Size.width, Size.height, &ImgStride);
     size_t DeviceStride;
     checkCudaErrors(cudaMallocPitch((void **)&src, &DeviceStride, Size.width * sizeof(float), Size.height));
     checkCudaErrors(cudaMallocPitch((void **)&dst, &DeviceStride, Size.width * sizeof(float), Size.height));
@@ -255,7 +255,7 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
  
     //convert image back to byte representation
     AddFloatPlane(128.0f, out_tmp, StrideF, Size);
-    CopyFloat2Byte(out_tmp, StrideF, ImgDst, ImgStride, Size);
+//    CopyFloat2Byte(out_tmp, StrideF, ImgDst, ImgStride, Size);
 
     //clean up memory
     checkCudaErrors(cudaFree(dst));
