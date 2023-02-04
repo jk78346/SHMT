@@ -351,7 +351,6 @@ float Quality::error_rate(int i, int j){
 
 float Quality::error_percentage(){
     return this->result.error_percentage;
-    //return this->error_percentage_kernel(0, 0, this->row, this->col);
 }
 
 float Quality::error_percentage(int i, int j){
@@ -510,14 +509,14 @@ void Quality::print_results(bool is_tiling, int verbose){
     myfile.open(file_path.c_str(), std::ios_base::app);
     assert(myfile.is_open());
     
-    std::cout << "input(max, min, mean, sdev, entropy) | rmse, rmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+    std::cout << "input(max, min, mean, sdev, entropy) | rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     myfile << "total quality,,,,,,,,,,,," << std::endl;
     myfile << ",,max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
-        std::cout << "(i, j) input(max, min, mean, sdev, entropy) | rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+        std::cout << "(i, j) input(max, min, mean, sdev, entropy) | rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         myfile << "tiling quality" << std::endl;
         myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){

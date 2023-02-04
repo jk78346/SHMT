@@ -420,7 +420,15 @@ void PartitionRuntime::show_device_sequence(){
     for(unsigned int  i = 0 ; i < this->row_cnt ; i++){
         for(unsigned int j = 0 ; j < this->col_cnt ; j++){
             unsigned int idx = i*this->col_cnt +j;
-            std::cout << this->dev_sequence[idx] << " ";
+            int tmp = this->dev_sequence[idx];
+            if(tmp == cpu){
+                std::cout << "c";
+            }else if(tmp == gpu){
+                std::cout << "g";
+            }else if(tmp == tpu){
+                std::cout << "t";
+            }
+            std::cout << " ";
         }
         std::cout << std::endl;
     }   

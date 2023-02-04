@@ -74,7 +74,6 @@ public:
                                         sizeof(float));
                         //this->input_array_type.host_fp;
                     this->output_array_type.device_fp = this->output_array_type.host_fp;
-                    std::cout << __func__ << "init to input conversion "<< std::endl;
                     int StrideF = 
                         ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
                     // ***** float shifting *****
