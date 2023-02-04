@@ -67,21 +67,30 @@ public:
                 /* TODO: curently this is true for both fft and dct8x8, need to
                     see if separated input conversion functions are needed.
                  */
-                this->input_array_type.device_fp = this->input_array_type.host_fp;
-                this->output_array_type.device_fp = this->output_array_type.host_fp;
-                // other fp type of kernels' input conversions
-                
                 if(app_name == "dct8x8_2d"){
+                    this->input_array_type.device_fp = 
+                        (float*) malloc(this->kernel_params.params.get_kernel_size() *
+                                        this->kernel_params.params.get_kernel_size() *
+                                        sizeof(float));
+                        //this->input_array_type.host_fp;
+                    this->output_array_type.device_fp = this->output_array_type.host_fp;
                     std::cout << __func__ << "init to input conversion "<< std::endl;
-                    int StrideF = ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
+                    int StrideF = 
+                        ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
                     // ***** float shifting *****
                     //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
 #pragma omp parallel for collapse(2)
                     for (unsigned int i = 0; i < this->kernel_params.params.get_kernel_size(); i++){
                         for (unsigned int j = 0; j < this->kernel_params.params.get_kernel_size(); j++){
-                            this->input_array_type.device_fp[i*StrideF+j] += -128.0f;
+                            int idx = i*StrideF+j;
+                            this->input_array_type.device_fp[idx] = 
+                                this->input_array_type.host_fp[idx] -128.0f;
                         }
                     }
+                }else{
+                    this->input_array_type.device_fp = this->input_array_type.host_fp;
+                    this->output_array_type.device_fp = this->output_array_type.host_fp;
+                    // other fp type of kernels' input conversions
                 }
             }
         }else{
@@ -109,6 +118,19 @@ public:
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             if(app_name == "fft_2d"){
                 this->fft_2d_output_conversion(); 
+            }else if(app_name == "dct8x8_2d"){
+                int StrideF = 
+                    ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
+                // ***** float shifting *****
+                //AddFloatPlane(128.0f, input, StrideF, ImgSize);
+#pragma omp parallel for collapse(2)
+                for (unsigned int i = 0; i < this->kernel_params.params.get_kernel_size(); i++){
+                    for (unsigned int j = 0; j < this->kernel_params.params.get_kernel_size(); j++){
+                        int idx = i*StrideF+j;
+                        float tmp = this->output_array_type.host_fp[idx] + 128.0f;
+                        this->output_array_type.device_fp[idx] = MIN(MAX(tmp, 0.), 255.);
+                    }
+                }
             }else{
                 // TODO: currently this is true for dct8x8
                 this->output_array_type.host_fp = this->output_array_type.device_fp;

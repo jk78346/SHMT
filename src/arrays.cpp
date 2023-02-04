@@ -88,6 +88,11 @@ void init_dct8x8(int rows, int cols, void** input_array){
     //AddFloatPlane(-128.0f, ImgF1, StrideF, ImgSize);
     
     *input_array = ImgF1;
+
+    // assert pixel range in float type
+    for(int i = 0 ; i < rows * cols ; i++){
+        assert(ImgF1[i] >= 0. && ImgF1[i] <= 255.);
+    }
 }
 
 void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* file){

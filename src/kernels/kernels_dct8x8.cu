@@ -169,6 +169,7 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
     int width  = params.get_kernel_size();
     int height = params.get_kernel_size();
     int StrideF = width;
+    
     float* ImgF2 = (float*) malloc(width * height * sizeof(float));  
     
     assert(width%8==0 && height%8==0);
@@ -179,10 +180,10 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
     quantizeGoldFloat(ImgF2, StrideF, width, height);
     computeIDCT8x8Gold2(ImgF2, output, StrideF, width, height);
 
-    ROI Size;
-    Size.width  = params.get_kernel_size();
-    Size.height = params.get_kernel_size();
-    AddFloatPlane(128.0f, output, StrideF, Size);
+//    ROI Size;
+//    Size.width  = params.get_kernel_size();
+//    Size.height = params.get_kernel_size();
+//    AddFloatPlane(128.0f, output, StrideF, Size);
 }
 
 /*
@@ -254,7 +255,7 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
                                  cudaMemcpyDeviceToHost));
  
     //convert image back to byte representation
-    AddFloatPlane(128.0f, out_tmp, StrideF, Size);
+//    AddFloatPlane(128.0f, out_tmp, StrideF, Size);
 //    CopyFloat2Byte(out_tmp, StrideF, ImgDst, ImgStride, Size);
 
     //clean up memory

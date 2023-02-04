@@ -152,6 +152,7 @@ int main(int argc, char* argv[]){
         All arrays will be casted to corresponding data type
         depending on application.
      */
+    std::cout << __func__ << ": data init..." << std::endl;
     data_initialization(proposed_params, 
                         &input_array,
                         &output_array_baseline,
@@ -231,7 +232,6 @@ int main(int argc, char* argv[]){
     quality->print_histogram(unify_input_type->float_array);
 
     // save result arrays as image files
-    std::cout << "saving output results as images..." << std::endl;
     const std::string path_prefix = proposed_params.app_name + "/"
                                    +std::to_string(proposed_params.problem_size) + "x"
                                    +std::to_string(proposed_params.problem_size) + "/"
@@ -251,6 +251,7 @@ int main(int argc, char* argv[]){
     system(cmd.c_str());    
 
     // save as png images
+    std::cout << "saving output results as images..." << std::endl;
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_baseline.png", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
@@ -261,6 +262,7 @@ int main(int argc, char* argv[]){
                                     output_array_proposed);
     
     // save as pixel arrays
+    std::cout << "saving output results in txt files..." << std::endl;
     unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_baseline.txt", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,

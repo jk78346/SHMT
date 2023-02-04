@@ -429,37 +429,18 @@ void Quality::print_results(bool is_tiling, int verbose){
         this->error_percentage(),
         this->ssim(),
         this->pnsr(),
-        {this->max(this->input_mat,
-                   0,
-                   0,
-                   this->row,
-                   this->col),
-         this->min(this->input_mat,
-                   0,
-                   0,
-                   this->row,
-                   this->col),
-         this->average(this->input_mat, 
-                       0,
-                       0, 
-                       this->row,
-                       this->col),
-         this->sdev(this->input_mat,
-                    0,
-                    0,
-                    this->row,
-                    this->col),
-         this->entropy(this->input_mat,
-                       0,
-                       0,
-                       this->row,
-                       this->col)}
+        {this->result.input_dist_stats.max,
+         this->result.input_dist_stats.min,
+         this->result.input_dist_stats.mean,
+         this->result.input_dist_stats.sdev,
+         this->result.input_dist_stats.entropy}
     };
     std::vector<Unit> tiling_quality;
 
     if(is_tiling == true){
         for(int i = 0 ; i < this->row_cnt ; i++){
             for(int j = 0 ; j < this->col_cnt ; j++){
+                int idx = i * this->col_cnt + j;
                 Unit per_quality = {
                     this->rmse(i, j),
                     this->rmse_percentage(i, j),
@@ -467,31 +448,11 @@ void Quality::print_results(bool is_tiling, int verbose){
                     this->error_percentage(i, j),
                     this->ssim(i, j),
                     this->pnsr(i, j),
-                    {this->max(this->input_mat,
-                               i*this->row_blk,
-                               j*this->col_blk,
-                               this->row_blk,
-                               this->col_blk),
-                     this->min(this->input_mat,
-                               i*this->row_blk,
-                               j*this->col_blk,
-                               this->row_blk,
-                               this->col_blk),
-                     this->average(this->input_mat, 
-                                   i*this->row_blk,
-                                   j*this->col_blk, 
-                                   this->row_blk,
-                                   this->col_blk),
-                     this->sdev(this->input_mat,
-                                i*this->row_blk,
-                                j*this->col_blk,
-                                this->row_blk,
-                                this->col_blk),
-                     this->entropy(this->input_mat,
-                                   i*this->row_blk,
-                                   j*this->col_blk,
-                                   this->row_blk,
-                                   this->col_blk)}
+                    {this->result_pars[idx].input_dist_stats.max,
+                     this->result_pars[idx].input_dist_stats.min,
+                     this->result_pars[idx].input_dist_stats.mean,
+                     this->result_pars[idx].input_dist_stats.sdev,
+                     this->result_pars[idx].input_dist_stats.entropy}
                 };
                 tiling_quality.push_back(per_quality);
             }

@@ -88,7 +88,7 @@ public:
             }else{
 #pragma omp parallel for
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
-                    this->input_kernel[i] = ((int)(input_array[i] + 128)) % 256; // float to int conversion
+                    this->input_kernel[i] = ((int)(input_array[i] /*+ 128*/)) % 256; // float to int conversion
                 }
             }
         }else{
@@ -133,6 +133,8 @@ public:
                 adj_scale = scale * 3300.;
             }else if(app_name == "hotspot_2d"){
                 adj_scale = scale * 343.76224;
+            }else if(app_name == "dct8x8_2d"){
+                adj_scale = scale;
             }else{
                 adj_scale = scale * 255.;
             }

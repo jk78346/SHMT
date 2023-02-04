@@ -55,6 +55,17 @@ void UnifyType::save_as_img(const std::string file_name,
         array2mat(mat, tmp, rows, cols);
         assert(!mat.empty());
         imwrite(file_name.c_str(), mat);
+    }else if(this->params.app_name == "dct8x8_2d"){
+        uint8_t* tmp = (uint8_t*) malloc(rows * cols * sizeof(uint8_t));
+#pragma omp parallel for
+        for(int i = 0 ; i < rows * cols ; i++){
+            tmp[i] = (uint8_t)this->float_array[i];
+        }
+        Mat mat(rows, cols, CV_8U);
+        // TODO: how to show float array?
+        array2mat(mat, tmp, rows, cols);
+        assert(!mat.empty());
+        imwrite(file_name.c_str(), mat);
     }else{
         std::cout << __func__ << ": unprocessed float type image." << std::endl;
         Mat mat(rows, cols, CV_32F);
@@ -82,6 +93,14 @@ void UnifyType::save_as_csv(const std::string file_name,
             for(unsigned int j = 0 ; j < cols ; j++){
                 myfile << std::hex << std::setfill('0') << std::setw(2) 
                        << (unsigned)tmp[i*cols+j] << " ";        
+            }
+            myfile << std::endl;
+        }    
+    }else if(this->params.app_name == "dct8x8_2d"){
+        float* tmp = reinterpret_cast<float*>(img);    
+        for(unsigned int i = 0 ; i < rows ; i++){
+            for(unsigned int j = 0 ; j < cols ; j++){
+                myfile << (uint8_t)tmp[i*cols+j] << " ";        
             }
             myfile << std::endl;
         }    

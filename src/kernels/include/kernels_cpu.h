@@ -1,6 +1,7 @@
 #ifndef __KERNELS_CPU_H__
 #define __KERNELS_CPU_H__
 #include <iostream>
+#include <algorithm>
 #include <unordered_map>
 #include <opencv2/opencv.hpp>
 #include "types.h"
@@ -39,19 +40,26 @@ public:
                 reinterpret_cast<float*>(this->input_array_type.ptr);
             float* output_array = 
                 reinterpret_cast<float*>(this->output_array_type.ptr);
-            this->input_array_type.fp  = input_array;
-            this->output_array_type.fp = output_array;
             if(app_name == "dct8x8_2d"){
+                this->input_array_type.fp 
+                    = (float*) malloc(this->params.get_kernel_size() * 
+                                      this->params.get_kernel_size() * 
+                                      sizeof(float));
+                this->output_array_type.fp = output_array;
+                
                 int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
                 //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
-                std::cout << __func__ << ": cpu: init to input conversion" << std::endl;
 #pragma omp parallel for collapse(2)
                 for (unsigned int i = 0; i < this->params.get_kernel_size(); i++){
                     for (unsigned int j = 0; j < this->params.get_kernel_size(); j++){
-                        this->input_array_type.fp[i*StrideF+j] += -128.0f;
+                        int idx = i*StrideF+j;
+                        this->input_array_type.fp[idx] = input_array[idx] - 128.0f;
                     }
                 }
+            }else{
+                this->input_array_type.fp  = input_array;
+                this->output_array_type.fp = output_array;
             }
         }else{
             // app_name not found in any table. 
@@ -73,6 +81,19 @@ public:
             mat2array(this->output_array_type.mat, output_array);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             // no need to convert from float* to float*, pass
+            if(app_name == "dct8x8_2d"){
+                int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
+                // ***** float shifting *****
+                //AddFloatPlane(128.0f, input, StrideF, ImgSize);
+#pragma omp parallel for collapse(2)
+                for (unsigned int i = 0; i < this->params.get_kernel_size(); i++){
+                    for (unsigned int j = 0; j < this->params.get_kernel_size(); j++){
+                        int idx = i*StrideF+j;
+                        float tmp = this->output_array_type.fp[idx] + 128.0f;
+                        this->output_array_type.fp[idx] = MIN(MAX(tmp, 0.), 255.);
+                    }
+                }
+            }
         }else{
             // app_name not found in any table. 
         }
