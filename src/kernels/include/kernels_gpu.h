@@ -216,7 +216,8 @@ private:
         std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d),
         std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d),
         std::make_pair<std::string, func_ptr_float> ("blackscholes_2d", this->blackscholes_2d),
-        std::make_pair<std::string, func_ptr_float> ("hotspot_2d", this->hotspot_2d)
+        std::make_pair<std::string, func_ptr_float> ("hotspot_2d", this->hotspot_2d),
+        std::make_pair<std::string, func_ptr_float> ("srad_2d", this->srad_2d)
     };
     
     // kernel-specific input/output conversion wrappers
@@ -251,5 +252,6 @@ private:
     static void dct8x8_2d(KernelParams& kernel_params, void** input, void** output);
     static void blackscholes_2d(KernelParams& kernel_params, void** input, void** output);
     static void hotspot_2d(KernelParams& kernel_params, void** input, void** output);
+    static void srad_2d(KernelParams& kernel_params, void** input, void** output);
 };
 #endif
