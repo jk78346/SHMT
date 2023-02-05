@@ -80,34 +80,32 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
     it = counts.begin();
     int elements = row_size * col_size;
    
-    std::cout << __func__ << "main" << std::endl;
+    std::cout << __func__ << ": main" << std::endl;
     // max, min, average, entropy(1)
-#pragma omp parallel for collapse(2)
+//#pragma omp parallel for
     for(int i = i_start ; i < i_start+row_size ; i++){
         for(int j = j_start ; j < j_start+col_size ; j++){
-			int idx = i*this->ldn+j;
-            sum += x[idx];
-            max = (x[idx] > max)?x[idx]:max;
-            min = (x[idx] < min)?x[idx]:min;
-            counts[x[idx]]++;
+            int idx = i*this->ldn+j;
+            float tmp = x[idx];
+            sum += tmp;
+            max = (tmp > max)?tmp:max;
+            min = (tmp < min)?tmp:min;
+            counts[tmp]++;
         }
     }
     stats.max = max;
     stats.min = min;
 	stats.mean = (float)(sum / (double)(elements));
     
-    std::cout << __func__ << "sdev" << std::endl;
     // sdev
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for
     for(int i = i_start ; i < i_start+row_size ; i++){
         for(int j = j_start ; j < j_start+col_size ; j++){
 			square_sum += pow(x[i*this->ldn+j] - stats.mean, 2);
         }
     }
-    
 	stats.sdev = pow((float)(sum / (double)(elements)), 0.5);
 
-    std::cout << __func__ << "entropy" << std::endl;
     // entropy(2)
     while(it != counts.end()){
         float p_x = (float)it->second/elements;
@@ -129,7 +127,7 @@ void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size
 	int cnt = 0;
 	int error_percentage_cnt = 0;
     double baseline_sum = 0.0;
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for
     for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
 			int idx = i*this->ldn+j;

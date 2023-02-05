@@ -65,7 +65,10 @@ void init_dct8x8(int rows, int cols, void** input_array){
     int ImgStride;
     byte *ImgSrc = MallocPlaneByte(ImgWidth, ImgHeight, &ImgStride);
     //load sample image
-    LoadBmpAsGray(pSampleImageFpath, ImgStride, ImgSize, ImgSrc);
+    //LoadBmpAsGray(pSampleImageFpath, ImgStride, ImgSize, ImgSrc);
+    cv::Mat tmp_img(rows, cols, CV_8U);
+    tmp_img = imread(pSampleImageFpath, IMREAD_GRAYSCALE);
+
 
     /* ImgSrc has to be resized to [rows x cols] */
     // byte = unsigned char
@@ -73,7 +76,7 @@ void init_dct8x8(int rows, int cols, void** input_array){
     Mat tmp, resized_tmp;
     array2mat(tmp, ImgSrc, rows, cols);
     Size size = Size(rows, cols);
-    resize(tmp, resized_tmp, size);
+    resize(tmp_img, resized_tmp, size);
     mat2array(resized_tmp, ImgSrc_resized);
     ImgSize.width = rows;
     ImgSize.height = cols;

@@ -78,13 +78,14 @@ public:
                         ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
                     // ***** float shifting *****
                     //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
-#pragma omp parallel for collapse(2)
-                    for (unsigned int i = 0; i < this->kernel_params.params.get_kernel_size(); i++){
-                        for (unsigned int j = 0; j < this->kernel_params.params.get_kernel_size(); j++){
-                            int idx = i*StrideF+j;
-                            this->input_array_type.device_fp[idx] = 
-                                this->input_array_type.host_fp[idx] -128.0f;
-                        }
+                    assert((unsigned)StrideF == this->kernel_params.params.get_kernel_size());
+#pragma omp parallel for
+                    for (unsigned int i = 0; 
+                            i < this->kernel_params.params.get_kernel_size() * 
+                            this->kernel_params.params.get_kernel_size(); 
+                            i++){
+                            this->input_array_type.device_fp[i] = 
+                                this->input_array_type.host_fp[i] -128.0f;
                     }
                 }else{
                     this->input_array_type.device_fp = this->input_array_type.host_fp;
@@ -122,13 +123,14 @@ public:
                     ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
                 //AddFloatPlane(128.0f, input, StrideF, ImgSize);
-#pragma omp parallel for collapse(2)
-                for (unsigned int i = 0; i < this->kernel_params.params.get_kernel_size(); i++){
-                    for (unsigned int j = 0; j < this->kernel_params.params.get_kernel_size(); j++){
-                        int idx = i*StrideF+j;
-                        float tmp = this->output_array_type.host_fp[idx] + 128.0f;
-                        this->output_array_type.device_fp[idx] = MIN(MAX(tmp, 0.), 255.);
-                    }
+                assert((unsigned)StrideF == this->kernel_params.params.get_kernel_size());
+#pragma omp parallel for
+                for (unsigned int i = 0; 
+                        i < this->kernel_params.params.get_kernel_size() * 
+                        this->kernel_params.params.get_kernel_size(); 
+                        i++){
+                        float tmp = this->output_array_type.host_fp[i] + 128.0f;
+                        this->output_array_type.device_fp[i] = MIN(MAX(tmp, 0.), 255.);
                 }
             }else{
                 // TODO: currently this is true for dct8x8

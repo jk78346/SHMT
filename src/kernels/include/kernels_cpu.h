@@ -50,12 +50,10 @@ public:
                 int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
                 //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
-#pragma omp parallel for collapse(2)
-                for (unsigned int i = 0; i < this->params.get_kernel_size(); i++){
-                    for (unsigned int j = 0; j < this->params.get_kernel_size(); j++){
-                        int idx = i*StrideF+j;
-                        this->input_array_type.fp[idx] = input_array[idx] - 128.0f;
-                    }
+                assert((unsigned int)StrideF == this->params.get_kernel_size());
+#pragma omp parallel for
+                for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
+                    this->input_array_type.fp[i] = input_array[i] - 128.0f;
                 }
             }else{
                 this->input_array_type.fp  = input_array;
@@ -85,13 +83,11 @@ public:
                 int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
                 //AddFloatPlane(128.0f, input, StrideF, ImgSize);
-#pragma omp parallel for collapse(2)
-                for (unsigned int i = 0; i < this->params.get_kernel_size(); i++){
-                    for (unsigned int j = 0; j < this->params.get_kernel_size(); j++){
-                        int idx = i*StrideF+j;
-                        float tmp = this->output_array_type.fp[idx] + 128.0f;
-                        this->output_array_type.fp[idx] = MIN(MAX(tmp, 0.), 255.);
-                    }
+                assert((unsigned)StrideF == this->params.get_kernel_size());
+#pragma omp parallel for
+                for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
+                    float tmp = this->output_array_type.fp[i] + 128.0f;
+                    this->output_array_type.fp[i] = MIN(MAX(tmp, 0.), 255.);
                 }
             }
         }else{
