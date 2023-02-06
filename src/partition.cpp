@@ -275,11 +275,10 @@ double PartitionRuntime::prepare_partitions(){
         }else if(p_mode == "c"){ // use default downsampling rate
             SamplingMode mode = center_crop;
             ret += this->run_sampling(mode);
-        }
         // input stats sampling types
-        int num_pixels = 100;
         // c-ns: N pixel stridding, c-nr: N pixel random
-        if(p_mode == "c-ns" || p_mode == "c-nr"){ // N pixel stridding
+        }else if(p_mode == "c-ns" || p_mode == "c-nr"){
+            int num_pixels = 100;
             ret += this->run_input_stats_probing(p_mode, num_pixels); 
         }else{
             std::cout << __func__ 
