@@ -127,6 +127,21 @@ class Applications:
         func(int(src.shape[0]/2), src.shape[1], src, dst)
         return dst
 
+    @staticmethod
+    def srad_2d(src):
+        """ This function returns srad's C implementation.  """    
+        # C wrapper related setup 
+        so_file = "/home/src/kernels/function_srad.so"
+        lib = ctypes.cdll.LoadLibrary(so_file)
+        func = lib.srad_2d
+        func.argtypes = [c_int, \
+                         c_int, \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        func.retype = None
+        dst = np.empty((src.shape[0], src.shape[1])).astype("float32")
+        func(src.shape[0], src.shape[1], src, dst)
+        return dst
 
 
 

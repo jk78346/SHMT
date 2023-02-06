@@ -87,11 +87,16 @@ class MyDataGen():
                 x_max = 1. #x_slice.max()
                 y_max = y_slice.max()
                 #print("x_max: " ,x_max, ", y_max: ", y_max)
+            elif self.model_name == 'srad_2d':
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                image = image.resize(self.in_shape)
+                x_slice = np.asarray(image).astype('float32') / 255. 
+                print("j: ", j)
+                y_slice = self.func(x_slice)
+#                print("x_slice: ", x_slice, ", y_slice: ", y_slice)
+                x_max = x_slice.max()
+                y_max = 1. #y_slice.max()
             else:
-                #np.random.seed(j)
-                #x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8")
-                #tf.keras.utils.set_random_seed(seed)
-                
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
                 x_slice = np.asarray(image)
@@ -117,6 +122,8 @@ class MyDataGen():
             
                 x[j] = (x_slice.astype('float32') / x_max) 
                 y[j] = (y_slice.astype('float32') / y_max)
+                print("x: ", x[j], ",y: ", y[j])
+        
         return x, y
     
     def representative_gen(self):
@@ -264,6 +271,13 @@ def pre_quantize_test(params, target_func, logfile):
         X_test = np.concatenate((temp_slice, power_slice))
         x_scale = 1.
         y_scale = 343.76224
+    elif params.model_name == 'srad_2d':
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('float32') / 255.
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -333,6 +347,14 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         X_test = (X_test * 255.).astype('uint8')
         x_scale = 255.
         y_scale = 343.76224 / 255.
+    elif params.model_name == 'srad_2d':
+        x_scale = 1.
+        y_scale = 1.
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('float32') / 255.
+        Y_ground_truth = target_func(X_test)
+        X_test = np.asarray(image).astype('uint8')
     else:
         x_scale = 255.
         y_scale = 1.
