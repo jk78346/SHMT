@@ -12,7 +12,9 @@ public:
           int block_size=2048,
           bool tiling_mode = false,
           int iter=1,
-          std::string input_data_path="../data/lena_gray_2Kx2K.bmp");
+          //std::string input_data_path="../data/lena_gray_2Kx2K.bmp"
+          std::string input_data_path="../data/super1.png"
+          );
     
     void set_tiling_mode(bool);
     bool get_tiling_mode();
