@@ -6,7 +6,7 @@
 
 extern "C" void srad_2d(int rows, int cols, float* input, float* output){
     int size_I, size_R, niter = 1, iter;
-    float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
+    float *I, *J, lambda=0.5, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float Jc, G2, L, num, den, qsqr;
     int *iN, *iS, *jE, *jW, k;

@@ -3,55 +3,6 @@
 #include <stdio.h>
 #include "kernels_gpu.h"
 
-const float      RISKFREE = 0.02f;
-const float    VOLATILITY = 0.30f;
-
-static double CND(double d)
-{   
-    const double       A1 = 0.31938153;
-    const double       A2 = -0.356563782;
-    const double       A3 = 1.781477937;
-    const double       A4 = -1.821255978;
-    const double       A5 = 1.330274429;
-    const double RSQRT2PI = 0.39894228040143267793994605993438;
-    
-    double
-    K = 1.0 / (1.0 + 0.2316419 * fabs(d));
-    
-    double
-    cnd = RSQRT2PI * exp(- 0.5 * d * d) *
-          (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))));
-    
-    if (d > 0)
-        cnd = 1.0 - cnd;
-    
-    return cnd;
-}
-
-static void BlackScholesBodyCPU(
-    float &callResult,
-    float &putResult,
-    float Sf, //Stock price
-    float Xf, //Option strike
-    float Tf, //Option years
-    float Rf, //Riskless rate
-    float Vf  //Volatility rate
-)
-{   
-    double S = Sf, X = Xf, T = Tf, R = Rf, V = Vf;
-    
-    double sqrtT = sqrt(T);
-    double    d1 = (log(S / X) + (R + 0.5 * V * V) * T) / (V * sqrtT);   
-    double    d2 = d1 - V * sqrtT;
-    double CNDD1 = CND(d1);
-    double CNDD2 = CND(d2);
-    
-    //Calculate Call and Put simultaneously
-    double expRT = exp(- R * T);
-    callResult   = (float)(S * CNDD1 - X * expRT * CNDD2);
-    putResult    = (float)(X * expRT * (1.0 - CNDD2) - S * (1.0 - CNDD1));
-}
-
 /*
     GPU blackscholes
     Reference: samples/
@@ -69,9 +20,9 @@ void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void
 #include "dct8x8_kernel_quantization.cuh"
 
 #define BENCHMARK_SIZE 10
-#define BLOCK_SIZE 8
-#define BLOCK_SIZE2 64
-#define BLOCK_SIZE_LOG2 3
+#define DCT_BLOCK_SIZE 8
+#define DCT_BLOCK_SIZE2 64
+#define DCT_BLOCK_SIZE_LOG2 3
 
 //float C_a = 1.387039845322148f; //!< a = (2^0.5) * cos(    pi / 16);  Used in forward and inverse DCT.
 //float C_b = 1.306562964876377f; //!< b = (2^0.5) * cos(    pi /  8);  Used in forward and inverse DCT.
@@ -140,8 +91,8 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     checkCudaErrors(cudaDeviceSynchronize());
 
     //setup execution parameters for quantization
-    dim3 ThreadsSmallBlocks(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 GridSmallBlocks(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
+    dim3 ThreadsSmallBlocks(DCT_BLOCK_SIZE, DCT_BLOCK_SIZE);
+    dim3 GridSmallBlocks(Size.width / DCT_BLOCK_SIZE, Size.height / DCT_BLOCK_SIZE);
 
     // execute Quantization kernel
     CUDAkernelQuantizationFloat<<< GridSmallBlocks, ThreadsSmallBlocks >>>(dst, (int) DeviceStride);
@@ -489,13 +440,13 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_
 #include <cuda_runtime.h>
 
 #ifdef RD_WG_SIZE_0_0                                                            
-        #define BLOCK_SIZE RD_WG_SIZE_0_0                                        
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
 #elif defined(RD_WG_SIZE_0)                                                      
-        #define BLOCK_SIZE RD_WG_SIZE_0                                          
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
 #elif defined(RD_WG_SIZE)                                                        
-        #define BLOCK_SIZE RD_WG_SIZE                                            
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
 #else
-        #define BLOCK_SIZE 16                                                            
+        #define HOTSPOT_BLOCK_SIZE 16                                                            
 #endif
 
 /* some constants */
@@ -527,9 +478,9 @@ __global__ void calculate_temp(int iteration,  //number of iteration
                                float step,
                                float time_elapsed){
 
-        __shared__ float temp_on_cuda[BLOCK_SIZE][BLOCK_SIZE];
-        __shared__ float power_on_cuda[BLOCK_SIZE][BLOCK_SIZE];
-        __shared__ float temp_t[BLOCK_SIZE][BLOCK_SIZE]; // saving temparary temperature result
+        __shared__ float temp_on_cuda[HOTSPOT_BLOCK_SIZE][HOTSPOT_BLOCK_SIZE];
+        __shared__ float power_on_cuda[HOTSPOT_BLOCK_SIZE][HOTSPOT_BLOCK_SIZE];
+        __shared__ float temp_t[HOTSPOT_BLOCK_SIZE][HOTSPOT_BLOCK_SIZE]; // saving temparary temperature result
  
     float amb_temp = 80.0;
         float step_div_Cap;
@@ -553,15 +504,15 @@ __global__ void calculate_temp(int iteration,  //number of iteration
         // all the input data
  
         // calculate the small block size
-    int small_block_rows = BLOCK_SIZE-iteration*2;//EXPAND_RATE
-    int small_block_cols = BLOCK_SIZE-iteration*2;//EXPAND_RATE
+    int small_block_rows = HOTSPOT_BLOCK_SIZE-iteration*2;//EXPAND_RATE
+    int small_block_cols = HOTSPOT_BLOCK_SIZE-iteration*2;//EXPAND_RATE
 
         // calculate the boundary for the block according to 
         // the boundary of its small block
         int blkY = small_block_rows*by-border_rows;
         int blkX = small_block_cols*bx-border_cols;
-        int blkYmax = blkY+BLOCK_SIZE-1;
-        int blkXmax = blkX+BLOCK_SIZE-1;
+        int blkYmax = blkY+HOTSPOT_BLOCK_SIZE-1;
+        int blkXmax = blkX+HOTSPOT_BLOCK_SIZE-1;
 
         // calculate the global thread coordination
     int yidx = blkY+ty;
@@ -581,9 +532,9 @@ __global__ void calculate_temp(int iteration,  //number of iteration
         // the valid range of the input data
         // used to rule out computation outside the boundary.
         int validYmin = (blkY < 0) ? -blkY : 0;
-        int validYmax = (blkYmax > grid_rows-1) ? BLOCK_SIZE-1-(blkYmax-grid_rows+1) : BLOCK_SIZE-1;
+        int validYmax = (blkYmax > grid_rows-1) ? HOTSPOT_BLOCK_SIZE-1-(blkYmax-grid_rows+1) : HOTSPOT_BLOCK_SIZE-1;
         int validXmin = (blkX < 0) ? -blkX : 0;
-        int validXmax = (blkXmax > grid_cols-1) ? BLOCK_SIZE-1-(blkXmax-grid_cols+1) : BLOCK_SIZE-1;
+        int validXmax = (blkXmax > grid_cols-1) ? HOTSPOT_BLOCK_SIZE-1-(blkXmax-grid_cols+1) : HOTSPOT_BLOCK_SIZE-1;
  
         int N = ty-1;
         int S = ty+1;
@@ -598,8 +549,8 @@ __global__ void calculate_temp(int iteration,  //number of iteration
         bool computed;
         for (int i=0; i<iteration ; i++){
             computed = false;
-            if( IN_RANGE(tx, i+1, BLOCK_SIZE-i-2) &&  \
-                  IN_RANGE(ty, i+1, BLOCK_SIZE-i-2) &&  \
+            if( IN_RANGE(tx, i+1, HOTSPOT_BLOCK_SIZE-i-2) &&  \
+                  IN_RANGE(ty, i+1, HOTSPOT_BLOCK_SIZE-i-2) &&  \
                   IN_RANGE(tx, validXmin, validXmax) && \
                   IN_RANGE(ty, validYmin, validYmax) ) {
                   computed = true;
@@ -631,7 +582,7 @@ __global__ void calculate_temp(int iteration,  //number of iteration
 int compute_tran_temp(float *MatrixPower,float *MatrixTemp[2], int col, int row, \
         int total_iterations, int num_iterations, int blockCols, int blockRows, int borderCols, int borderRows)
 {
-        dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+        dim3 dimBlock(HOTSPOT_BLOCK_SIZE, HOTSPOT_BLOCK_SIZE);
         dim3 dimGrid(blockCols, blockRows);
      
     float grid_height = chip_height / row;
@@ -676,8 +627,8 @@ void GpuKernel::hotspot_2d(KernelParams& kernel_params, void** input, void** out
     # define EXPAND_RATE 2// add one iteration will extend the pyramid base by 2 per each borderline
     int borderCols = (pyramid_height)*EXPAND_RATE/2;
     int borderRows = (pyramid_height)*EXPAND_RATE/2;
-    int smallBlockCol = BLOCK_SIZE-(pyramid_height)*EXPAND_RATE;
-    int smallBlockRow = BLOCK_SIZE-(pyramid_height)*EXPAND_RATE;
+    int smallBlockCol = HOTSPOT_BLOCK_SIZE-(pyramid_height)*EXPAND_RATE;
+    int smallBlockRow = HOTSPOT_BLOCK_SIZE-(pyramid_height)*EXPAND_RATE;
     int blockCols = grid_cols/smallBlockCol+((grid_cols%smallBlockCol==0)?0:1);
     int blockRows = grid_rows/smallBlockRow+((grid_rows%smallBlockRow==0)?0:1);
 
@@ -771,7 +722,7 @@ void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output
     int rows = kernel_params.params.get_kernel_size();
     int cols = kernel_params.params.get_kernel_size();
     int size_I, size_R, niter = 1, iter;
-    float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
+    float *I, *J, lambda=0.5, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float *J_cuda;
     float *C_cuda;
@@ -813,10 +764,10 @@ void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output
         q0sqr   = varROI / (meanROI*meanROI);
 
         //Currently the input size must be divided by 16 - the block size
-        int block_x = cols/BLOCK_SIZE ;
-        int block_y = rows/BLOCK_SIZE ;
+        int block_x = cols/SRAD_BLOCK_SIZE ;
+        int block_y = rows/SRAD_BLOCK_SIZE ;
  
-        dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+        dim3 dimBlock(SRAD_BLOCK_SIZE, SRAD_BLOCK_SIZE);
         dim3 dimGrid(block_x , block_y);
  
         //Copy data from main memory to device memory

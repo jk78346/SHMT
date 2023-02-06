@@ -84,9 +84,9 @@ void CpuKernel::blackscholes_2d(Params params, float* input, float* output){
 //#include "dct8x8_kernel2.cuh"
 
 #define BENCHMARK_SIZE 10
-#define BLOCK_SIZE 8
-#define BLOCK_SIZE2 64
-#define BLOCK_SIZE_LOG2 3
+#define DCT_BLOCK_SIZE 8
+#define DCT_BLOCK_SIZE2 64
+#define DCT_BLOCK_SIZE_LOG2 3
 
 float C_a = 1.387039845322148f; //!< a = (2^0.5) * cos(    pi / 16);  Used in forward and inverse DCT.
 float C_b = 1.306562964876377f; //!< b = (2^0.5) * cos(    pi /  8);  Used in forward and inverse DCT.
@@ -99,7 +99,7 @@ float C_norm = 0.3535533905932737f; // 1 / (8^0.5)
 /**
 *  JPEG quality=0_of_12 quantization matrix
 */
-float Q_array[BLOCK_SIZE2] =
+float Q_array[DCT_BLOCK_SIZE2] =
 {
     32.f,  33.f,  51.f,  81.f,  66.f,  39.f,  34.f,  17.f,
     33.f,  36.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,
@@ -140,18 +140,18 @@ void SubroutineDCTvector(float *FirstIn, int StepIn, float *FirstOut, int StepOu
 }
 
 void computeDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, int height){
-    for (int i = 0; i + BLOCK_SIZE - 1 < height; i += BLOCK_SIZE)
+    for (int i = 0; i + DCT_BLOCK_SIZE - 1 < height; i += DCT_BLOCK_SIZE)
     {
-        for (int j = 0; j + BLOCK_SIZE - 1 < width; j += BLOCK_SIZE)
+        for (int j = 0; j + DCT_BLOCK_SIZE - 1 < width; j += DCT_BLOCK_SIZE)
         {
             //process rows
-            for (int k = 0; k < BLOCK_SIZE; k++)
+            for (int k = 0; k < DCT_BLOCK_SIZE; k++)
             {
                 SubroutineDCTvector((float *)fSrc + (i+k) * Stride + j, 1, fDst + (i+k) * Stride + j, 1);
             }
 
             //process columns
-            for (int k = 0; k < BLOCK_SIZE; k++)
+            for (int k = 0; k < DCT_BLOCK_SIZE; k++)
             {
                 SubroutineDCTvector(fDst + i * Stride + (j+k), Stride, fDst + i * Stride + (j+k), Stride);
             }
@@ -177,10 +177,10 @@ void quantizeGoldFloat(float *fSrcDst, int Stride, int width, int height)
     {
         for (int j=0; j<width; j++)
         {
-            int qx = j % BLOCK_SIZE;
-            int qy = i % BLOCK_SIZE;
-            float quantized = round_f(fSrcDst[i*Stride+j] / Q_array[(qy<<BLOCK_SIZE_LOG2)+qx]);
-            fSrcDst[i*Stride+j] = quantized * Q_array[(qy<<BLOCK_SIZE_LOG2)+qx];
+            int qx = j % DCT_BLOCK_SIZE;
+            int qy = i % DCT_BLOCK_SIZE;
+            float quantized = round_f(fSrcDst[i*Stride+j] / Q_array[(qy<<DCT_BLOCK_SIZE_LOG2)+qx]);
+            fSrcDst[i*Stride+j] = quantized * Q_array[(qy<<DCT_BLOCK_SIZE_LOG2)+qx];
         }
     }
 }
@@ -216,18 +216,18 @@ void SubroutineIDCTvector(float *FirstIn, int StepIn, float *FirstOut, int StepO
 
 void computeIDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, int height)
 {
-    for (int i = 0; i + BLOCK_SIZE - 1 < height; i += BLOCK_SIZE)
+    for (int i = 0; i + DCT_BLOCK_SIZE - 1 < height; i += DCT_BLOCK_SIZE)
     {
-        for (int j = 0; j + BLOCK_SIZE - 1 < width; j += BLOCK_SIZE)
+        for (int j = 0; j + DCT_BLOCK_SIZE - 1 < width; j += DCT_BLOCK_SIZE)
         {
             //process rows
-            for (int k = 0; k < BLOCK_SIZE; k++)
+            for (int k = 0; k < DCT_BLOCK_SIZE; k++)
             {
                 SubroutineIDCTvector((float *)fSrc + (i+k) * Stride + j, 1, fDst + (i+k) * Stride + j, 1);
             }
 
             //process columns
-            for (int k = 0; k < BLOCK_SIZE; k++)
+            for (int k = 0; k < DCT_BLOCK_SIZE; k++)
             {
                 SubroutineIDCTvector(fDst + i * Stride + (j+k), Stride, fDst + i * Stride + (j+k), Stride);
             }
@@ -331,13 +331,13 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
 #include <cuda_runtime.h>
 
 #ifdef RD_WG_SIZE_0_0                                                            
-        #define BLOCK_SIZE RD_WG_SIZE_0_0                                        
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
 #elif defined(RD_WG_SIZE_0)                                                      
-        #define BLOCK_SIZE RD_WG_SIZE_0                                          
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
 #elif defined(RD_WG_SIZE)                                                        
-        #define BLOCK_SIZE RD_WG_SIZE                                            
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
 #else
-        #define BLOCK_SIZE 16                                                            
+        #define HOTSPOT_BLOCK_SIZE 16                                                            
 #endif
 
 /* some constants */
@@ -361,28 +361,28 @@ void single_iteration(float* result,
                       float Rz_1,
                       float step){
     /* some constants */
-    //int BLOCK_SIZE = 16;
-    int BLOCK_SIZE_C = BLOCK_SIZE;
-    int BLOCK_SIZE_R = BLOCK_SIZE;
+    //int HOTSPOT_BLOCK_SIZE = 16;
+    int HOTSPOT_BLOCK_SIZE_C = HOTSPOT_BLOCK_SIZE;
+    int HOTSPOT_BLOCK_SIZE_R = HOTSPOT_BLOCK_SIZE;
     const float amb_temp = 80.0;
 
     float delta;
     int r, c;
     int chunk;
-    int num_chunk = row*col / (BLOCK_SIZE_R * BLOCK_SIZE_C);
-    int chunks_in_row = col/BLOCK_SIZE_C;
-    int chunks_in_col = row/BLOCK_SIZE_R;
+    int num_chunk = row*col / (HOTSPOT_BLOCK_SIZE_R * HOTSPOT_BLOCK_SIZE_C);
+    int chunks_in_row = col/HOTSPOT_BLOCK_SIZE_C;
+    int chunks_in_col = row/HOTSPOT_BLOCK_SIZE_R;
 
     for( chunk = 0; chunk < num_chunk; ++chunk ){
-        int r_start = BLOCK_SIZE_R*(chunk/chunks_in_col);
-        int c_start = BLOCK_SIZE_C*(chunk%chunks_in_row);
-        int r_end = r_start + BLOCK_SIZE_R > row ? row : r_start + BLOCK_SIZE_R;
-        int c_end = c_start + BLOCK_SIZE_C > col ? col : c_start + BLOCK_SIZE_C;
+        int r_start = HOTSPOT_BLOCK_SIZE_R*(chunk/chunks_in_col);
+        int c_start = HOTSPOT_BLOCK_SIZE_C*(chunk%chunks_in_row);
+        int r_end = r_start + HOTSPOT_BLOCK_SIZE_R > row ? row : r_start + HOTSPOT_BLOCK_SIZE_R;
+        int c_end = c_start + HOTSPOT_BLOCK_SIZE_C > col ? col : c_start + HOTSPOT_BLOCK_SIZE_C;
 
     
         if ( r_start == 0 || c_start == 0 || r_end == row || c_end == col ){
-            for ( r = r_start; r < r_start + BLOCK_SIZE_R; ++r ) {
-                for ( c = c_start; c < c_start + BLOCK_SIZE_C; ++c ) {
+            for ( r = r_start; r < r_start + HOTSPOT_BLOCK_SIZE_R; ++r ) {
+                for ( c = c_start; c < c_start + HOTSPOT_BLOCK_SIZE_C; ++c ) {
                     /* Corner 1 */
                     if ( (r == 0) && (c == 0) ) {
                         delta = (Cap_1) * (power[0] +
@@ -438,8 +438,8 @@ void single_iteration(float* result,
             continue;
         }
 
-        for ( r = r_start; r < r_start + BLOCK_SIZE_R; ++r ) {
-            for ( c = c_start; c < c_start + BLOCK_SIZE_C; ++c ) {
+        for ( r = r_start; r < r_start + HOTSPOT_BLOCK_SIZE_R; ++r ) {
+            for ( c = c_start; c < c_start + HOTSPOT_BLOCK_SIZE_C; ++c ) {
             /* Update Temperatures */
                 result[r*col+c] =temp[r*col+c]+
                      ( Cap_1 * (power[r*col+c] +
@@ -577,7 +577,7 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
     int rows = params.get_kernel_size();
     int cols = params.get_kernel_size();
     int size_I, size_R, niter = 1, iter;
-    float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
+    float *I, *J, lambda=0.5, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float Jc, G2, L, num, den, qsqr;
     int *iN, *iS, *jE, *jW, k;
