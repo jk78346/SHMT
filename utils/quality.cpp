@@ -80,7 +80,6 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
     it = counts.begin();
     int elements = row_size * col_size;
    
-    std::cout << __func__ << ": main" << std::endl;
     // max, min, average, entropy(1)
 //#pragma omp parallel for
     for(int i = i_start ; i < i_start+row_size ; i++){

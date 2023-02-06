@@ -52,20 +52,7 @@ bool sortByVal(const std::pair<int , float> &a, const std::pair<int, float> &b){
  This is the main function to determine criticality of each tiling block based on
  sampling quality.
  */
-void PartitionRuntime::criticality_kernel(){
-    std::vector<std::pair<int, float>> order;
-
-    for(unsigned int i = 0 ; i < this->sampling_qualities.size() ; i++){
-        std::cout << __func__ << ": i: " << i 
-                  << ", rmse: " << this->sampling_qualities[i].rmse()
-                  << ", rmse %: " << this->sampling_qualities[i].rmse_percentage()
-                  << ", error rate: " << this->sampling_qualities[i].error_rate()
-                  << ", error %: " << this->sampling_qualities[i].error_percentage()
-                  << ", ssim: " << this->sampling_qualities[i].ssim()
-                  << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
-        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
-    }
-    sort(order.begin(), order.end(), sortByVal);
+void PartitionRuntime::criticality_kernel(std::vector<std::pair<int, float>>& order){
 
     /*
         Current design: mark (no more than) one third of the worst blocks 
@@ -93,11 +80,13 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     Sampling policies:
     
     0. Oracle: do a acutal full scale run to know the quality rank
-    1. fixed number of pixel samplings:
+    1. fixed number of pixel samplings (input stats):
         1-1: one pixel per sub-tiling block
-        1-2: N pixels per sub-tiling block, N is constant
+        1-2: N stride pixels per sub-tiling block, N is constant
             within N pixels, find minmax to represent full tiling block's dist.
-    2. fixed percentage of pixel samplings:
+        1-3: N random pixels per sub-tiling block, N is constant
+            within N pixels, find minmax to represent full tiling block's dist.
+    2. fixed percentage of pixel samplings (actual run sampling):
         2-1. sub-tiling block downsampling
  */
     
@@ -187,13 +176,76 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
 
     std::cout << __func__ << ": sampling timing overhead: " << sampling_overhead << " (ms)" << std::endl;
     /* criticality policy to determine which tiling block(s) are critical. */
-    this->criticality_kernel(); 
+    std::vector<std::pair<int, float>> order;
+
+    for(unsigned int i = 0 ; i < this->sampling_qualities.size() ; i++){
+        std::cout << __func__ << ": i: " << i 
+                  << ", rmse: " << this->sampling_qualities[i].rmse()
+                  << ", rmse %: " << this->sampling_qualities[i].rmse_percentage()
+                  << ", error rate: " << this->sampling_qualities[i].error_rate()
+                  << ", error %: " << this->sampling_qualities[i].error_percentage()
+                  << ", ssim: " << this->sampling_qualities[i].ssim()
+                  << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
+        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+    }
+    sort(order.begin(), order.end(), sortByVal);
+    this->criticality_kernel(order); 
 
     // If a block is critical, then it must be static and assigned to GPU.
     // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
     // In this way, work stealing is used during runtime.
     
     return sampling_overhead;
+}
+
+double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int num_pixels){
+    timing s = clk::now();
+    std::vector<float> samples_max(this->params.get_block_cnt(), FLT_MIN);
+    std::vector<float> samples_min(this->params.get_block_cnt(), FLT_MAX);
+    std::vector<float> samples_range(this->params.get_block_cnt(), 0.);
+    int total_size = this->params.get_kernel_size() * this->params.get_kernel_size();
+    unsigned int offset;
+    float tmp;
+    for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
+        for(unsigned int idx = 0 ; idx < num_pixels ; idx++){
+            if(mode == "c-nr"){
+                offset = rand()%total_size;
+            }else if(mode == "c-ns"){ // stride from top-left corner
+                unsigned int stride = 32; // just a default
+                offset = (idx * stride) % total_size; // flat circular stridding to avoid segflt
+            }else{
+                std::cout << __func__ << ": input stats sampling mode: " 
+                            << mode << " is not supported yet." << std::endl;
+                exit(0);
+            }
+            if(std::find(this->params.uint8_t_type_app.begin(),
+                        this->params.uint8_t_type_app.end(),
+                        this->params.app_name) !=
+                    this->params.uint8_t_type_app.end()){
+                uint8_t* ptr = reinterpret_cast<uint8_t*>(this->input_pars[i]);
+                tmp = ptr[offset]; // uchar to float conversion
+            }else{
+                float* ptr = reinterpret_cast<float*>(this->input_pars[i]);
+                tmp = ptr[offset];
+            }
+            samples_max[i] = (tmp > samples_max[i])?tmp:samples_max[i];
+            samples_min[i] = (tmp < samples_min[i])?tmp:samples_min[i];
+        }
+    }
+   
+    std::vector<std::pair<int, float>> order;
+    for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
+        assert(samples_max[i] >= samples_min[i]);
+        samples_range[i] = samples_max[i] - samples_min[i];
+        // smaller the range, more critical (?)
+        order.push_back(std::make_pair(i, -1*samples_range[i]));
+    }
+    sort(order.begin(), order.end(), sortByVal);
+    
+    this->criticality_kernel(order); 
+
+    timing e = clk::now();
+    return get_time_ms(e, s); 
 }
 
 double PartitionRuntime::prepare_partitions(){
@@ -210,10 +262,33 @@ double PartitionRuntime::prepare_partitions(){
                                    &(this->output),
                                    this->output_pars);
 
-    if(is_criticality_mode()){
-        SamplingMode mode = center_crop;
-        ret += this->run_sampling(mode);
+/* sampling section if enabled */
+    if(this->is_criticality_mode()){
+        auto p_mode = this->get_partition_mode();
+        std::cout << __func__ << ": mode: " << p_mode << std::endl;
+        
+        // involves actual run types
+        if(p_mode == "c-oracle"){ // full scale run test
+            SamplingMode mode = center_crop;
+            this->params.set_downsampling_rate(1.);
+            ret += this->run_sampling(mode);
+        }else if(p_mode == "c"){ // use default downsampling rate
+            SamplingMode mode = center_crop;
+            ret += this->run_sampling(mode);
+        }
+        // input stats sampling types
+        int num_pixels = 100;
+        // c-ns: N pixel stridding, c-nr: N pixel random
+        if(p_mode == "c-ns" || p_mode == "c-nr"){ // N pixel stridding
+            ret += this->run_input_stats_probing(p_mode, num_pixels); 
+        }else{
+            std::cout << __func__ 
+                      << ": unknown partition mode: " << p_mode << std::endl;
+            exit(0);
+        }
     }
+/* end sampling section */
+        
     this->setup_dynamic_devices();
 
     /* This is the latest moment to determine if each tiling block and device is 
@@ -415,7 +490,10 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
            block is dynamic (determined by SPMC at runtime). No need to 
            pre-determine here so do nothing.
          */
-    }else if(this->mode == "gt_c"){ // criticality mode on GPU/TPU mixing
+    }else if(this->mode == "gt_c" ||
+             this->mode == "gt_c-oracle" ||
+             this->mode == "gt_c-ns" ||
+             this->mode == "gt_c-nr"){ // criticality mode on GPU/TPU mixing
         ret = (this->criticality[i] == true)?gpu:undefine; // non-critical blocks are dynamic
     }else{
         std::cout << __func__ << ": undefined partition mode: "
@@ -473,7 +551,7 @@ std::string PartitionRuntime::get_partition_mode(){
     unsigned int delimiter_loc = this->mode.find("_");
     if(delimiter_loc != std::string::npos && 
         this->mode.length() > delimiter_loc){
-        ret = this->mode.substr(delimiter_loc+1, 1);
+        ret = this->mode.substr(delimiter_loc+1);
     }else{
         std::cout << __func__ 
                   << ": no partition mode found, exit." << std::endl;

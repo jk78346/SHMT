@@ -7,14 +7,12 @@
 
 using namespace cv;
 
-extern std::vector<std::string> uint8_t_type_app;
-
 UnifyType::UnifyType(Params params, void* in){
     this->params = params;
-    if( std::find(uint8_t_type_app.begin(),
-                  uint8_t_type_app.end(),
+    if( std::find(params.uint8_t_type_app.begin(),
+                  params.uint8_t_type_app.end(),
                   params.app_name) !=
-        uint8_t_type_app.end() ){
+        params.uint8_t_type_app.end() ){
         uint8_t* tmp = reinterpret_cast<uint8_t*>(in);
         this->float_array = (float*) malloc(params.problem_size * 
                                             params.problem_size * 
@@ -33,10 +31,10 @@ void UnifyType::save_as_img(const std::string file_name,
                             unsigned int rows, 
                             unsigned int cols, 
                             void* img){
-    if( std::find(uint8_t_type_app.begin(),
-                  uint8_t_type_app.end(),
+    if( std::find(this->params.uint8_t_type_app.begin(),
+                  this->params.uint8_t_type_app.end(),
                   this->params.app_name) !=
-        uint8_t_type_app.end() ){
+        this->params.uint8_t_type_app.end() ){
         Mat mat(rows, cols, CV_8U);
         array2mat(mat, this->char_array, rows, cols);
         assert(!mat.empty());
@@ -84,10 +82,10 @@ void UnifyType::save_as_csv(const std::string file_name,
     myfile.open(file_name.c_str(), std::ios_base::out | std::ios::binary);
     assert(myfile.is_open());
 
-    if(std::find(uint8_t_type_app.begin(),
-                uint8_t_type_app.end(),
+    if(std::find(this->params.uint8_t_type_app.begin(),
+                this->params.uint8_t_type_app.end(),
                 this->params.app_name) !=
-       uint8_t_type_app.end() ){
+       this->params.uint8_t_type_app.end() ){
         uint8_t* tmp = reinterpret_cast<uint8_t*>(img);    
         for(unsigned int i = 0 ; i < rows ; i++){
             for(unsigned int j = 0 ; j < cols ; j++){

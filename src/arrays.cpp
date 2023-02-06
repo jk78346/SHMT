@@ -13,13 +13,6 @@
         float:   fft_2d, dct8x8_2d, blackscholes
  */
 
-std::vector<std::string> uint8_t_type_app = {
-    "sobel_2d",
-    "mean_2d",
-    "laplacian_2d",
-    "kmeans_2d"
-};
-
 void init_fft(unsigned int input_total_size, void** input_array){
     printf("...generating random input data\n");
     srand(2010);
@@ -177,10 +170,10 @@ void data_initialization(Params params,
     unsigned int output_total_size = rows * cols;
 
     // image filter type of kernels
-    if( std::find(uint8_t_type_app.begin(), 
-                  uint8_t_type_app.end(), 
+    if( std::find(params.uint8_t_type_app.begin(), 
+                  params.uint8_t_type_app.end(), 
                   params.app_name) !=
-        uint8_t_type_app.end() ){
+        params.uint8_t_type_app.end() ){
         *input_array = (uint8_t*) malloc(input_total_size * sizeof(uint8_t));
         *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
         *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        
@@ -241,10 +234,10 @@ void array_partition_initialization(Params params,
                                     bool skip_init,
                                     void** input,
                                     std::vector<void*>& input_pars){
-    if( std::find(uint8_t_type_app.begin(), 
-                  uint8_t_type_app.end(), 
+    if( std::find(params.uint8_t_type_app.begin(), 
+                  params.uint8_t_type_app.end(), 
                   params.app_name) !=
-        uint8_t_type_app.end() ){
+        params.uint8_t_type_app.end() ){
         // prepare for utilizing opencv roi() to do partitioning.
         Mat input_mat, tmp(params.block_size, params.block_size, CV_8U);
         if(!skip_init){
@@ -304,10 +297,10 @@ void output_array_partition_gathering(Params params,
                                       void** output,
                                       std::vector<void*>& output_pars){
     // prepare for utilizing opencv roi() to do gathering.
-    if( std::find(uint8_t_type_app.begin(), 
-                  uint8_t_type_app.end(), 
+    if( std::find(params.uint8_t_type_app.begin(), 
+                  params.uint8_t_type_app.end(), 
                   params.app_name) !=
-        uint8_t_type_app.end() ){
+        params.uint8_t_type_app.end() ){
         Mat output_mat(params.problem_size, params.problem_size, CV_8U), tmp;
     
         for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
@@ -405,10 +398,10 @@ void array_partition_downsampling(Params params,
                                   bool skip_init,
                                   std::vector<void*> input_pars,
                                   std::vector<void*>& input_sampling_pars){
-    if( std::find(uint8_t_type_app.begin(), 
-                  uint8_t_type_app.end(), 
+    if( std::find(params.uint8_t_type_app.begin(), 
+                  params.uint8_t_type_app.end(), 
                   params.app_name) !=
-        uint8_t_type_app.end() ){
+        params.uint8_t_type_app.end() ){
         downsampling_wrapper<uint8_t>(params,
                                       skip_init,
                                       input_pars,

@@ -1,6 +1,7 @@
 #ifndef __PARAMS_H__
 #define __PARAMS_H__
 #include <string>
+#include <vector>
 
 enum SamplingMode {cv_resize, center_crop, init_crop, random_crop};
 
@@ -30,6 +31,13 @@ public:
     bool tiling_mode;
     unsigned int iter;
     std::string input_data_path; 
+
+    std::vector<std::string> uint8_t_type_app = {
+        "sobel_2d",
+        "mean_2d",
+        "laplacian_2d",
+        "kmeans_2d"
+    };
 
 private:        
     unsigned int row_cnt = 0;

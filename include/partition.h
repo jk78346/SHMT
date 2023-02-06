@@ -44,8 +44,15 @@ public:
 private:
     /* The sampling pre-processing to determine criticality on tiling blocks. 
         Return is timing overhead in ms.
+        This is for acutal run types of sampling
      */
     double run_sampling(SamplingMode mode);
+    
+    /* The sampling pre-processing to determine criticality on tiling blocks. 
+        Return is timing overhead in ms.
+        This is for input stats probing types of sampling
+     */
+    double run_input_stats_probing(std::string mode, unsigned int num_pixels);
 
     /* The main algorithm to determine tiling tasks to specific device(s). */
     DeviceType mix_policy(unsigned int i);
@@ -68,7 +75,7 @@ private:
     std::string get_partition_mode();
 
     // The main criticality determine function based on sampling qualities.
-    void criticality_kernel();
+    void criticality_kernel(std::vector<std::pair<int, float>>& order);
 
     /* To determine if each type of devices is static or dynamic
         by setting the the following arrays:
