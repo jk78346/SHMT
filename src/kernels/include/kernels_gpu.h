@@ -141,6 +141,24 @@ public:
                         float tmp = this->output_array_type.host_fp[i] + 128.0f;
                         this->output_array_type.device_fp[i] = MIN(MAX(tmp, 0.), 255.);
                 }
+            }else if(app_name == "srad_2d"){
+                this->output_array_type.host_fp = this->output_array_type.device_fp;
+                float max_val = FLT_MIN;
+#pragma omp parallel for reduction(max:max_val)
+                for(unsigned int i = 0 ; 
+                        i < this->kernel_params.params.get_kernel_size() *
+                        this->kernel_params.params.get_kernel_size();
+                        i++){
+                    max_val = (max_val > this->output_array_type.host_fp[i])? max_val : this->output_array_type.host_fp[i];
+                }
+                float scale = 255./max_val;
+#pragma omp parallel for
+                for(unsigned int i = 0 ; 
+                        i < this->kernel_params.params.get_kernel_size() *
+                        this->kernel_params.params.get_kernel_size();
+                        i++){
+                    this->output_array_type.host_fp[i] *= scale;
+                }
             }else{
                 // TODO: currently this is true for dct8x8
                 this->output_array_type.host_fp = this->output_array_type.device_fp;

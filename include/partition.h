@@ -63,6 +63,10 @@ private:
     std::vector<bool> criticality;
     // A helper function to check if mode is criticality mode
     bool is_criticality_mode();
+
+    // A helper function to extract partition mode is string
+    std::string get_partition_mode();
+
     // The main criticality determine function based on sampling qualities.
     void criticality_kernel();
 

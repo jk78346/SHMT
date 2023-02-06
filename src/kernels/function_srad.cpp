@@ -1,10 +1,11 @@
 #include "srad.h"
 #include <math.h>
+#include <float.h>
 #include <stdlib.h>
 //#include "srad_kernel.cu"
 
 extern "C" void srad_2d(int rows, int cols, float* input, float* output){
-    int size_I, size_R, niter = 10, iter;
+    int size_I, size_R, niter = 1, iter;
     float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float Jc, G2, L, num, den, qsqr;
@@ -111,6 +112,24 @@ extern "C" void srad_2d(int rows, int cols, float* input, float* output){
             }
         }
     }
+
+    // scale output result nack to uint8 scale
+    float J_max = FLT_MIN;
+    for(int i = 0 ; i < rows ; i++){
+    	for(int j = 0 ; j < cols ; j++){
+	    k = i * cols + j;
+	    J_max = (J[k] > J_max)?J[k]:J_max;
+	}
+    }
+    float scale = 255./J_max;
+    for(int i = 0 ; i < rows ; i++){
+    	for(int j = 0 ; j < cols ; j++){
+	    k = i * cols + j;
+	    J[k] *= scale;
+	}
+    }
+
+
     free(iN); free(iS); free(jW); free(jE);
     free(dN); free(dS); free(dW); free(dE);
     free(c);

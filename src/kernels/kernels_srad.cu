@@ -6,7 +6,7 @@
 void CpuKernel::srad_2d(Params params, float* input, float* output){
     int rows = params.get_kernel_size();
     int cols = params.get_kernel_size();
-    int size_I, size_R, niter = 10, iter;
+    int size_I, size_R, niter = 1, iter;
     float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float Jc, G2, L, num, den, qsqr;
@@ -121,7 +121,7 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
 void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output){
     int rows = kernel_params.params.get_kernel_size();
     int cols = kernel_params.params.get_kernel_size();
-    int size_I, size_R, niter = 10, iter;
+    int size_I, size_R, niter = 1, iter;
     float *I, *J, lambda, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float *J_cuda;

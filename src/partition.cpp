@@ -89,6 +89,18 @@ void PartitionRuntime::criticality_kernel(){
 }
 
 double PartitionRuntime::run_sampling(SamplingMode mode){
+/*
+    Sampling policies:
+    
+    0. Oracle: do a acutal full scale run to know the quality rank
+    1. fixed number of pixel samplings:
+        1-1: one pixel per sub-tiling block
+        1-2: N pixels per sub-tiling block, N is constant
+            within N pixels, find minmax to represent full tiling block's dist.
+    2. fixed percentage of pixel samplings:
+        2-1. sub-tiling block downsampling
+ */
+    
     this->params.set_sampling_mode(mode);
     std::cout << __func__ << ": start sampling run, mode: " 
               << this->params.get_sampling_mode() 
@@ -452,6 +464,20 @@ bool PartitionRuntime::is_criticality_mode(){
         this->mode.length() > delimiter_loc &&
         this->mode.substr(delimiter_loc+1, 1) == "c"){
         ret = true;
+    }
+    return ret;
+}
+
+std::string PartitionRuntime::get_partition_mode(){
+    std::string ret;
+    unsigned int delimiter_loc = this->mode.find("_");
+    if(delimiter_loc != std::string::npos && 
+        this->mode.length() > delimiter_loc){
+        ret = this->mode.substr(delimiter_loc+1, 1);
+    }else{
+        std::cout << __func__ 
+                  << ": no partition mode found, exit." << std::endl;
+        exit(0);
     }
     return ret;
 }

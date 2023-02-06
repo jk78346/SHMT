@@ -91,11 +91,10 @@ class MyDataGen():
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
                 x_slice = np.asarray(image).astype('float32') / 255. 
-                print("j: ", j)
                 y_slice = self.func(x_slice)
 #                print("x_slice: ", x_slice, ", y_slice: ", y_slice)
                 x_max = x_slice.max()
-                y_max = 1. #y_slice.max()
+                y_max = y_slice.max()
             else:
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
@@ -122,7 +121,6 @@ class MyDataGen():
             
                 x[j] = (x_slice.astype('float32') / x_max) 
                 y[j] = (y_slice.astype('float32') / y_max)
-                print("x: ", x[j], ",y: ", y[j])
         
         return x, y
     
@@ -138,6 +136,10 @@ class MyDataGen():
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
             elif self.model_name == "dct8x8_2d":
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                image = image.resize(self.in_shape)
+                x_slice = np.expand_dims(image, axis=0).astype("uint8")
+            elif self.model_name == "srad_2d":
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
                 x_slice = np.expand_dims(image, axis=0).astype("uint8")
@@ -277,7 +279,7 @@ def pre_quantize_test(params, target_func, logfile):
         X_test = np.asarray(image).astype('float32') / 255.
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
-        y_scale = 1.
+        y_scale = 255.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
