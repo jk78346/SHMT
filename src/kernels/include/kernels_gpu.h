@@ -63,35 +63,44 @@ public:
             // ***** integrating fft_2d conversion as the first trial *****
             if(app_name == "fft_2d"){
                 this->fft_2d_input_conversion();
-            }else{
-                /* TODO: curently this is true for both fft and dct8x8, need to
-                    see if separated input conversion functions are needed.
-                 */
-                if(app_name == "dct8x8_2d"){
-                    this->input_array_type.device_fp = 
-                        (float*) malloc(this->kernel_params.params.get_kernel_size() *
-                                        this->kernel_params.params.get_kernel_size() *
-                                        sizeof(float));
-                        //this->input_array_type.host_fp;
-                    this->output_array_type.device_fp = this->output_array_type.host_fp;
-                    int StrideF = 
-                        ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
-                    // ***** float shifting *****
-                    //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
-                    assert((unsigned)StrideF == this->kernel_params.params.get_kernel_size());
+            }else if(app_name == "dct8x8_2d"){
+                this->input_array_type.device_fp = 
+                    (float*) malloc(this->kernel_params.params.get_kernel_size() *
+                                    this->kernel_params.params.get_kernel_size() *
+                                    sizeof(float));
+                    //this->input_array_type.host_fp;
+                this->output_array_type.device_fp = this->output_array_type.host_fp;
+                int StrideF = 
+                    ((int)ceil(this->kernel_params.params.get_kernel_size()/16.0f))*16;
+                // ***** float shifting *****
+                //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
+                assert((unsigned)StrideF == this->kernel_params.params.get_kernel_size());
 #pragma omp parallel for
-                    for (unsigned int i = 0; 
-                            i < this->kernel_params.params.get_kernel_size() * 
-                            this->kernel_params.params.get_kernel_size(); 
-                            i++){
-                            this->input_array_type.device_fp[i] = 
-                                this->input_array_type.host_fp[i] -128.0f;
-                    }
-                }else{
-                    this->input_array_type.device_fp = this->input_array_type.host_fp;
-                    this->output_array_type.device_fp = this->output_array_type.host_fp;
-                    // other fp type of kernels' input conversions
+                for (unsigned int i = 0; 
+                        i < this->kernel_params.params.get_kernel_size() * 
+                        this->kernel_params.params.get_kernel_size(); 
+                        i++){
+                        this->input_array_type.device_fp[i] = 
+                            this->input_array_type.host_fp[i] -128.0f;
                 }
+            }else if(app_name == "srad_2d"){
+                this->input_array_type.device_fp = 
+                    (float*) malloc(this->kernel_params.params.get_kernel_size() *
+                                    this->kernel_params.params.get_kernel_size() *
+                                    sizeof(float));
+#pragma omp parallel for
+                for (unsigned int i = 0; 
+                        i < this->kernel_params.params.get_kernel_size() * 
+                        this->kernel_params.params.get_kernel_size(); 
+                        i++){
+                        this->input_array_type.device_fp[i] = 
+                            this->input_array_type.host_fp[i] / 255.;
+                }
+                this->output_array_type.device_fp = this->output_array_type.host_fp;
+            }else{
+                this->input_array_type.device_fp = this->input_array_type.host_fp;
+                this->output_array_type.device_fp = this->output_array_type.host_fp;
+                // other fp type of kernels' input conversions
             }
         }else{
             // app_name not found in any table. 

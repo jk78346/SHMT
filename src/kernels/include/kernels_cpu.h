@@ -45,8 +45,6 @@ public:
                     = (float*) malloc(this->params.get_kernel_size() * 
                                       this->params.get_kernel_size() * 
                                       sizeof(float));
-                this->output_array_type.fp = output_array;
-                
                 int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
                 //AddFloatPlane(-128.0f, input, StrideF, ImgSize);
@@ -55,10 +53,19 @@ public:
                 for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
                     this->input_array_type.fp[i] = input_array[i] - 128.0f;
                 }
+            }else if(app_name == "srad_2d"){
+                this->input_array_type.fp 
+                    = (float*) malloc(this->params.get_kernel_size() * 
+                                      this->params.get_kernel_size() * 
+                                      sizeof(float));
+#pragma omp parallel for
+                for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
+                    this->input_array_type.fp[i] = input_array[i] / 255.;
+                }
             }else{
                 this->input_array_type.fp  = input_array;
-                this->output_array_type.fp = output_array;
             }
+            this->output_array_type.fp = output_array;
         }else{
             // app_name not found in any table. 
         }
@@ -78,7 +85,6 @@ public:
                 CV_8U);
             mat2array(this->output_array_type.mat, output_array);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
-            // no need to convert from float* to float*, pass
             if(app_name == "dct8x8_2d"){
                 int StrideF = ((int)ceil(this->params.get_kernel_size()/16.0f))*16;
                 // ***** float shifting *****
@@ -89,6 +95,8 @@ public:
                     float tmp = this->output_array_type.fp[i] + 128.0f;
                     this->output_array_type.fp[i] = MIN(MAX(tmp, 0.), 255.);
                 }
+            }else{
+            // no need to convert from float* to float*, pass
             }
         }else{
             // app_name not found in any table. 

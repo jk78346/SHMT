@@ -159,7 +159,7 @@ void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size
 			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
 				error_percentage_cnt++;
 			}
-			cnt++;	
+			cnt++;
 		}
 	}
 
