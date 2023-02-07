@@ -52,7 +52,6 @@ RUN apt-get install -y python-scipy
 
 FROM BUILD2 AS FINAL 
 # setup LD_LIBRARY_PATH
-RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc && \
-    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/aarch64" >> ~/.bashrc
+RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8:/home/libedgetpu/out/direct/aarch64:/usr/local/cuda-10.2/lib64/" >> ~/.bashrc
 WORKDIR /home
 
