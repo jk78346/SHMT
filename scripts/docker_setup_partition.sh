@@ -17,22 +17,23 @@ SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
 echo "[${PROJ}] - building docker image from dockerfile..."
-docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
+nvidia-docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
 
-docker stop ${CONTAINER_NAME}
-docker rm ${CONTAINER_NAME}
+nvidia-docker stop ${CONTAINER_NAME}
+nvidia-docker rm ${CONTAINER_NAME}
 
 # generate container from image
 # mount dataset dir (ImageNet)/src  from host fs to container fs
 # get the container running
 echo "[${PROJ}] - build docker container..."
 # Use 'priviledged' flag to enable edgetpu access
-docker run -d \
+nvidia-docker run -d \
          -it \
          --privileged \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
          --runtime=nvidia \
+         -e NVIDIA_VISIBLE_DEVICES=all \
          --gpus all \
          --mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly \
          --mount type=bind,source=/etc/group,target=/etc/group,readonly \
