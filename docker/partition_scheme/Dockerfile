@@ -52,8 +52,7 @@ RUN apt-get install -y python-scipy
 
 FROM BUILD2 AS FINAL 
 # setup LD_LIBRARY_PATH
-RUN ln -s $(which python3) /usr/bin/python && \
-    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc && \
+RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8" >> ~/.bashrc && \
     echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/aarch64" >> ~/.bashrc
 WORKDIR /home
 

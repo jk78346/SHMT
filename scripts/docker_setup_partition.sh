@@ -32,6 +32,7 @@ docker run -d \
          --privileged \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
+         --runtime=nvidia \
          --gpus all \
          --mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly \
          --mount type=bind,source=/etc/group,target=/etc/group,readonly \

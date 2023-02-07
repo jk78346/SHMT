@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# specifically for docker env 
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-10.2/bin/nvcc)
+set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-10.2)
 
 set(PROJ_NAME "gpgtpu")
 project(${PROJ_NAME} VERSION 1.0 LANGUAGES CXX CUDA)
