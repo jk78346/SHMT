@@ -64,7 +64,7 @@ void PartitionRuntime::criticality_kernel(std::vector<std::pair<int, float>>& or
     for(auto p: order){
         this->criticality[p.first] = (cnt < threshold)?false:true;
         cnt++;
-        std::cout << __func__ << ": i: " << p.first << ", error rate: " << p.second << std::endl;
+        std::cout << __func__ << ": i: " << p.first << ", metric: " << p.second << std::endl;
     }
 
     // show criticality
@@ -186,7 +186,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                   << ", error %: " << this->sampling_qualities[i].error_percentage()
                   << ", ssim: " << this->sampling_qualities[i].ssim()
                   << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
-        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+        order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
     }
     sort(order.begin(), order.end(), sortByVal);
     this->criticality_kernel(order); 

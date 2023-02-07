@@ -205,6 +205,7 @@ void histogram_matching(void* output_array_baseline,
 }
 
 void dump_to_csv(std::string log_file_path,
+                 std::string input_img_name,
                  std::string app_name,
                  std::string baseline_mode,
                  std::string proposed_mode,
@@ -250,7 +251,9 @@ void dump_to_csv(std::string log_file_path,
                 proposed_time_breakdown->get_total_time_ms(iter)) << ",\n";
     
     // log quality metrics
-    myfile << "*****total quality*****,--,input stats,--,--,--,--,--,output quality,"
+    myfile << "*****total quality*****,--,input stats,"
+           << input_img_name
+           << ",--,--,--,--,output quality,"
            << "\n--,--,max,min,mean,sdev,entropy,--,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n"
            << "--,--," 
            << quality->in_max() << ","

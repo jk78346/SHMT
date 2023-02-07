@@ -13,7 +13,7 @@ public:
           bool tiling_mode = false,
           int iter=1,
           //std::string input_data_path="../data/lena_gray_2Kx2K.bmp"
-          std::string input_data_path="../data/super1.png"
+          std::string input_data_path="../data/super5.png"
           );
     
     void set_tiling_mode(bool);

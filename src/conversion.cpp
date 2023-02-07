@@ -90,7 +90,7 @@ void UnifyType::save_as_csv(const std::string file_name,
         for(unsigned int i = 0 ; i < rows ; i++){
             for(unsigned int j = 0 ; j < cols ; j++){
                 myfile << std::hex << std::setfill('0') << std::setw(2) 
-                       << (unsigned)tmp[i*cols+j] << " ";        
+                       << (unsigned)tmp[i*cols+j] << ",";        
             }
             myfile << std::endl;
         }    
@@ -98,7 +98,7 @@ void UnifyType::save_as_csv(const std::string file_name,
         float* tmp = reinterpret_cast<float*>(img);    
         for(unsigned int i = 0 ; i < rows ; i++){
             for(unsigned int j = 0 ; j < cols ; j++){
-                myfile << (uint8_t)tmp[i*cols+j] << " ";        
+                myfile << (uint8_t)tmp[i*cols+j] << ",";        
             }
             myfile << std::endl;
         }    
@@ -106,7 +106,7 @@ void UnifyType::save_as_csv(const std::string file_name,
         float* tmp = reinterpret_cast<float*>(img);    
         for(unsigned int i = 0 ; i < rows ; i++){
             for(unsigned int j = 0 ; j < cols ; j++){
-                myfile << tmp[i*cols+j] << " ";        
+                myfile << tmp[i*cols+j] << ",";        
             }
             myfile << std::endl;
         }    

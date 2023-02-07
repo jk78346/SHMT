@@ -38,6 +38,7 @@ void histogram_matching(void* output_array_baseline,
                         int blk_cols,
                         std::vector<int> dev_sequence);
 void dump_to_csv(std::string log_file_path,
+                 std::string input_img_name,
                  std::string app_name,
                  std::string baseline_mode,
                  std::string proposed_mode,

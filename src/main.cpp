@@ -129,8 +129,10 @@ int main(int argc, char* argv[]){
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
     std::string testing_img_path = 
-        (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
-    
+        (argc == 8)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
+    std::string testing_img_file_name = 
+        testing_img_path.substr(testing_img_path.find_last_of("/") + 1);
+
     Params baseline_params(app_name,
                            problem_size, 
                            block_size, 
@@ -252,36 +254,24 @@ int main(int argc, char* argv[]){
 
     // save as png images
     std::cout << "saving output results as images..." << std::endl;
-    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_baseline.png", 
+    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.png", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
                                     output_array_baseline);
-    unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+ts_str+"_proposed.png", 
+    unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.png", 
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,
                                     output_array_proposed);
     
     // save as pixel arrays
     std::cout << "saving output results in txt files..." << std::endl;
-    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_baseline.txt", 
+    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.csv", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
                                     output_array_baseline);
-    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_proposed.txt", 
+    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.csv", 
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,
-                                    output_array_proposed);
-    
-    // save as pixel arrays for the first 100x100 block
-    // FOr easy visual check
-    assert(proposed_params.problem_size >= 50);
-    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_50_baseline.txt", 
-                                    50,
-                                    50,
-                                    output_array_baseline);
-    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+ts_str+"_50_proposed.txt", 
-                                    50,
-                                    50,
                                     output_array_proposed);
     
     std::string log_file_path = "../log/" + path_prefix + "/"
@@ -328,6 +318,7 @@ int main(int argc, char* argv[]){
     std::cout << "dumping measurement results into file: " 
               << log_file_path << std::endl;
     dump_to_csv(log_file_path, 
+                testing_img_file_name,
                 proposed_params.app_name,
                 baseline_mode,
                 proposed_mode,
