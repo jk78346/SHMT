@@ -1,8 +1,70 @@
 #include <math.h>
 #include <string>
 #include <stdio.h>
+#include <cufft.h>
+#include <assert.h>
+#include <iostream>
+#include <cuda_runtime.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/cudaarithm.hpp> // addWeighted()
+#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
+#include <opencv2/highgui/highgui.hpp>
+#include "srad.h"
+#include "BmpUtil.h"
+#include "cuda_utils.h"
 #include "kernels_cpu.h"
 
+#define IN_RANGE(x, min, max)   ((x)>=(min) && (x)<=(max))
+#define CLAMP_RANGE(x, min, max) x = (x<(min)) ? min : ((x>(max)) ? max : x )
+//#define MIN(a, b) ((a)<=(b) ? (a) : (b))
+
+#ifdef RD_WG_SIZE_0_0                                                            
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
+#elif defined(RD_WG_SIZE_0)                                                      
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
+#elif defined(RD_WG_SIZE)                                                        
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
+#else
+        #define HOTSPOT_BLOCK_SIZE 16                                                            
+#endif
+
+/* some constants */
+#define chip_height 0.016
+#define chip_width 0.016
+#define t_chip 0.0005
+#define PRECISION 0.001
+#define SPEC_HEAT_SI 1.75e6
+#define K_SI 100
+#define FACTOR_CHIP 0.5
+#define MAX_PD 3.0e6
+
+#define BENCHMARK_SIZE 10
+#define DCT_BLOCK_SIZE 8
+#define DCT_BLOCK_SIZE2 64
+#define DCT_BLOCK_SIZE_LOG2 3
+
+float C_a = 1.387039845322148f; //!< a = (2^0.5) * cos(    pi / 16);  Used in forward and inverse DCT.
+float C_b = 1.306562964876377f; //!< b = (2^0.5) * cos(    pi /  8);  Used in forward and inverse DCT.
+float C_c = 1.175875602419359f; //!< c = (2^0.5) * cos(3 * pi / 16);  Used in forward and inverse DCT.
+float C_d = 0.785694958387102f; //!< d = (2^0.5) * cos(5 * pi / 16);  Used in forward and inverse DCT.
+float C_e = 0.541196100146197f; //!< e = (2^0.5) * cos(3 * pi /  8);  Used in forward and inverse DCT.
+float C_f = 0.275899379282943f; //!< f = (2^0.5) * cos(7 * pi / 16);  Used in forward and inverse DCT.
+float C_norm = 0.3535533905932737f; // 1 / (8^0.5)
+
+/**
+*  JPEG quality=0_of_12 quantization matrix
+*/
+float Q_array[DCT_BLOCK_SIZE2] =
+{
+    32.f,  33.f,  51.f,  81.f,  66.f,  39.f,  34.f,  17.f,
+    33.f,  36.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,
+    51.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,  12.f,
+    81.f,  47.f,  28.f,  23.f,  12.f,  12.f,  12.f,  12.f,
+    66.f,  28.f,  23.f,  12.f,  12.f,  12.f,  12.f,  12.f,
+    39.f,  23.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,
+    34.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,
+    17.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f
+};
 const float      RISKFREE = 0.02f;
 const float    VOLATILITY = 0.30f;
 
@@ -75,41 +137,6 @@ void CpuKernel::blackscholes_2d(Params params, float* input, float* output){
         );
     }
 }
-
-#include <math.h>
-#include <string>
-#include <stdio.h>
-#include "kernels_cpu.h"
-#include "BmpUtil.h"
-//#include "dct8x8_kernel2.cuh"
-
-#define BENCHMARK_SIZE 10
-#define DCT_BLOCK_SIZE 8
-#define DCT_BLOCK_SIZE2 64
-#define DCT_BLOCK_SIZE_LOG2 3
-
-float C_a = 1.387039845322148f; //!< a = (2^0.5) * cos(    pi / 16);  Used in forward and inverse DCT.
-float C_b = 1.306562964876377f; //!< b = (2^0.5) * cos(    pi /  8);  Used in forward and inverse DCT.
-float C_c = 1.175875602419359f; //!< c = (2^0.5) * cos(3 * pi / 16);  Used in forward and inverse DCT.
-float C_d = 0.785694958387102f; //!< d = (2^0.5) * cos(5 * pi / 16);  Used in forward and inverse DCT.
-float C_e = 0.541196100146197f; //!< e = (2^0.5) * cos(3 * pi /  8);  Used in forward and inverse DCT.
-float C_f = 0.275899379282943f; //!< f = (2^0.5) * cos(7 * pi / 16);  Used in forward and inverse DCT.
-float C_norm = 0.3535533905932737f; // 1 / (8^0.5)
-
-/**
-*  JPEG quality=0_of_12 quantization matrix
-*/
-float Q_array[DCT_BLOCK_SIZE2] =
-{
-    32.f,  33.f,  51.f,  81.f,  66.f,  39.f,  34.f,  17.f,
-    33.f,  36.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,
-    51.f,  48.f,  47.f,  28.f,  23.f,  12.f,  12.f,  12.f,
-    81.f,  47.f,  28.f,  23.f,  12.f,  12.f,  12.f,  12.f,
-    66.f,  28.f,  23.f,  12.f,  12.f,  12.f,  12.f,  12.f,
-    39.f,  23.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,
-    34.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,
-    17.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f,  12.f
-};
 
 void SubroutineDCTvector(float *FirstIn, int StepIn, float *FirstOut, int StepOut)
 {
@@ -235,7 +262,6 @@ void computeIDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, 
     }
 }
 
-
 /*
     CPU dct8x8. This implementation requires both dimensions of input/output 
     arrays to be multiply of 8. Incorrect otherwise.
@@ -261,16 +287,6 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
 //    Size.height = params.get_kernel_size();
 //    AddFloatPlane(128.0f, output, StrideF, Size);
 }
-
-#include <string>
-#include <stdio.h>
-#include "cuda_utils.h"
-#include "kernels_cpu.h"
-
-#include <cuda_runtime.h>
-#include <cufft.h>
-//#include <cuda_runtime_api.h>
-//#include <cuda.h>
 
 /*
     CPU convolveFFT2D, this kernel used a fixed 7x6 convolving kernel.
@@ -321,34 +337,6 @@ void CpuKernel::fft_2d(Params params, float* input, float* output){
             h_Result[y * dataW + x] = (float)sum;
         }
 }
-
-#include <assert.h>
-#include <iostream>
-#include "cuda_utils.h"
-
-#include "kernels_cpu.h"
-
-#include <cuda_runtime.h>
-
-#ifdef RD_WG_SIZE_0_0                                                            
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
-#elif defined(RD_WG_SIZE_0)                                                      
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
-#elif defined(RD_WG_SIZE)                                                        
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
-#else
-        #define HOTSPOT_BLOCK_SIZE 16                                                            
-#endif
-
-/* some constants */
-#define chip_height 0.016
-#define chip_width 0.016
-#define t_chip 0.0005
-#define PRECISION 0.001
-#define SPEC_HEAT_SI 1.75e6
-#define K_SI 100
-#define FACTOR_CHIP 0.5
-#define MAX_PD 3.0e6
 
 void single_iteration(float* result,
                       float* temp,
@@ -489,14 +477,6 @@ void CpuKernel::hotspot_2d(Params params, float* input, float* output){
     }
 }
 
-#define IN_RANGE(x, min, max)   ((x)>=(min) && (x)<=(max))
-#define CLAMP_RANGE(x, min, max) x = (x<(min)) ? min : ((x>(max)) ? max : x )
-//#define MIN(a, b) ((a)<=(b) ? (a) : (b))
- 
-#include "kernels_cpu.h"
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/core/core.hpp>
-
 void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
     int k = 4;
     std::vector<int> labels;
@@ -520,41 +500,20 @@ void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
     out_img.convertTo(out_img, CV_8U);
 }
 
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudafilters.hpp>
-#include "kernels_cpu.h"
-
 void CpuKernel::laplacian_2d(const Mat in_img, Mat& out_img){
     int ddepth = CV_32F;
     Laplacian(in_img, out_img, ddepth, 3/*kernel size*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
     convertScaleAbs(out_img, out_img);
 }
 
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
-#include "kernels_cpu.h"
-
 void CpuKernel::mean_2d(const Mat in_img, Mat& out_img){
     blur(in_img, out_img, Size(3, 3), Point(-1, -1), BORDER_DEFAULT);
 }
-
-#include <string>
-#include <stdio.h>
-#include "kernels_cpu.h"
 
 /* A dummy kernel for testing only. */
 void CpuKernel::minimum_2d(const Mat in_img, Mat& out_img){
     out_img = in_img;
 }
-
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudaarithm.hpp> // addWeighted()
-#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
-#include "kernels_cpu.h"
 
 void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
     Mat grad_x, grad_y;
@@ -569,9 +528,6 @@ void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
 
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
- 
-#include "srad.h"
-#include "kernels_cpu.h"
 
 void CpuKernel::srad_2d(Params params, float* input, float* output){
     int rows = params.get_kernel_size();

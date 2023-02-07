@@ -1,7 +1,53 @@
 #include <math.h>
 #include <string>
 #include <stdio.h>
+#include <cufft.h>
+#include <assert.h>
+#include <iostream>
+#include <cuda_runtime.h>
+#include <cuda_runtime.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/cudaarithm.hpp> // addWeighted()
+#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
+#include "srad.h"
+#include "BmpUtil.h"
+#include "cuda_utils.h"
 #include "kernels_gpu.h"
+#include "srad_kernel.cu"
+#include "kernels_fft.cuh"
+#include "kernels_fft_wrapper.cu"
+#include "dct8x8_kernel2.cuh"
+#include "dct8x8_kernel_quantization.cuh"
+
+#ifdef RD_WG_SIZE_0_0                                                            
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
+#elif defined(RD_WG_SIZE_0)                                                      
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
+#elif defined(RD_WG_SIZE)                                                        
+        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
+#else
+        #define HOTSPOT_BLOCK_SIZE 16                                                            
+#endif
+
+/* some constants */
+#define chip_height 0.016
+#define chip_width 0.016
+#define t_chip 0.0005
+#define PRECISION 0.001
+#define SPEC_HEAT_SI 1.75e6
+#define K_SI 100
+#define FACTOR_CHIP 0.5
+#define MAX_PD 3.0e6
+
+#define IN_RANGE(x, min, max)   ((x)>=(min) && (x)<=(max))
+#define CLAMP_RANGE(x, min, max) x = (x<(min)) ? min : ((x>(max)) ? max : x )
+//#define MIN(a, b) ((a)<=(b) ? (a) : (b))
+
+#define BENCHMARK_SIZE 10
+#define DCT_BLOCK_SIZE 8
+#define DCT_BLOCK_SIZE2 64
+#define DCT_BLOCK_SIZE_LOG2 3
 
 /*
     GPU blackscholes
@@ -9,37 +55,6 @@
 */
 void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void** out_img){
 }
-
-
-#include <math.h>
-#include <string>
-#include <stdio.h>
-#include "kernels_gpu.h"
-#include "BmpUtil.h"
-#include "dct8x8_kernel2.cuh"
-#include "dct8x8_kernel_quantization.cuh"
-
-#define BENCHMARK_SIZE 10
-#define DCT_BLOCK_SIZE 8
-#define DCT_BLOCK_SIZE2 64
-#define DCT_BLOCK_SIZE_LOG2 3
-
-//float C_a = 1.387039845322148f; //!< a = (2^0.5) * cos(    pi / 16);  Used in forward and inverse DCT.
-//float C_b = 1.306562964876377f; //!< b = (2^0.5) * cos(    pi /  8);  Used in forward and inverse DCT.
-//float C_c = 1.175875602419359f; //!< c = (2^0.5) * cos(3 * pi / 16);  Used in forward and inverse DCT.
-//float C_d = 0.785694958387102f; //!< d = (2^0.5) * cos(5 * pi / 16);  Used in forward and inverse DCT.
-//float C_e = 0.541196100146197f; //!< e = (2^0.5) * cos(3 * pi /  8);  Used in forward and inverse DCT.
-//float C_f = 0.275899379282943f; //!< f = (2^0.5) * cos(7 * pi / 16);  Used in forward and inverse DCT.
-//float C_norm = 0.3535533905932737f; // 1 / (8^0.5)
-
-/*Already implemented in utils/BmpUtil.cpp*/
-//float round_f(float num)
-//{
-//    float NumAbs = fabs(num);
-//    int NumAbsI = (int)(NumAbs + 0.5f);
-//    float sign = num > 0 ? 1.0f : -1.0f;
-//    return sign * NumAbsI;
-//}
 
 /*
     GPU dct8x8
@@ -117,20 +132,6 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     checkCudaErrors(cudaFree(dst));
     checkCudaErrors(cudaFree(src));
 }
-
-
-#include <string>
-#include <stdio.h>
-#include "cuda_utils.h"
-#include "kernels_gpu.h"
-#include "kernels_fft.cuh"
-#include "kernels_fft_wrapper.cu"
-
-#include <cuda_runtime.h>
-#include <cufft.h>
-//#include <cuda_runtime_api.h>
-//#include <cuda.h>
-
 
 void GpuKernel::fft_2d_input_conversion(){
     this->input_array_type.device_fp  = this->input_array_type.host_fp;
@@ -278,190 +279,6 @@ void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_
     checkCudaErrors(cudaFree(d_Data));
     checkCudaErrors(cudaFree(d_Kernel));
 }
-
-#include <assert.h>
-#include <iostream>
-#include "cuda_utils.h"
-#include "kernels_fft.cuh"
-
-////////////////////////////////////////////////////////////////////////////////
-/// Position convolution kernel center at (0, 0) in the image
-////////////////////////////////////////////////////////////////////////////////
-//extern "C" void padKernel(
-//    float *d_Dst,
-//    float *d_Src,
-//    int fftH,
-//    int fftW,
-//    int kernelH,
-//    int kernelW,
-//    int kernelY,
-//    int kernelX
-//)
-//{
-//    assert(d_Src != d_Dst);
-//    dim3 threads(32, 8);
-//    dim3 grid(iDivUp(kernelW, threads.x), iDivUp(kernelH, threads.y));
-// 
-//    SET_FLOAT_BASE;
-//#if (USE_TEXTURE)
-//    cudaTextureObject_t texFloat;
-//    cudaResourceDesc    texRes;
-//    memset(&texRes,0,sizeof(cudaResourceDesc));
-// 
-//    texRes.resType            = cudaResourceTypeLinear;
-//    texRes.res.linear.devPtr    = d_Src;
-//    texRes.res.linear.sizeInBytes = sizeof(float)*kernelH*kernelW;
-//    texRes.res.linear.desc = cudaCreateChannelDesc<float>();
-//
-//    cudaTextureDesc             texDescr;
-//    memset(&texDescr,0,sizeof(cudaTextureDesc));
-//    texDescr.normalizedCoords = false;
-//    texDescr.filterMode       = cudaFilterModeLinear;
-//    texDescr.addressMode[0] = cudaAddressModeWrap;
-//    texDescr.readMode = cudaReadModeElementType;
-//  
-//    cudaCreateTextureObject(&texFloat, &texRes, &texDescr, NULL);
-//#endif
-//  
-//    padKernel_kernel<<<grid, threads>>>(
-//        d_Dst,
-//        d_Src,
-//        fftH,
-//        fftW,
-//        kernelH,
-//        kernelW,
-//        kernelY,
-//        kernelX
-//#if (USE_TEXTURE)
-//        , texFloat
-//#endif
-//    );
-////    getLastCudaError("padKernel_kernel<<<>>> execution failed\n");
-// 
-//#if (USE_TEXTURE)
-//    cudaDestroyTextureObject(texFloat);
-//#endif
-//}
-
-////////////////////////////////////////////////////////////////////////////////
-// Prepare data for "pad to border" addressing mode
-////////////////////////////////////////////////////////////////////////////////
-//extern "C" void padDataClampToBorder(
-//    float *d_Dst,
-//    float *d_Src,
-//    int fftH,
-//    int fftW,
-//    int dataH,
-//    int dataW,
-//    int kernelW,
-//    int kernelH,
-//    int kernelY,
-//    int kernelX
-//)
-//{
-//    assert(d_Src != d_Dst);
-//    dim3 threads(32, 8);
-//    dim3 grid(iDivUp(fftW, threads.x), iDivUp(fftH, threads.y));
-//
-//#if (USE_TEXTURE)
-//    cudaTextureObject_t texFloat;
-//    cudaResourceDesc            texRes;
-//    memset(&texRes,0,sizeof(cudaResourceDesc));
-//
-//    texRes.resType            = cudaResourceTypeLinear;
-//    texRes.res.linear.devPtr    = d_Src;
-//    texRes.res.linear.sizeInBytes = sizeof(float)*dataH*dataW;
-//    texRes.res.linear.desc = cudaCreateChannelDesc<float>();
-// 
-//    cudaTextureDesc             texDescr;
-//    memset(&texDescr,0,sizeof(cudaTextureDesc));
-// 
-//    texDescr.normalizedCoords = false;
-//    texDescr.filterMode       = cudaFilterModeLinear;
-//    texDescr.addressMode[0] = cudaAddressModeWrap;
-//    texDescr.readMode = cudaReadModeElementType;
-// 
-//    cudaCreateTextureObject(&texFloat, &texRes, &texDescr, NULL);
-//#endif
-// 
-//    padDataClampToBorder_kernel<<<grid, threads>>>(
-//        d_Dst,
-//        d_Src,
-//        fftH,
-//        fftW,
-//        dataH,
-//        dataW,
-//        kernelH,
-//        kernelW,
-//        kernelY,
-//        kernelX
-//#if (USE_TEXTURE)
-//       ,texFloat
-//#endif
-//    );
-////    getLastCudaError("padDataClampToBorder_kernel<<<>>> execution fai    led\n");
-// 
-//#if (USE_TEXTURE)
-//    cudaDestroyTextureObject(texFloat);
-//#endif
-//}
-
-////////////////////////////////////////////////////////////////////////////////
-// Modulate Fourier image of padded data by Fourier image of padded kernel
-// and normalize by FFT size
-////////////////////////////////////////////////////////////////////////////////
-//extern "C" void modulateAndNormalize(
-//    fComplex *d_Dst,
-//    fComplex *d_Src,
-//    int fftH,
-//    int fftW,
-//    int padding
-//)
-//{
-//    assert(fftW % 2 == 0);
-//    const int dataSize = fftH * (fftW / 2 + padding);
-//
-//    modulateAndNormalize_kernel<<<iDivUp(dataSize, 256), 256>>>(
-//        d_Dst,
-//        d_Src,
-//        dataSize,
-//        1.0f / (float)(fftW *fftH)
-//    );
-////    getLastCudaError("modulateAndNormalize() execution failed\n");
-//}
-
-
-//void fft_2d_input_conversion_wrapper(){
-//    return;
-//}
-
-#include "kernels_gpu.h"
-
-#include <cuda_runtime.h>
-
-#ifdef RD_WG_SIZE_0_0                                                            
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
-#elif defined(RD_WG_SIZE_0)                                                      
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0                                          
-#elif defined(RD_WG_SIZE)                                                        
-        #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE                                            
-#else
-        #define HOTSPOT_BLOCK_SIZE 16                                                            
-#endif
-
-/* some constants */
-#define chip_height 0.016
-#define chip_width 0.016
-#define t_chip 0.0005
-#define PRECISION 0.001
-#define SPEC_HEAT_SI 1.75e6
-#define K_SI 100
-#define FACTOR_CHIP 0.5
-#define MAX_PD 3.0e6
-
-#define IN_RANGE(x, min, max)   ((x)>=(min) && (x)<=(max))
-#define CLAMP_RANGE(x, min, max) x = (x<(min)) ? min : ((x>(max)) ? max : x )
-//#define MIN(a, b) ((a)<=(b) ? (a) : (b))
  
 __global__ void calculate_temp(int iteration,  //number of iteration
                                float *power,   //power input
@@ -658,44 +475,25 @@ void GpuKernel::hotspot_2d(KernelParams& kernel_params, void** input, void** out
     cudaFree(MatrixTemp[0]);
     cudaFree(MatrixTemp[1]);
 }
-#include "kernels_gpu.h"
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/core/core.hpp>
 
 void GpuKernel::kmeans_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
 }
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudafilters.hpp>
-#include "kernels_gpu.h"
 
 void GpuKernel::laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     auto laplacian = cuda::createLaplacianFilter(in_img.type(), in_img.type(), 3/*kernel size*/, 1/*scale*/, BORDER_DEFAULT);
     laplacian->apply(in_img, out_img);
     cuda::abs(out_img, out_img);
 }
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
-#include "kernels_gpu.h"
 
 void GpuKernel::mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     auto median = cuda::createBoxFilter(in_img.type(), in_img.type(), Size(3, 3),     Point(-1, -1), BORDER_DEFAULT);
     median->apply(in_img, out_img);
 }
-#include <string>
-#include <stdio.h>
-#include "kernels_gpu.h"
 
 void GpuKernel::minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     out_img = in_img;
 }
-#include <string>
-#include <stdio.h>
-#include <opencv2/cudaarithm.hpp> // addWeighted()
-#include <opencv2/cudafilters.hpp> // create[XXX]Filter()
-#include "kernels_gpu.h"
+
 void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
 
     cuda::GpuMat grad_x, grad_y;
@@ -713,10 +511,6 @@ void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
   
     cuda::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
-#include "srad.h"
-#include "kernels_gpu.h"
-#include "srad_kernel.cu"
-
 
 void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output){
     int rows = kernel_params.params.get_kernel_size();
@@ -791,260 +585,4 @@ void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output
     cudaFree(S_C);
     free(c);
 }
-#include "srad.h"
-#include <stdio.h>
 
-//__global__ void
-//srad_cuda_1(
-//		  float *E_C, 
-//		  float *W_C, 
-//		  float *N_C, 
-//		  float *S_C,
-//		  float * J_cuda, 
-//		  float * C_cuda, 
-//		  int cols, 
-//		  int rows, 
-//		  float q0sqr
-//) 
-//{
-//
-//  //block id
-//  int bx = blockIdx.x;
-//  int by = blockIdx.y;
-//
-//  //thread id
-//  int tx = threadIdx.x;
-//  int ty = threadIdx.y;
-//  
-//  //indices
-//  int index   = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * ty + tx;
-//  int index_n = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + tx - cols;
-//  int index_s = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * BLOCK_SIZE + tx;
-//  int index_w = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * ty - 1;
-//  int index_e = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * ty + BLOCK_SIZE;
-//
-//  float n, w, e, s, jc, g2, l, num, den, qsqr, c;
-//
-//  //shared memory allocation
-//  __shared__ float temp[BLOCK_SIZE][BLOCK_SIZE];
-//  __shared__ float temp_result[BLOCK_SIZE][BLOCK_SIZE];
-//
-//  __shared__ float north[BLOCK_SIZE][BLOCK_SIZE];
-//  __shared__ float south[BLOCK_SIZE][BLOCK_SIZE];
-//  __shared__ float  east[BLOCK_SIZE][BLOCK_SIZE];
-//  __shared__ float  west[BLOCK_SIZE][BLOCK_SIZE];
-//
-//  //load data to shared memory
-//  north[ty][tx] = J_cuda[index_n]; 
-//  south[ty][tx] = J_cuda[index_s];
-//  if ( by == 0 ){
-//  north[ty][tx] = J_cuda[BLOCK_SIZE * bx + tx]; 
-//  }
-//  else if ( by == gridDim.y - 1 ){
-//  south[ty][tx] = J_cuda[cols * BLOCK_SIZE * (gridDim.y - 1) + BLOCK_SIZE * bx + cols * ( BLOCK_SIZE - 1 ) + tx];
-//  }
-//   __syncthreads();
-// 
-//  west[ty][tx] = J_cuda[index_w];
-//  east[ty][tx] = J_cuda[index_e];
-//
-//  if ( bx == 0 ){
-//  west[ty][tx] = J_cuda[cols * BLOCK_SIZE * by + cols * ty]; 
-//  }
-//  else if ( bx == gridDim.x - 1 ){
-//  east[ty][tx] = J_cuda[cols * BLOCK_SIZE * by + BLOCK_SIZE * ( gridDim.x - 1) + cols * ty + BLOCK_SIZE-1];
-//  }
-// 
-//  __syncthreads();
-//  
-// 
-//
-//  temp[ty][tx]      = J_cuda[index];
-//
-//  __syncthreads();
-//
-//   jc = temp[ty][tx];
-//
-//   if ( ty == 0 && tx == 0 ){ //nw
-//	n  = north[ty][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = west[ty][tx]  - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }	    
-//   else if ( ty == 0 && tx == BLOCK_SIZE-1 ){ //ne
-//	n  = north[ty][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = east[ty][tx] - jc;
-//   }
-//   else if ( ty == BLOCK_SIZE -1 && tx == BLOCK_SIZE - 1){ //se
-//	n  = temp[ty-1][tx] - jc;
-//    s  = south[ty][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = east[ty][tx]  - jc;
-//   }
-//   else if ( ty == BLOCK_SIZE -1 && tx == 0 ){//sw
-//	n  = temp[ty-1][tx] - jc;
-//    s  = south[ty][tx] - jc;
-//    w  = west[ty][tx]  - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }
-//
-//   else if ( ty == 0 ){ //n
-//	n  = north[ty][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }
-//   else if ( tx == BLOCK_SIZE -1 ){ //e
-//	n  = temp[ty-1][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = east[ty][tx] - jc;
-//   }
-//   else if ( ty == BLOCK_SIZE -1){ //s
-//	n  = temp[ty-1][tx] - jc;
-//    s  = south[ty][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }
-//   else if ( tx == 0 ){ //w
-//	n  = temp[ty-1][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = west[ty][tx] - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }
-//   else{  //the data elements which are not on the borders 
-//	n  = temp[ty-1][tx] - jc;
-//    s  = temp[ty+1][tx] - jc;
-//    w  = temp[ty][tx-1] - jc; 
-//    e  = temp[ty][tx+1] - jc;
-//   }
-//
-//
-//    g2 = ( n * n + s * s + w * w + e * e ) / (jc * jc);
-//
-//    l = ( n + s + w + e ) / jc;
-//
-//	num  = (0.5*g2) - ((1.0/16.0)*(l*l)) ;
-//	den  = 1 + (.25*l);
-//	qsqr = num/(den*den);
-//
-//	// diffusion coefficent (equ 33)
-//	den = (qsqr-q0sqr) / (q0sqr * (1+q0sqr)) ;
-//	c = 1.0 / (1.0+den) ;
-//
-//    // saturate diffusion coefficent
-//	if (c < 0){temp_result[ty][tx] = 0;}
-//	else if (c > 1) {temp_result[ty][tx] = 1;}
-//	else {temp_result[ty][tx] = c;}
-//
-//    __syncthreads();
-//
-//    C_cuda[index] = temp_result[ty][tx];
-//	E_C[index] = e;
-//	W_C[index] = w;
-//	S_C[index] = s;
-//	N_C[index] = n;
-//
-//}
-//
-//__global__ void
-//srad_cuda_2(
-//		  float *E_C, 
-//		  float *W_C, 
-//		  float *N_C, 
-//		  float *S_C,	
-//		  float * J_cuda, 
-//		  float * C_cuda, 
-//		  int cols, 
-//		  int rows, 
-//		  float lambda,
-//		  float q0sqr
-//) 
-//{
-//	//block id
-//	int bx = blockIdx.x;
-//    int by = blockIdx.y;
-//
-//	//thread id
-//    int tx = threadIdx.x;
-//    int ty = threadIdx.y;
-//
-//	//indices
-//    int index   = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * ty + tx;
-//	int index_s = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * BLOCK_SIZE + tx;
-//    int index_e = cols * BLOCK_SIZE * by + BLOCK_SIZE * bx + cols * ty + BLOCK_SIZE;
-//	float cc, cn, cs, ce, cw, d_sum;
-//
-//	//shared memory allocation
-//	__shared__ float south_c[BLOCK_SIZE][BLOCK_SIZE];
-//    __shared__ float  east_c[BLOCK_SIZE][BLOCK_SIZE];
-//
-//    __shared__ float c_cuda_temp[BLOCK_SIZE][BLOCK_SIZE];
-//    __shared__ float c_cuda_result[BLOCK_SIZE][BLOCK_SIZE];
-//    __shared__ float temp[BLOCK_SIZE][BLOCK_SIZE];
-//
-//    //load data to shared memory
-//	temp[ty][tx]      = J_cuda[index];
-//
-//    __syncthreads();
-//	 
-//	south_c[ty][tx] = C_cuda[index_s];
-//
-//	if ( by == gridDim.y - 1 ){
-//	south_c[ty][tx] = C_cuda[cols * BLOCK_SIZE * (gridDim.y - 1) + BLOCK_SIZE * bx + cols * ( BLOCK_SIZE - 1 ) + tx];
-//	}
-//	__syncthreads();
-//	 
-//	 
-//	east_c[ty][tx] = C_cuda[index_e];
-//	
-//	if ( bx == gridDim.x - 1 ){
-//	east_c[ty][tx] = C_cuda[cols * BLOCK_SIZE * by + BLOCK_SIZE * ( gridDim.x - 1) + cols * ty + BLOCK_SIZE-1];
-//	}
-//	 
-//    __syncthreads();
-//  
-//    c_cuda_temp[ty][tx]      = C_cuda[index];
-//
-//    __syncthreads();
-//
-//	cc = c_cuda_temp[ty][tx];
-//
-//   if ( ty == BLOCK_SIZE -1 && tx == BLOCK_SIZE - 1){ //se
-//	cn  = cc;
-//    cs  = south_c[ty][tx];
-//    cw  = cc; 
-//    ce  = east_c[ty][tx];
-//   } 
-//   else if ( tx == BLOCK_SIZE -1 ){ //e
-//	cn  = cc;
-//    cs  = c_cuda_temp[ty+1][tx];
-//    cw  = cc; 
-//    ce  = east_c[ty][tx];
-//   }
-//   else if ( ty == BLOCK_SIZE -1){ //s
-//	cn  = cc;
-//    cs  = south_c[ty][tx];
-//    cw  = cc; 
-//    ce  = c_cuda_temp[ty][tx+1];
-//   }
-//   else{ //the data elements which are not on the borders 
-//	cn  = cc;
-//    cs  = c_cuda_temp[ty+1][tx];
-//    cw  = cc; 
-//    ce  = c_cuda_temp[ty][tx+1];
-//   }
-//
-//   // divergence (equ 58)
-//   d_sum = cn * N_C[index] + cs * S_C[index] + cw * W_C[index] + ce * E_C[index];
-//
-//   // image update (equ 61)
-//   c_cuda_result[ty][tx] = temp[ty][tx] + 0.25 * lambda * d_sum;
-//
-//   __syncthreads();
-//              
-//   J_cuda[index] = c_cuda_result[ty][tx];
-//    
-//}
