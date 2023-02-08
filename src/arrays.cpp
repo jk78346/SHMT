@@ -256,7 +256,9 @@ void array_partition_initialization(Params params,
 
                 // partition initialization
                 if(!skip_init){
-                    Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                    int top_left_w = j*params.block_size;
+                    int top_left_h = i*params.block_size;
+                    Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
                     input_mat(roi).copyTo(tmp); 
                     mat2array(tmp, (uint8_t*)((input_pars[idx])));
                 }
@@ -281,7 +283,9 @@ void array_partition_initialization(Params params,
                 
                 // partition initialization
                 if(!skip_init){
-                    Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                    int top_left_w = j*params.block_size;
+                    int top_left_h = i*params.block_size;
+                    Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
                     input_mat(roi).copyTo(tmp); 
                     mat2array(tmp, (float*)((input_pars[idx])));
                 }
@@ -307,7 +311,9 @@ void output_array_partition_gathering(Params params,
             for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
                 unsigned int idx = i * params.get_col_cnt() + j;
                 array2mat(tmp, (uint8_t*)((output_pars[idx])), params.block_size, params.block_size);
-                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                int top_left_w = j*params.block_size;
+                int top_left_h = i*params.block_size;
+                Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
                 tmp.copyTo(output_mat(roi));
             }
         }
@@ -319,7 +325,9 @@ void output_array_partition_gathering(Params params,
             for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
                 unsigned int idx = i * params.get_col_cnt() + j;
                 array2mat(tmp, (float*)((output_pars[idx])), params.block_size, params.block_size);
-                Rect roi(i*params.block_size, j*params.block_size, params.block_size, params.block_size); 
+                int top_left_w = j*params.block_size;
+                int top_left_h = i*params.block_size;
+                Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
                 tmp.copyTo(output_mat(roi));
             }
         }
@@ -348,7 +356,9 @@ void sampling_kernel(Params params, Mat& in, Mat& out, int downsample_block_size
             i_start = int(rand() % (in.rows - downsample_block_size));
             j_start = int(rand() % (in.rows - downsample_block_size));
         }
-        Rect roi(i_start, j_start, downsample_block_size, downsample_block_size); 
+        int top_left_w = j_start;
+        int top_left_h = i_start;
+        Rect roi(top_left_w, top_left_h, downsample_block_size, downsample_block_size); 
         in(roi).copyTo(out);
     }
 }
