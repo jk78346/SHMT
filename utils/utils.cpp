@@ -182,7 +182,9 @@ void histogram_matching(void* output_array_baseline,
             //proposed_pars[idx] = (float*) calloc(block_total_size, sizeof(float));
  
             // partition initialization
-            Rect roi(i*blk_rows, j*blk_cols, blk_rows, blk_cols);
+            int top_left_w = j*blk_cols;
+            int top_left_h = i*blk_rows;
+            Rect roi(top_left_w, top_left_h, blk_rows, blk_cols);
             baseline_mat(roi).copyTo(baseline_tmp);
             proposed_mat(roi).copyTo(proposed_tmp);
 
