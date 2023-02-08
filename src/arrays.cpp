@@ -22,9 +22,12 @@ void init_fft(unsigned int input_total_size, void** input_array){
     }
 }
 
-void init_dct8x8(int rows, int cols, void** input_array){
+void init_dct8x8(Params params, int rows, int cols, void** input_array){
     /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu */
-    char SampleImageFname[] = "../data/barbara.bmp";
+    char SampleImageFname[256];
+    assert(params.input_data_path.length() < 256);
+    strcpy(SampleImageFname, params.input_data_path.c_str());
+    //= "../data/barbara.bmp";
     char *pSampleImageFpath = sdkFindFilePath(SampleImageFname, NULL/*argv[0]*/);
     if (pSampleImageFpath == NULL)
     {
@@ -210,7 +213,7 @@ void data_initialization(Params params,
             *input_array = (float*) malloc(input_total_size * sizeof(float));
             init_fft(input_total_size, input_array);
         }else if(params.app_name == "dct8x8_2d"){
-            init_dct8x8(rows, cols, input_array);
+            init_dct8x8(params, rows, cols, input_array);
         }else if(params.app_name == "hotspot_2d"){
             *input_array = (float*) malloc(2 * input_total_size * sizeof(float));   
             init_hotspot(rows, cols, input_array);

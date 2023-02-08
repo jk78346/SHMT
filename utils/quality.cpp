@@ -103,7 +103,7 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
 			square_sum += pow(x[i*this->ldn+j] - stats.mean, 2);
         }
     }
-	stats.sdev = pow((float)(sum / (double)(elements)), 0.5);
+	stats.sdev = pow((float)(square_sum / (double)(elements)), 0.5);
 
     // entropy(2)
     while(it != counts.end()){

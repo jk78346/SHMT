@@ -186,7 +186,10 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                   << ", error %: " << this->sampling_qualities[i].error_percentage()
                   << ", ssim: " << this->sampling_qualities[i].ssim()
                   << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
-        order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
+        // objective or criticality ordering
+        //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
+        //order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+        order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
     }
     sort(order.begin(), order.end(), sortByVal);
     this->criticality_kernel(order); 
@@ -198,11 +201,28 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     return sampling_overhead;
 }
 
+double sdev(std::vector<float> v){
+    double sum = 0.;
+    double square_sum = 0.;
+    auto const count = static_cast<float>(v.size());
+    double mean;
+    for(auto p: v){
+        sum += p;
+    }
+    mean = sum / count;
+    for(auto p: v){
+        square_sum += pow(p - mean, 2);
+    }
+    return pow((double)(square_sum / (double)(count)), 0.5);
+}
+
 double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int num_pixels){
     timing s = clk::now();
     std::vector<float> samples_max(this->params.get_block_cnt(), FLT_MIN);
     std::vector<float> samples_min(this->params.get_block_cnt(), FLT_MAX);
     std::vector<float> samples_range(this->params.get_block_cnt(), 0.);
+    std::vector<float> samples_sdev(this->params.get_block_cnt(), 0.);
+    std::vector<std::vector<float>> samples_pixels(this->params.get_block_cnt());
     int total_size = this->params.get_kernel_size() * this->params.get_kernel_size();
     unsigned int offset;
     float tmp;
@@ -228,17 +248,23 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
                 float* ptr = reinterpret_cast<float*>(this->input_pars[i]);
                 tmp = ptr[offset];
             }
+            samples_pixels[i].push_back(tmp);
             samples_max[i] = (tmp > samples_max[i])?tmp:samples_max[i];
             samples_min[i] = (tmp < samples_min[i])?tmp:samples_min[i];
         }
     }
-   
+    
+    for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
+        samples_sdev[i] = sdev(samples_pixels[i]);
+    }
+
     std::vector<std::pair<int, float>> order;
     for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
         assert(samples_max[i] >= samples_min[i]);
         samples_range[i] = samples_max[i] - samples_min[i];
         // smaller the range, more critical (?)
-        order.push_back(std::make_pair(i, -1*samples_range[i]));
+        //order.push_back(std::make_pair(i, -1*samples_range[i]));
+        order.push_back(std::make_pair(i, samples_sdev[i]));
     }
     sort(order.begin(), order.end(), sortByVal);
     
