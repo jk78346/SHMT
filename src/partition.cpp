@@ -189,6 +189,11 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
         // objective or criticality ordering
         //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
         //order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+        
+        /* good for sobel_2d */
+        //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
+        
+        /* testing for laplacian_2d */
         order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
     }
     sort(order.begin(), order.end(), sortByVal);

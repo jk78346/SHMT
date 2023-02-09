@@ -27,7 +27,7 @@ void init_dct8x8(Params params, int rows, int cols, void** input_array){
     char SampleImageFname[256];
     assert(params.input_data_path.length() < 256);
     strcpy(SampleImageFname, params.input_data_path.c_str());
-    //= "../data/barbara.bmp";
+    //char SampleImageFname[] = "../data/barbara.bmp";
     char *pSampleImageFpath = sdkFindFilePath(SampleImageFname, NULL/*argv[0]*/);
     if (pSampleImageFpath == NULL)
     {
@@ -264,6 +264,44 @@ void array_partition_initialization(Params params,
                     Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
                     input_mat(roi).copyTo(tmp); 
                     mat2array(tmp, (uint8_t*)((input_pars[idx])));
+                }
+            }
+        }
+    }else if(params.app_name == "hotspot_2d"){
+        // need special partition way to deal with 2 input arrays
+        Mat input_mat_temp, input_mat_power;
+        Mat tmp_temp(params.block_size, params.block_size, CV_32F);
+        Mat tmp_power(params.block_size, params.block_size, CV_32F);
+        if(!skip_init){
+            array2mat(input_mat_temp,
+                      (float*)*input,
+                      params.problem_size,
+                      params.problem_size);
+            array2mat(input_mat_power,
+                      &(((float*)(*input))[params.problem_size * params.problem_size]),
+                      params.problem_size,
+                      params.problem_size);
+        }
+        unsigned int block_total_size = params.block_size * params.block_size;
+ 
+        // vector of partitions allocation
+        input_pars.resize(params.get_block_cnt());
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+ 
+                // partition allocation
+                input_pars[idx] = (float*) calloc(2 * block_total_size, sizeof(float));
+ 
+                // partition initialization
+                if(!skip_init){
+                    int top_left_w = j*params.block_size;
+                    int top_left_h = i*params.block_size;
+                    Rect roi(top_left_w, top_left_h, params.block_size, params.block_size);
+                    input_mat_temp(roi).copyTo(tmp_temp);
+                    input_mat_power(roi).copyTo(tmp_power);
+                    mat2array(tmp_temp, (float*)((input_pars[idx])));
+                    mat2array(tmp_power, &(((float*)(input_pars[idx]))[block_total_size]));
                 }
             }
         }
