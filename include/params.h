@@ -40,6 +40,12 @@ public:
         "laplacian_2d",
         "kmeans_2d"
     };
+    
+    /* Return maximun percentage of tiling blocks can be protected as critical
+        before degrading latency.
+     */
+    void set_criticality_ratio(float val){ this->criticality_ratio = val; };
+    float get_criticality_ratio(/*std::string app_name, int block_size*/){ return this->criticality_ratio; };
 
 private:        
     unsigned int row_cnt = 0;
@@ -47,5 +53,7 @@ private:
     unsigned int block_cnt = 0;
     float downsampling_rate = 0.25;
     SamplingMode sampling_mode = center_crop;
+    
+    float criticality_ratio = 1./3.;
 };
 #endif

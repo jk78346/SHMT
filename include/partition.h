@@ -75,7 +75,7 @@ private:
     std::string get_partition_mode();
 
     // The main criticality determine function based on sampling qualities.
-    void criticality_kernel(std::vector<std::pair<int, float>>& order);
+    void criticality_kernel(std::vector<std::pair<int, float>>& order, float criticality_ratio);
 
     /* To determine if each type of devices is static or dynamic
         by setting the the following arrays:

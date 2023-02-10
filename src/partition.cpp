@@ -52,23 +52,25 @@ bool sortByVal(const std::pair<int , float> &a, const std::pair<int, float> &b){
  This is the main function to determine criticality of each tiling block based on
  sampling quality.
  */
-void PartitionRuntime::criticality_kernel(std::vector<std::pair<int, float>>& order){
+void PartitionRuntime::criticality_kernel(std::vector<std::pair<int, float>>& order, float criticality_ratio){
 
     /*
         Current design: mark (no more than) one third of the worst blocks 
             (error_rate worst) to be critical.
         TODO: design the criticality decision 
      */
-    int threshold = ceil(order.size() * (2./3.));
+    std::cout << __func__ << ": criticality ratio: " << criticality_ratio;
+    int threshold = ceil(order.size() * (1. - criticality_ratio));
     int cnt = 0;
+    std::cout << __func__ << std::endl;
     for(auto p: order){
         this->criticality[p.first] = (cnt < threshold)?false:true;
         cnt++;
-        std::cout << __func__ << ": i: " << p.first << ", metric: " << p.second << std::endl;
+        std::cout << p.first << "," << p.second << std::endl;
     }
 
     // show criticality
-    std::cout << __func__ << ": criticality: ";
+    std::cout << __func__ << ": criticality series: ";
     for(auto c: this->criticality){
         std::cout << c << " ";
     }
@@ -197,7 +199,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
         order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
     }
     sort(order.begin(), order.end(), sortByVal);
-    this->criticality_kernel(order); 
+    this->criticality_kernel(order, params.get_criticality_ratio()); 
 
     // If a block is critical, then it must be static and assigned to GPU.
     // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
@@ -268,12 +270,12 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
         assert(samples_max[i] >= samples_min[i]);
         samples_range[i] = samples_max[i] - samples_min[i];
         // smaller the range, more critical (?)
-        //order.push_back(std::make_pair(i, -1*samples_range[i]));
+        //order.push_back(std::make_pair(i, samples_range[i]));
         order.push_back(std::make_pair(i, samples_sdev[i]));
     }
     sort(order.begin(), order.end(), sortByVal);
     
-    this->criticality_kernel(order); 
+    this->criticality_kernel(order, this->params.get_criticality_ratio()); 
 
     timing e = clk::now();
     return get_time_ms(e, s); 

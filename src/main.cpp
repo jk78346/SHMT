@@ -128,6 +128,7 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
+    float criticality_ratio = 1./3.; //atof(argv[idx++]);
     std::string testing_img_path = 
         (argc == 8)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
     std::string testing_img_file_name = 
@@ -145,6 +146,9 @@ int main(int argc, char* argv[]){
                            false, // default no tiling mode. can be reset anytime later
                            iter,
                            testing_img_path);
+
+    baseline_params.set_criticality_ratio(criticality_ratio);
+    proposed_params.set_criticality_ratio(criticality_ratio);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
