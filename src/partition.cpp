@@ -4,6 +4,7 @@
 #include "quality.h"
 #include "partition.h"
 #include "conversion.h"
+#include <opencv2/saliency/saliencySpecializedClasses.hpp>
 
 std::atomic<int> doneProducers(0);
 std::atomic<int> doneConsumers(0);
@@ -281,6 +282,61 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
     return get_time_ms(e, s); 
 }
 
+double PartitionRuntime::set_criticality_by_saliency(Params params, void** array){
+    timing s = clk::now();
+    cv::Mat mat;
+    cv::Mat saliency_map, binary_map;
+    auto saliency = cv::saliency::StaticSaliencySpectralResidual();
+        
+    if(std::find(this->params.uint8_t_type_app.begin(),
+                 this->params.uint8_t_type_app.end(),
+                 this->params.app_name) !=
+       this->params.uint8_t_type_app.end()){
+        array2mat(mat, (uint8_t*)*array, params.problem_size, params.problem_size);
+    }else{
+        array2mat(mat, (float*)*array, params.problem_size, params.problem_size);
+    }  
+    assert(saliency.computeSaliency(mat, saliency_map));
+    assert(saliency.computeBinaryMap(saliency_map, binary_map));
+
+    unsigned long long int total_saliency_cnt = 0;
+    unsigned long long int total_pixel_cnt = 0;
+    std::vector<std::pair<int, float>> saliency_ratio;
+
+    for(unsigned int i_idx = 0 ; i_idx < params.get_row_cnt() ; i_idx++){
+        for(unsigned int j_idx = 0 ; j_idx < params.get_col_cnt() ; j_idx++){
+            unsigned long long int total_cnt = 0;
+            unsigned long long int saliency_cnt = 0;
+            unsigned int i_start = i_idx * params.get_kernel_size();
+            unsigned int j_start = j_idx * params.get_kernel_size();
+            int idx = i_idx*params.get_col_cnt()+j_idx;
+            for(unsigned int i = i_start ; i < i_start+params.get_kernel_size() ; i++){
+                for(unsigned int j = j_start ; j < j_start+params.get_kernel_size() ; j++){
+                    saliency_cnt += ((uint8_t)binary_map.at<uint8_t>(i, j))?1:0;
+                    total_cnt++;
+                }
+            }
+            total_saliency_cnt += saliency_cnt;
+            total_pixel_cnt += total_cnt;
+//            std::cout << __func__ << ": " << i_idx << ", " << j_idx 
+//                      << ": saliency_cnt: " << saliency_cnt 
+//                      << ", total: " << total_cnt 
+//                      << ", rate: " 
+//                      << (float)saliency_cnt/total_cnt << std::endl;
+            saliency_ratio.push_back(std::make_pair(idx, (float)saliency_cnt/total_cnt));
+        }
+    }
+    std::cout << __func__ 
+              << ": total saliency rate: " 
+              << (float)total_saliency_cnt / total_pixel_cnt << std::endl;
+    
+    sort(saliency_ratio.begin(), saliency_ratio.end(), sortByVal);
+    this->criticality_kernel(saliency_ratio, params.get_criticality_ratio()); 
+
+    timing e = clk::now();
+    return get_time_ms(e, s);
+}
+
 double PartitionRuntime::prepare_partitions(){
     double ret = 0.0;
     // allocate input partitions and initialization
@@ -302,9 +358,9 @@ double PartitionRuntime::prepare_partitions(){
         
         // involves actual run types
         if(p_mode == "c-oracle"){ // full scale run test
-            SamplingMode mode = center_crop;
-            this->params.set_downsampling_rate(1.);
-            ret += this->run_sampling(mode);
+            // To determine critical or not on each tiling block by saliency detection
+            this->params.set_criticality_ratio(1./3.);
+            ret += this->set_criticality_by_saliency(this->params, &(this->input));
         }else if(p_mode == "c"){ // use default downsampling rate
             SamplingMode mode = center_crop;
             ret += this->run_sampling(mode);

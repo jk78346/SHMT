@@ -47,7 +47,17 @@ private:
         This is for acutal run types of sampling
      */
     double run_sampling(SamplingMode mode);
-    
+
+    /*
+       Get saliency binary map of input image and assign criticality on each tiling block 
+        threshold: 
+            A theshold to determine if a tiling block is critical or not by the ratio: 
+                    (# of saliency pixels) / (# of total pixels)
+        criticality_ratio:
+            The upper bound ratio of (# of critical tiling blocks) / (# of tiling blocks).
+     */
+    double set_criticality_by_saliency(Params params, void** array);
+
     /* The sampling pre-processing to determine criticality on tiling blocks. 
         Return is timing overhead in ms.
         This is for input stats probing types of sampling
