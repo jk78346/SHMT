@@ -151,6 +151,7 @@ void GpuKernel::fft_2d_output_conversion(){
     array2mat(result, this->output_array_type.device_fp, fftH, fftW);
     Mat cropped = result(Range(0, dataH), Range(0, dataW)); 
     mat2array(cropped, this->output_array_type.host_fp);
+    free(this->output_array_type.device_fp);
 }    
 
 /*
