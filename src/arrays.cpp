@@ -162,6 +162,42 @@ void init_hotspot(int rows, int cols, void** input_array){
     std::cout << __func__ << ": power sum: " << power_sum << std::endl;
 }
 
+float RandFloat(float low, float high)
+{
+    float t = (float)rand() / (float)RAND_MAX;
+    return (1.0f - t) * low + t * high;
+}
+
+void init_blackscholes(Params params, 
+                       int rows, 
+                       int cols, 
+                       void** input_array, 
+                       void** output_array_baseline, 
+                       void** output_array_proposed){
+    int OPT_N = rows * cols;
+    printf("...generating input data in CPU mem.\n");
+    srand(5347);
+    float* h_StockPrice = (float*)*input_array;
+    float* h_OptionStrike = &((float*)*input_array)[OPT_N];
+    float* h_OptionYears = &((float*)*input_array)[2 * OPT_N];
+
+    float* h_CallResult_baseline = (float*)*output_array_baseline;
+    float* h_CallResult_proposed = (float*)*output_array_proposed;
+    float* h_PutResult_baseline = &((float*)*output_array_baseline)[OPT_N];
+    float* h_PutResult_proposed = &((float*)*output_array_proposed)[OPT_N];
+
+    for (int i = 0; i < OPT_N; i++)
+    {
+        h_CallResult_baseline[i] = 0.0f;
+        h_PutResult_baseline[i]  = -1.0f;
+        h_CallResult_proposed[i] = 0.0f;
+        h_PutResult_proposed[i]  = -1.0f;
+        h_StockPrice[i]    = RandFloat(5.0f, 30.0f);
+        h_OptionStrike[i]  = RandFloat(1.0f, 100.0f);
+        h_OptionYears[i]   = RandFloat(0.25f, 10.0f);
+    }
+}
+
 void data_initialization(Params params,
                          void** input_array,
                          void** output_array_baseline,
@@ -207,18 +243,29 @@ void data_initialization(Params params,
         //    }
         //}
     }else{ // others are default as float type
-        *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
-        *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
         if(params.app_name == "fft_2d"){
             *input_array = (float*) malloc(input_total_size * sizeof(float));
+            *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
             init_fft(input_total_size, input_array);
         }else if(params.app_name == "dct8x8_2d"){
+            *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
             init_dct8x8(params, rows, cols, input_array);
         }else if(params.app_name == "hotspot_2d"){
+            *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
             *input_array = (float*) malloc(2 * input_total_size * sizeof(float));   
             init_hotspot(rows, cols, input_array);
+        }else if(params.app_name == "blackscholes_2d"){
+            *input_array = (float*) malloc(3 * input_total_size * sizeof(float));
+            *output_array_baseline = (float*) malloc(2 * output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(2 * output_total_size * sizeof(float));   
+            init_blackscholes(params, rows, cols, input_array, output_array_baseline, output_array_proposed);
         }else{
             *input_array = (float*) malloc(input_total_size * sizeof(float));
+            *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
             Mat in_img;
             read_img(params.input_data_path,
                     rows,
@@ -305,6 +352,51 @@ void array_partition_initialization(Params params,
                 }
             }
         }
+    }else if(params.app_name == "blackscholes_2d"){
+        // need special partition way to deal with 3 input arrays
+        Mat input_mat_StockPrice, input_mat_OptionStrike, input_mat_OptionYears;
+        Mat tmp_StockPrice(params.block_size, params.block_size, CV_32F);
+        Mat tmp_OptionStrike(params.block_size, params.block_size, CV_32F);
+        Mat tmp_OptionYears(params.block_size, params.block_size, CV_32F);
+        if(!skip_init){
+            array2mat(input_mat_StockPrice,
+                      (float*)*input,
+                      params.problem_size,
+                      params.problem_size);
+            array2mat(input_mat_OptionStrike,
+                      &(((float*)(*input))[params.problem_size * params.problem_size]),
+                      params.problem_size,
+                      params.problem_size);
+            array2mat(input_mat_OptionYears,
+                      &(((float*)(*input))[2 * params.problem_size * params.problem_size]),
+                      params.problem_size,
+                      params.problem_size);
+        }
+        unsigned int block_total_size = params.block_size * params.block_size;
+ 
+        // vector of partitions allocation
+        input_pars.resize(params.get_block_cnt());
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+ 
+                // partition allocation
+                input_pars[idx] = (float*) calloc(3 * block_total_size, sizeof(float));
+ 
+                // partition initialization
+                if(!skip_init){
+                    int top_left_w = j*params.block_size;
+                    int top_left_h = i*params.block_size;
+                    Rect roi(top_left_w, top_left_h, params.block_size, params.block_size);
+                    input_mat_StockPrice(roi).copyTo(tmp_StockPrice);
+                    input_mat_OptionStrike(roi).copyTo(tmp_OptionStrike);
+                    input_mat_OptionYears(roi).copyTo(tmp_OptionYears);
+                    mat2array(tmp_StockPrice, (float*)((input_pars[idx])));
+                    mat2array(tmp_OptionStrike, &(((float*)(input_pars[idx]))[block_total_size]));
+                    mat2array(tmp_OptionYears, &(((float*)(input_pars[idx]))[2 * block_total_size]));
+                }
+            }
+        }
     }else{
         // prepare for utilizing opencv roi() to do partitioning.
         Mat input_mat, tmp(params.block_size, params.block_size, CV_32F);
@@ -359,6 +451,37 @@ void output_array_partition_gathering(Params params,
             }
         }
         mat2array(output_mat, (uint8_t*)*output);
+    }else if(params.app_name == "blackscholes_2d"){
+        Mat output_mat(2 * params.problem_size, params.problem_size, CV_32F), tmp_call, tmp_put;
+    
+        int total_block_size = params.block_size * params.block_size;
+
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+                array2mat(tmp_call, 
+                          (float*)(output_pars[idx]), 
+                          params.block_size, 
+                          params.block_size);
+                array2mat(tmp_put,  
+                          &((float*)(output_pars[idx]))[total_block_size], 
+                          params.block_size, 
+                          params.block_size);
+                int top_left_w = j*params.block_size;
+                int top_left_h = i*params.block_size;
+                Rect roi_call(top_left_w, 
+                              top_left_h, 
+                              params.block_size, 
+                              params.block_size); 
+                tmp_call.copyTo(output_mat(roi_call));
+                Rect roi_put(top_left_w, 
+                             top_left_h + params.problem_size, 
+                             params.block_size, 
+                             params.block_size); 
+                tmp_put.copyTo(output_mat(roi_put));
+            }
+        }
+        mat2array(output_mat, (float*)*output);
     }else{
         Mat output_mat(params.problem_size, params.problem_size, CV_32F), tmp;
     
