@@ -217,7 +217,9 @@ void dump_to_csv(std::string log_file_path,
                  Quality* quality,
                  TimeBreakDown* baseline_time_breakdown,
                  TimeBreakDown* proposed_time_breakdown,
-                 std::vector<int> proposed_device_sequence){
+                 std::vector<int> proposed_device_sequence,
+                 float saliency_ratio,
+                 float protected_saliency_ratio){
     std::fstream myfile;
     // simply append baseline and proposed rows
     myfile.open(log_file_path.c_str(), std::ios_base::app);
@@ -270,8 +272,13 @@ void dump_to_csv(std::string log_file_path,
            << quality->ssim() << ","
            << quality->pnsr() << ",\n";
 
+    myfile << "***** critical measurement*****,--,critical area ratio, protected critical area ratio,\n"
+           << "--,--,"
+           << saliency_ratio * 100. << "\%,"
+           << protected_saliency_ratio * 100. << "\%,\n";
+
     bool is_tiling = (problem_size > block_size)?true:false;
-    if(is_tiling){
+    if(0 && is_tiling){
         myfile << "*****tiling quality*****,(proposed mode's partition),input stats,--,--,--,--,--,output tiling quality,\n"
                << "i,j,max,min,mean,sdev,entropy,device type,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
         int idx = 0;

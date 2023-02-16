@@ -39,6 +39,8 @@ public:
     double transform_output();
     void show_device_sequence();
     std::vector<DeviceType> get_device_sequence();
+    std::vector<bool> get_criticality(){ return this->criticality; };
+    
     unsigned int dev_type_cnt = 3; // cpu, gpu and tpu
 
 private:
@@ -85,7 +87,9 @@ private:
     std::string get_partition_mode();
 
     // The main criticality determine function based on sampling qualities.
-    void criticality_kernel(std::vector<std::pair<int, float>>& order, float criticality_ratio);
+    void criticality_kernel(Params params, 
+                            std::vector<std::pair<int, float>>& order, 
+                            float criticality_ratio);
 
     /* To determine if each type of devices is static or dynamic
         by setting the the following arrays:

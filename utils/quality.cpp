@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <opencv2/saliency/saliencySpecializedClasses.hpp>
 
 Quality::Quality(int m, 
                  int n, 
@@ -17,7 +18,9 @@ Quality::Quality(int m,
                  int col_blk,
                  float* input_mat,
                  float* x,
-                 float* y){
+                 float* y,
+                 std::vector<bool> criticality,
+                 std::vector<int> proposed_device_type){
 	this->row          = m;
 	this->col          = n;
 	this->ldn          = ldn;
@@ -32,13 +35,17 @@ Quality::Quality(int m,
     this->input_mat = input_mat;
     this->target_mat   = x;
 	this->baseline_mat = y;
-    
+    this->criticality = criticality;
+    this->proposed_device_type = proposed_device_type;
+    assert(criticality.size() == (this->row_cnt * this->col_cnt));
+
     this->result_pars.resize(this->row_cnt * this->col_cnt);
+    this->result_critical_pars.resize(this->row_cnt * this->col_cnt);
 
     std::cout << __func__ << ": calculating metrices..." << std::endl;
     // global quality
     std::cout << "global quality..." << std::endl;
-    this->common_kernel(this->result, 0, 0, this->row, this->col);
+    this->common_kernel(this->result, this->result_critical, 0, 0, this->row, this->col);
     this->common_stats_kernel(this->result.input_dist_stats, 
                               this->input_mat, 
                               0, 
@@ -47,13 +54,14 @@ Quality::Quality(int m,
                               this->col);
     bool is_tiling = (this->row > this->row_blk)?true:false;
     
-    if(is_tiling){
+    if(0 && is_tiling){
         // tiling quality
         for(int i = 0 ; i < this->row_cnt ; i++){
             for(int j = 0 ; j < this->col_cnt ; j++){
                 int idx = i * this->col_cnt + j;
                 std::cout << "tiling quality(" << i << ", " << j << ")..." << std::endl;
                 this->common_kernel(this->result_pars[idx], 
+                                    this->result_critical_pars[idx],
                                     i*this->row_blk,
                                     j*this->col_blk,
                                     this->row_blk,
@@ -67,6 +75,49 @@ Quality::Quality(int m,
             }
         }    
     }
+}
+
+void Quality::calc_saliency_accuracy(float& saliency_ratio, float& protected_saliency_ratio){
+    cv::Mat mat;
+    cv::Mat saliency_map, binary_map;
+    auto saliency = cv::saliency::StaticSaliencySpectralResidual();
+ 
+    array2mat(mat, (float*)this->target_mat, this->row, this->col);
+    
+    std::cout << __func__ << ": getting binary map..." << std::endl;
+    assert(saliency.computeSaliency(mat, saliency_map));
+    assert(saliency.computeBinaryMap(saliency_map, binary_map));
+
+    unsigned long long int saliency_cnt = 0;
+    unsigned long long int saliency_protected_cnt = 0;
+
+    for(unsigned int i_idx = 0 ; i_idx < this->row_cnt ; i_idx++){
+        for(unsigned int j_idx = 0 ; j_idx < this->col_cnt ; j_idx++){
+            unsigned int i_start = i_idx * this->row_blk;
+            unsigned int j_start = j_idx * this->col_blk;
+            int idx = i_idx*this->col_cnt+j_idx;
+            for(unsigned int i = i_start ; i < i_start+this->row_blk ; i++){
+                for(unsigned int j = j_start ; j < j_start+this->col_blk ; j++){
+                    bool is_saliency = ((uint8_t)binary_map.at<uint8_t>(i, j))?true:false;
+                    saliency_cnt += (is_saliency)?1:0;
+                    saliency_protected_cnt += (is_saliency && this->proposed_device_type[idx] == 2/*gpu*/)?1:0;
+                }
+            }
+        }
+    }
+    
+    //std::fstream myfile;
+    //std::string file_path = "./quality.csv";
+    //myfile.open(file_path.c_str(), std::ios_base::app);
+    //assert(myfile.is_open());
+    //myfile << "saliency protected area, saliency area, saliency protected rate(%), saliency rate(%)," << std::endl;
+
+    //myfile << saliency_protected_cnt << ","
+    //       << saliency_cnt << ","
+    //       << ((float)saliency_protected_cnt / saliency_cnt) * 100. << "\%,"
+    //       << ((float)saliency_cnt / (this->row * this->col)) * 100. << "\%," << std::endl;
+    saliency_ratio = (float)saliency_cnt / (this->row * this->col);
+    protected_saliency_ratio = (float)saliency_protected_cnt / saliency_cnt;
 }
 
 void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j_start, int row_size, int col_size){
@@ -116,7 +167,7 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
     stats.entropy = entropy;
 }
 
-void Quality::common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size){
+void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, int j_start, int row_size, int col_size){
     
     double mse = 0;
 	double mean; 
@@ -383,21 +434,21 @@ void Quality::print_quality(Unit quality){
     std::cout << quality.ssim << "\t, ";
     std::cout << quality.pnsr << std::endl;
 
-    std::fstream myfile;
-    std::string file_path = "./quality.csv";
-    myfile.open(file_path.c_str(), std::ios_base::app);
-    assert(myfile.is_open());
-    myfile << ",," << quality.input_dist_stats.max << ", "
-           << quality.input_dist_stats.min << ", "
-           << quality.input_dist_stats.mean << ", "
-           << quality.input_dist_stats.sdev << ", "
-           << quality.input_dist_stats.entropy << ",,"
-           << quality.rmse << "\t, "
-           << quality.rmse_percentage << "\t, "
-           << quality.error_rate << "\t, "
-           << quality.error_percentage << "\t, "
-           << quality.ssim << "\t, "
-           << quality.pnsr << std::endl;
+//    std::fstream myfile;
+//    std::string file_path = "./quality.csv";
+//    myfile.open(file_path.c_str(), std::ios_base::app);
+//    assert(myfile.is_open());
+//    myfile << ",," << quality.input_dist_stats.max << ", "
+//           << quality.input_dist_stats.min << ", "
+//           << quality.input_dist_stats.mean << ", "
+//           << quality.input_dist_stats.sdev << ", "
+//           << quality.input_dist_stats.entropy << ",,"
+//           << quality.rmse << "\t, "
+//           << quality.rmse_percentage << "\t, "
+//           << quality.error_rate << "\t, "
+//           << quality.error_percentage << "\t, "
+//           << quality.ssim << "\t, "
+//           << quality.pnsr << std::endl;
 
 }
 
@@ -501,21 +552,21 @@ void Quality::print_results(bool is_tiling, int verbose){
     printf("=============================================\n");
     std::cout << "total quality: " << std::endl;
 
-    std::fstream myfile;
-    std::string file_path = "./quality.csv";
-    myfile.open(file_path.c_str(), std::ios_base::app);
-    assert(myfile.is_open());
+//    std::fstream myfile;
+//    std::string file_path = "./quality.csv";
+//    myfile.open(file_path.c_str(), std::ios_base::app);
+//    assert(myfile.is_open());
     
     std::cout << "input(max, min, mean, sdev, entropy) | rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
-    myfile << "total quality,,,,,,,,,,,," << std::endl;
-    myfile << ",,max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+//    myfile << "total quality,,,,,,,,,,,," << std::endl;
+//    myfile << ",,max, min, mean, sdev, entropy,,\t rmse(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
     print_quality(total_quality);
 
     if(is_tiling == true){
         std::cout << "tiling quality: " << std::endl;
         std::cout << "(i, j) input(max, min, mean, sdev, entropy) | rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
-        myfile << "tiling quality" << std::endl;
-        myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
+//        myfile << "tiling quality" << std::endl;
+//        myfile << "(i, j), max, min, mean, sdev, entropy,,\t rmse,\trmse_percentage(\%),\terror_rate(\%),\terror_percentage(\%),\tssim,\tpnsr(dB)" << std::endl;
         for(int i = 0 ; i < this->row_cnt  ; i++){
             for(int j = 0 ; j < this->col_cnt  ; j++){
                 std::cout << "(" << i << ", " << j << "): ";
@@ -524,9 +575,10 @@ void Quality::print_results(bool is_tiling, int verbose){
         }
     }
 
-    std::cout << __func__ << ": baseline hist.:" << std::endl;
-    print_histogram(this->baseline_mat);
-    std::cout << __func__ << ": target hist.:" << std::endl;
-    print_histogram(this->target_mat);
+    //std::cout << __func__ << ": baseline hist.:" << std::endl;
+    //print_histogram(this->baseline_mat);
+    //std::cout << __func__ << ": target hist.:" << std::endl;
+    //print_histogram(this->target_mat);
+    
 }
 

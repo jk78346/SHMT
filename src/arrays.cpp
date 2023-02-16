@@ -24,10 +24,10 @@ void init_fft(unsigned int input_total_size, void** input_array){
 
 void init_dct8x8(Params params, int rows, int cols, void** input_array){
     /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu */
-    char SampleImageFname[256];
-    assert(params.input_data_path.length() < 256);
-    strcpy(SampleImageFname, params.input_data_path.c_str());
-    //char SampleImageFname[] = "../data/barbara.bmp";
+    //char SampleImageFname[256];
+    //assert(params.input_data_path.length() < 256);
+    //strcpy(SampleImageFname, params.input_data_path.c_str());
+    char SampleImageFname[] = "../data/barbara.bmp";
     char *pSampleImageFpath = sdkFindFilePath(SampleImageFname, NULL/*argv[0]*/);
     if (pSampleImageFpath == NULL)
     {

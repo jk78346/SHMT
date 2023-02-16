@@ -32,8 +32,8 @@ def load_hotspot_data(in_shape):
     hotspot_read_data = lib.read_data
     hotspot_read_data.argtypes = [c_int, \
                                   c_int, \
-                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"    ), \
-                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"    )]
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                                  ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
     hotspot_read_data.retype = None
     temp_slice  = np.empty(in_shape).astype("float32")
     power_slice = np.empty(in_shape).astype("float32")
@@ -41,6 +41,28 @@ def load_hotspot_data(in_shape):
                       in_shape[1], \
                       temp_slice, power_slice)
     return temp_slice, power_slice
+
+def load_blackscholes_data(in_shape):
+    """ A helper function to load input data of blackscholes """
+    so_file = "/home/src/kernels/function_blackscholes.so"
+    lib = ctypes.cdll.LoadLibrary(so_file)
+    blackscholes_read_data = lib.read_data
+    blackscholes_read_data.argtypes = [c_int, \
+                                       c_int, \
+                                       ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                                       ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                                       ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+    blackscholes_read_data.retype = None
+    a_slice  = np.empty(in_shape).astype("float32")
+    b_slice  = np.empty(in_shape).astype("float32")
+    c_slice  = np.empty(in_shape).astype("float32")
+    blackscholes_read_data(in_shape[0], \
+                           in_shape[1], \
+                           a_slice, \
+                           b_slice, \
+                           c_slice)
+    return a_slice, b_slice, c_slice
+
 
 class Quality:
     """ This class collects all quality metircs for evaluating model output compared against ground truth. """

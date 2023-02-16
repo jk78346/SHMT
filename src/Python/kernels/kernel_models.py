@@ -148,6 +148,16 @@ class KernelModels:
         return keras.Model(inputs, outputs)
 
     @staticmethod
+    def blackscholes_2d(in_shape, out_shape):
+        """ This function returns a NN-based blackscholes model. """
+        encoded_dim = 16
+        inputs = keras.Input(shape=(in_shape[0]*3, in_shape[1])+(1,))
+        x = layers.Conv2D(filters=encoded_dim, strides=(3, 1), kernel_size=(3,3), padding='same', activation='relu')(inputs)
+        #x = layers.Dense(1, activation='relu')(inputs)
+        outputs = x
+        return keras.Model(inputs, outputs)
+
+    @staticmethod
     def histogram256(in_shape, out_shape):
         """ This function returns a NN-based hist256 model. """
         inputs = keras.Input(shape=in_shape+(1,))

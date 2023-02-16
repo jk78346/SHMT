@@ -143,8 +143,30 @@ class Applications:
         func(src.shape[0], src.shape[1], src, dst)
         return dst
 
+    @staticmethod
+    def blackscholes_2d(src):
+        """ This function returns blackscholes' implementation. """
+        so_file = "/home/src/kernels/function_blackscholes.so"
+        lib = ctypes.cdll.LoadLibrary(so_file)
+        func = lib.blackscholes_2d
+        func.argtypes = [c_int, \
+                         c_int, \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        func.retype = None
 
+        assert src.shape[0] % 3 == 0, \
+                """ src.shape[0]: ${src.shape[0]} % 3 != 0. """
+        src_dim_1 = int(src.shape[0] / 3)
 
+        #dst1 = np.zeros((src_dim_1, src.shape[1])).astype("float32")
+        #dst2 = np.ones((src_dim_1, src.shape[1])).astype("float32") * -1.
+        #dst_all = np.concatenate((dst1, dst2))
+        dst = np.empty((src_dim_1 * 2, src.shape[1])).astype("float32")
+        #dst = np.copy(dst_all)
+
+        func(src.shape[0], src.shape[1], src, dst)
+        return dst
 
 
 

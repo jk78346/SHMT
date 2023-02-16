@@ -22,7 +22,8 @@ std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode,
                                                     Params params, 
                                                     void* input, 
                                                     void* output,
-                                                    TimeBreakDown* time_breakdown){
+                                                    TimeBreakDown* time_breakdown,
+                                                    std::vector<bool>& criticality){
     std::vector<DeviceType> ret;
     KernelBase* kernel = NULL;
     if(mode == "cpu"){
@@ -38,6 +39,7 @@ std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode,
         std::cout << __func__ << ": undefined execution mode: " << mode 
                   << ", execution is skipped." << std::endl;
     }
+    criticality.push_back(true); // dummy
 
     // input array conversion from void* input
     time_breakdown->input_time_ms = kernel->input_conversion();
@@ -58,7 +60,8 @@ std::vector<DeviceType> run_kernel_partition(const std::string& mode,
                                              Params params, 
                                              void* input, 
                                              void* output,
-                                             TimeBreakDown* time_breakdown){
+                                             TimeBreakDown* time_breakdown,
+                                             std::vector<bool>& criticality){
     PartitionRuntime* p_run = new PartitionRuntime(params,
                                                    mode,
                                                    input,
@@ -73,6 +76,12 @@ std::vector<DeviceType> run_kernel_partition(const std::string& mode,
     time_breakdown->output_time_ms = p_run->transform_output();
     p_run->show_device_sequence();
     std::vector<DeviceType> ret = p_run->get_device_sequence();
+    criticality = p_run->get_criticality();
+    std::cout << __func__ << ": criticality seq:" << std::endl;
+    for(auto c: criticality){
+        std::cout << c << " ";
+    }
+    std::cout << std::endl;
     delete p_run;
     return ret;
 }
@@ -81,7 +90,8 @@ std::vector<DeviceType> run_kernel(const std::string& mode,
                                    Params& params, 
                                    void* input, 
                                    void* output,
-                                   TimeBreakDown* time_breakdown){
+                                   TimeBreakDown* time_breakdown,
+                                   std::vector<bool>& criticality){
     std::cout << __func__ << ": start running kernel in " << mode << " mode" 
               << " with iter = " << params.iter << std::endl;
     std::vector<DeviceType> ret;
@@ -90,13 +100,15 @@ std::vector<DeviceType> run_kernel(const std::string& mode,
                                           params, 
                                           input, 
                                           output,
-                                          time_breakdown); 
+                                          time_breakdown,
+                                          criticality); 
     }else{
         ret = run_kernel_partition(mode, 
                                    params, 
                                    input, 
                                    output,
-                                   time_breakdown);
+                                   time_breakdown,
+                                   criticality);
     }
     return ret;
 }
@@ -128,7 +140,6 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
-    float criticality_ratio = 1./3.; //atof(argv[idx++]);
     std::string testing_img_path = 
         (argc == 8)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
     std::string testing_img_file_name = 
@@ -146,9 +157,6 @@ int main(int argc, char* argv[]){
                            false, // default no tiling mode. can be reset anytime later
                            iter,
                            testing_img_path);
-
-    baseline_params.set_criticality_ratio(criticality_ratio);
-    proposed_params.set_criticality_ratio(criticality_ratio);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
@@ -170,13 +178,17 @@ int main(int argc, char* argv[]){
     std::vector<DeviceType> baseline_device_sequence; // typically will be gpu mode
     std::vector<DeviceType> proposed_device_sequence;
 
+    std::vector<bool> baseline_criticality_sequence;
+    std::vector<bool> proposed_criticality_sequence;
+
     // Start to run baseline version of the application's implementation.
     timing baseline_start = clk::now();
     baseline_device_sequence = run_kernel(baseline_mode, 
                                baseline_params, 
                                input_array, 
                                output_array_baseline,
-                               baseline_time_breakdown);
+                               baseline_time_breakdown,
+                               baseline_criticality_sequence);
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
@@ -185,7 +197,8 @@ int main(int argc, char* argv[]){
                                           proposed_params, 
                                           input_array, 
                                           output_array_proposed,
-                                          proposed_time_breakdown);
+                                          proposed_time_breakdown,
+                                          proposed_criticality_sequence);
     timing proposed_end = clk::now();
 
     // convert device sequence type 
@@ -220,6 +233,7 @@ int main(int argc, char* argv[]){
 
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
+    std::cout << __func__ << ": criticality size: " << proposed_criticality_sequence.size() << std::endl;
     Quality* quality = new Quality(proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
                                    proposed_params.problem_size, // ldn
@@ -227,15 +241,17 @@ int main(int argc, char* argv[]){
                                    proposed_params.block_size,
                                    unify_input_type->float_array,
                                    unify_proposed_type->float_array, 
-                                   unify_baseline_type->float_array);
+                                   unify_baseline_type->float_array,
+                                   proposed_criticality_sequence,
+                                   proposed_device_type);
     bool is_tiling = 
         (baseline_params.problem_size > baseline_params.block_size)?true:false;
 
     quality->print_results(is_tiling, 1/*verbose*/);
     
     /* print hist of input */
-    std::cout << __func__ << ": print hist of input array" << std::endl;
-    quality->print_histogram(unify_input_type->float_array);
+    //std::cout << __func__ << ": print hist of input array" << std::endl;
+    //quality->print_histogram(unify_input_type->float_array);
 
     // save result arrays as image files
     const std::string path_prefix = proposed_params.app_name + "/"
@@ -268,15 +284,15 @@ int main(int argc, char* argv[]){
                                     output_array_proposed);
     
     // save as pixel arrays
-    std::cout << "saving output results in txt files..." << std::endl;
-    unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.csv", 
-                                    baseline_params.problem_size,
-                                    baseline_params.problem_size,
-                                    output_array_baseline);
-    unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.csv", 
-                                    proposed_params.problem_size,
-                                    proposed_params.problem_size,
-                                    output_array_proposed);
+    //std::cout << "saving output results in txt files..." << std::endl;
+    //unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.csv", 
+    //                                baseline_params.problem_size,
+    //                                baseline_params.problem_size,
+    //                                output_array_baseline);
+    //unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.csv", 
+    //                                proposed_params.problem_size,
+    //                                proposed_params.problem_size,
+    //                                output_array_proposed);
     
     std::string log_file_path = "../log/" + path_prefix + "/"
                                + app_name + "_"
@@ -321,6 +337,10 @@ int main(int argc, char* argv[]){
     // dump record to csv file
     std::cout << "dumping measurement results into file: " 
               << log_file_path << std::endl;
+
+    float saliency_ratio, protected_saliency_ratio;
+    quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
+    
     dump_to_csv(log_file_path, 
                 testing_img_file_name,
                 proposed_params.app_name,
@@ -332,7 +352,9 @@ int main(int argc, char* argv[]){
                 quality, 
                 baseline_time_breakdown,
                 proposed_time_breakdown,
-                proposed_device_type);
+                proposed_device_type,
+                saliency_ratio,
+                protected_saliency_ratio);
 
     delete quality;
     delete baseline_time_breakdown;

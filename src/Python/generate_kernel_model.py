@@ -21,6 +21,7 @@ from utils.utils import (
         get_imgs_count, 
         get_img_paths_list,
         load_hotspot_data,
+        load_blackscholes_data,
         Quality,    
 )
 from keras.callbacks import (
@@ -60,11 +61,16 @@ class MyDataGen():
     def random_input_gen(self):
         """ This function generates random samples for training input. """
         if self.model_name == "hotspot_2d":
-            x = np.zeros((self.num_samples,) + (self.in_shape[0] * 2, self.in_shape[1]) + (1,) , dtype="float32")
+            x = np.zeros((self.num_samples,) + (self.in_shape[0] * 2, self.in_shape[1]) + (1,), dtype="float32")
+        elif self.model_name == "blackscholes_2d":
+            x = np.zeros((self.num_samples,) + (self.in_shape[0] * 3, self.in_shape[1]) + (1,), dtype="float32")
         else:
-            x = np.zeros((self.num_samples,) + self.in_shape + (1,) , dtype="float32")
+            x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
 
-        y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
+        if self.model_name == "blackscholes_2d":
+            y = np.zeros((self.num_samples,) + (self.out_shape[0] * 2, self.out_shape[1]) + (1,), dtype="float32")
+        else:
+            y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         
         for j in range(self.num_samples):
             if self.model_name == 'histogram256':
@@ -93,6 +99,15 @@ class MyDataGen():
                 x_slice = np.asarray(image).astype('float32') / 255. 
                 y_slice = self.func(x_slice)
 #                print("x_slice: ", x_slice, ", y_slice: ", y_slice)
+                x_max = x_slice.max()
+                y_max = y_slice.max()
+            elif self.model_name == "blackscholes_2d":
+                a_slice, b_slice, c_slice = load_blackscholes_data(self.in_shape)
+                x_slice = np.concatenate((a_slice, b_slice, c_slice))
+                y_slice = self.func(x_slice)
+                
+                print("x_slice.shape: ", x_slice.shape, ", y_slice.shape: ", y_slice.shape)
+
                 x_max = x_slice.max()
                 y_max = y_slice.max()
             else:

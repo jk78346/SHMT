@@ -48,6 +48,8 @@ void dump_to_csv(std::string log_file_path,
                  Quality* quality, 
                  TimeBreakDown* baseline_time_breakdown,
                  TimeBreakDown* proposed_time_breakdown,
-                 std::vector<int> proposed_device_sequence);
+                 std::vector<int> proposed_device_sequence,
+                 float saliency_ratio,
+                 float protected_saliency_ratio);
 #endif
 

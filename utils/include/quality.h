@@ -12,8 +12,18 @@ class Quality{
                 int col_blk, 
                 float* input_mat,
                 float* target_mat, 
-                float* baseline_mat);
+                float* baseline_mat,
+                std::vector<bool> criticality,
+                std::vector<int> proposed_device_type);
 
+        /*
+            saliency ratio: 
+                percentage of critical area / full image area
+            protected slaiency ratio:
+                percentage of critical area under GPU execution / total critical area
+         */
+        void calc_saliency_accuracy(float& saliency_ratio, 
+                                    float& protected_saliency_ratio);
 	    /* main APIs
 	        Now each API call works on one tiling block only,
             and the block is indicated by i_blk_idx, j_blk_idx.
@@ -68,6 +78,9 @@ class Quality{
         int get_col_cnt(){ return this->col_cnt; }
 
     private:
+        std::vector<bool> criticality;
+        std::vector<int> proposed_device_type;
+
         struct DistStats{
             float max;
             float min;
@@ -88,8 +101,8 @@ class Quality{
             DistStats input_dist_stats;
         };
 
-        Unit result;
-        std::vector<Unit> result_pars;
+        Unit result, result_critical;
+        std::vector<Unit> result_pars, result_critical_pars;
 
         void print_quality(Unit quality);
 
@@ -110,7 +123,7 @@ class Quality{
         float entropy(float* mat, int i_start, int j_start, int row_size, int col_size);
         
         // common quality kernel
-        void common_kernel(Unit& result, int i_start, int j_start, int row_size, int col_size);
+        void common_kernel(Unit& result, Unit& result_critical, int i_start, int j_start, int row_size, int col_size);
         void common_stats_kernel(DistStats& stats, float* x, int i_start, int j_start, int row_size, int col_size);
         
         int row;
