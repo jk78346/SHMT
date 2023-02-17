@@ -98,7 +98,6 @@ class MyDataGen():
                 image = image.resize(self.in_shape)
                 x_slice = np.asarray(image).astype('float32') / 255. 
                 y_slice = self.func(x_slice)
-#                print("x_slice: ", x_slice, ", y_slice: ", y_slice)
                 x_max = x_slice.max()
                 y_max = y_slice.max()
             elif self.model_name == "blackscholes_2d":
@@ -294,7 +293,7 @@ def pre_quantize_test(params, target_func, logfile):
         X_test = np.asarray(image).astype('float32') / 255.
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
-        y_scale = 255.
+        y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -366,7 +365,7 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         y_scale = 343.76224 / 255.
     elif params.model_name == 'srad_2d':
         x_scale = 1.
-        y_scale = 1.
+        y_scale = 1./255.
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
         X_test = np.asarray(image).astype('float32') / 255.

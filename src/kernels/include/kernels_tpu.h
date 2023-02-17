@@ -136,7 +136,7 @@ public:
             }else if(app_name == "dct8x8_2d"){
                 adj_scale = scale;
             }else if(app_name == "srad_2d"){
-                adj_scale = scale;
+                adj_scale = scale * (1./255.);
             }else{
                 adj_scale = scale * 255.;
             }

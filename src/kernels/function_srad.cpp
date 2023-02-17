@@ -109,25 +109,28 @@ extern "C" void srad_2d(int rows, int cols, float* input, float* output){
  
                 // image update (equ 61)
                 J[k] = J[k] + 0.25*lambda*D;
-            }
+
+    	    	/* convert back */
+	    	    J[k] = log(J[k]);
+	        }
         }
     }
 
-    // scale output result nack to uint8 scale
-    float J_max = FLT_MIN;
-    for(int i = 0 ; i < rows ; i++){
-    	for(int j = 0 ; j < cols ; j++){
-	    k = i * cols + j;
-	    J_max = (J[k] > J_max)?J[k]:J_max;
-	}
-    }
-    float scale = 255./J_max;
-    for(int i = 0 ; i < rows ; i++){
-    	for(int j = 0 ; j < cols ; j++){
-	    k = i * cols + j;
-	    J[k] *= scale;
-	}
-    }
+    // scale output result back to uint8 scale
+    //float J_max = FLT_MIN;
+    //for(int i = 0 ; i < rows ; i++){
+    //	for(int j = 0 ; j < cols ; j++){
+//	    k = i * cols + j;
+//	    J_max = (J[k] > J_max)?J[k]:J_max;
+//	}
+    //}
+    //float scale = 255./J_max;
+    //for(int i = 0 ; i < rows ; i++){
+    //	for(int j = 0 ; j < cols ; j++){
+//	    k = i * cols + j;
+//	    J[k] *= scale;
+//	}
+//    }
 
 
     free(iN); free(iS); free(jW); free(jE);
