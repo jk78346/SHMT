@@ -19,6 +19,8 @@
 #include "kernels_fft_wrapper.cu"
 #include "dct8x8_kernel2.cuh"
 #include "dct8x8_kernel_quantization.cuh"
+#include "dwt.h"
+#include "common.h"
 
 #ifdef RD_WG_SIZE_0_0                                                            
         #define HOTSPOT_BLOCK_SIZE RD_WG_SIZE_0_0                                        
@@ -742,5 +744,44 @@ void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output
     cudaFree(N_C);
     cudaFree(S_C);
     free(c);
+}
+
+inline void fdwt(float *in, float *out, int width, int height, int levels){
+    dwt_cuda::fdwt97(in, out, width, height, levels);
+}
+
+inline void rdwt(float *in, float *out, int width, int height, int levels){
+    dwt_cuda::rdwt97(in, out, width, height, levels);
+}
+
+void GpuKernel::dwt_2d(KernelParams& kernel_params, void** input, void** output){
+    int width  = kernel_params.params.get_kernel_size();
+    int height = kernel_params.params.get_kernel_size();
+    int componentSize = width * height * sizeof(float);
+
+    float* c_r; // device input
+    float* c_r_mid;  // device output
+    float* c_r_out;  // device output
+    //float* backup ;
+    
+    cudaMalloc((void**)&(c_r), componentSize); //< R, aligned component size
+    cudaMemset(c_r, 0, componentSize);
+
+    cudaMalloc((void**)&c_r_mid, componentSize); //< aligned component size
+    cudaMemset(c_r_mid, 0, componentSize);
+    
+    cudaMalloc((void**)&c_r_out, componentSize); //< aligned component size
+    cudaMemset(c_r_out, 0, componentSize);
+
+    cudaMemcpy(c_r, (float*)*input, width * height * sizeof(float), cudaMemcpyHostToDevice);
+    
+    fdwt(c_r,     c_r_mid, width, height, 1/*stages*/);
+    rdwt(c_r_mid, c_r_out, width, height, 1/*stages*/);
+
+    cudaMemcpy((float*)*output, c_r_out, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cudaFree(c_r);
+    cudaFree(c_r_mid);
+    cudaFree(c_r_out);
 }
 

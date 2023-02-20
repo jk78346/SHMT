@@ -109,6 +109,14 @@ class MyDataGen():
 
                 x_max = x_slice.max()
                 y_max = y_slice.max()
+            elif self.model_name == "dwt_2d":
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                image = image.resize(self.in_shape)
+                x_slice = np.asarray(image).astype("float32")
+
+                y_slice = self.func(x_slice)
+                x_max = x_slice.max()
+                y_max = y_slice.max()
             else:
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
@@ -294,6 +302,13 @@ def pre_quantize_test(params, target_func, logfile):
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
         y_scale = 1.
+    elif params.model_name == "dwt_2d":
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('uint8') 
+        Y_ground_truth = target_func(np.asarray(image).astype('float32'))
+        x_scale = 255.
+        y_scale = 255.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -371,6 +386,13 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         X_test = np.asarray(image).astype('float32') / 255.
         Y_ground_truth = target_func(X_test)
         X_test = np.asarray(image).astype('uint8')
+    elif params.model_name == "dwt_2d":
+        x_scale = 255.
+        y_scale = 1.
+        image = Image.open(params.lenna_path)
+        image = image.resize(params.in_shape)
+        X_test = np.asarray(image).astype('uint8') 
+        Y_ground_truth = target_func(np.asarray(image).astype('float32'))
     else:
         x_scale = 255.
         y_scale = 1.

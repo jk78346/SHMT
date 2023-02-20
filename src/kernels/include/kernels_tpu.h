@@ -133,7 +133,7 @@ public:
                 adj_scale = scale * 3300.;
             }else if(app_name == "hotspot_2d"){
                 adj_scale = scale * 343.76224;
-            }else if(app_name == "dct8x8_2d"){
+            }else if(app_name == "dct8x8_2d" || app_name == "dwt_2d"){
                 adj_scale = scale;
             }else if(app_name == "srad_2d"){
                 adj_scale = scale * (1./255.);
@@ -190,7 +190,8 @@ private:
         "dct8x8_2d",
         "blackscholes_2d",
         "hotspot_2d",
-        "srad_2d"
+        "srad_2d",
+        "dwt_2d"
     };
     gptpu_utils::EdgeTpuHandler* device_handler;
     unsigned int dev_cnt = 0;

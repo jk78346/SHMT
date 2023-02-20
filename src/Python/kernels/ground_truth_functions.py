@@ -168,5 +168,19 @@ class Applications:
         func(src.shape[0], src.shape[1], src, dst)
         return dst
 
-
+    @staticmethod
+    def dwt_2d(src):
+        """ This function returns dwt's CUDA implementation.  """    
+        # C wrapper related setup 
+        so_file = "/home/src/kernels/function_dwt.so"
+        lib = ctypes.cdll.LoadLibrary(so_file)
+        func = lib.dwt_2d
+        func.argtypes = [c_int, \
+                         c_int, \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), \
+                         ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        func.retype = None
+        dst = np.empty((src.shape[0], src.shape[1])).astype("float32")
+        func(src.shape[0], src.shape[1], src, dst)
+        return dst
 
