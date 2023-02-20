@@ -102,8 +102,20 @@ public:
                 this->output_array_type.device_fp = this->output_array_type.host_fp;
                 // other fp type of kernels' input conversions
             }
+        }else if(if_kernel_in_table(this->func_table_uchar, app_name)){
+            uint8_t* input_array  = 
+                reinterpret_cast<uint8_t*>(this->input_array_type.ptr);
+            uint8_t* output_array = 
+                reinterpret_cast<uint8_t*>(this->output_array_type.ptr);
+            this->input_array_type.host_uchar  = input_array;
+            this->output_array_type.host_uchar = output_array; 
+            this->input_array_type.device_uchar  = this->input_array_type.host_uchar;
+            this->output_array_type.device_uchar = this->output_array_type.host_uchar;
         }else{
-            // app_name not found in any table. 
+            std::cout << __func__ << ": app_name: " 
+                      << app_name << " is not found in any table." 
+                      << std::endl;
+            exit(0);
         }
         timing end = clk::now();
         return get_time_ms(end, start);
@@ -164,6 +176,8 @@ public:
                 this->output_array_type.host_fp = this->output_array_type.device_fp;
                 // other fp type of kernels' output conversion
             }
+        }else if(if_kernel_in_table(this->func_table_uchar, app_name)){
+            this->output_array_type.host_uchar = this->output_array_type.device_uchar;
         }else{
             // app_name not found in any table. 
         }
@@ -177,6 +191,8 @@ public:
             return this->run_kernel_opencv_cuda(iter);
         }else if(if_kernel_in_table(this->func_table_fp, app_name)){
             return this->run_kernel_float(iter);
+        }else if(if_kernel_in_table(this->func_table_uchar, app_name)){
+            return this->run_kernel_uchar(iter);
         }else{
             // app_name not found in any table. 
             std::cout << __func__ << ": kernel name: " << app_name 
@@ -212,12 +228,27 @@ private:
         return get_time_ms(end, start);
     }
 
+    /* uchar type of input/output */
+    double run_kernel_uchar(unsigned int iter){
+        kernel_existence_checking(this->func_table_uchar, this->kernel_params.params.app_name);
+        timing start = clk::now();
+        for(unsigned int i = 0 ; i < iter ; i++){
+            this->func_table_uchar[this->kernel_params.params.app_name](this->kernel_params, 
+                                                       (void**)&this->input_array_type.device_uchar, 
+                                                       (void**)&this->output_array_type.device_uchar);
+        }
+        timing end = clk::now();
+        return get_time_ms(end, start);
+    }
+    
     // arrays
     struct ArrayType{
         void* ptr = NULL;
         cuda::GpuMat gpumat;
         float* host_fp = NULL; // reinterpreted float pointer of void* ptr
         float* device_fp = NULL; 
+        uint8_t* host_uchar = NULL;
+        uint8_t* device_uchar = NULL;
     };
     ArrayType input_array_type, output_array_type;
 
@@ -229,25 +260,27 @@ private:
 
     // function tables
     typedef void (*func_ptr_opencv_cuda)(const cuda::GpuMat, cuda::GpuMat&); // const cuda::GpuMat: input, cuda::GpuMat& : input/output
-    typedef void (*func_ptr_float)(KernelParams&, void**, void**);
+    typedef void (*func_ptr_any)(KernelParams&, void**, void**);
     typedef std::unordered_map<std::string, func_ptr_opencv_cuda> func_table_opencv_cuda;
-    typedef std::unordered_map<std::string, func_ptr_float>  func_table_float;
+    typedef std::unordered_map<std::string, func_ptr_any>  func_table_float, func_table_uint8_t;
     func_table_opencv_cuda func_table_cv_cuda = {
         std::make_pair<std::string, func_ptr_opencv_cuda> ("minimum_2d", this->minimum_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("sobel_2d", this->sobel_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("mean_2d", this->mean_2d),
-        std::make_pair<std::string, func_ptr_opencv_cuda> ("laplacian_2d", this->laplacian_2d),
-        std::make_pair<std::string, func_ptr_opencv_cuda> ("kmeans_2d", this->kmeans_2d)
+        std::make_pair<std::string, func_ptr_opencv_cuda> ("laplacian_2d", this->laplacian_2d)
     };
     func_table_float func_table_fp = {
-        std::make_pair<std::string, func_ptr_float> ("fft_2d", this->fft_2d),
-        std::make_pair<std::string, func_ptr_float> ("dct8x8_2d", this->dct8x8_2d),
-        std::make_pair<std::string, func_ptr_float> ("blackscholes_2d", this->blackscholes_2d),
-        std::make_pair<std::string, func_ptr_float> ("hotspot_2d", this->hotspot_2d),
-        std::make_pair<std::string, func_ptr_float> ("srad_2d", this->srad_2d),
-        std::make_pair<std::string, func_ptr_float> ("dwt_2d", this->dwt_2d)
+        std::make_pair<std::string, func_ptr_any> ("fft_2d", this->fft_2d),
+        std::make_pair<std::string, func_ptr_any> ("dct8x8_2d", this->dct8x8_2d),
+        std::make_pair<std::string, func_ptr_any> ("blackscholes_2d", this->blackscholes_2d),
+        std::make_pair<std::string, func_ptr_any> ("hotspot_2d", this->hotspot_2d),
+        std::make_pair<std::string, func_ptr_any> ("srad_2d", this->srad_2d),
+        std::make_pair<std::string, func_ptr_any> ("dwt_2d", this->dwt_2d)
     };
     
+    func_table_uint8_t func_table_uchar = {
+        std::make_pair<std::string, func_ptr_any> ("kmeans_2d", this->kmeans_2d)
+    };
     // kernel-specific input/output conversion wrappers
     /*
         Note: arrays.cpp is in charge of allocating and populating h_Data of this tiling block.
@@ -275,12 +308,12 @@ private:
     static void sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
-    static void kmeans_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img);
     static void fft_2d(KernelParams& kernel_params, void** input, void** output);
     static void dct8x8_2d(KernelParams& kernel_params, void** input, void** output);
     static void blackscholes_2d(KernelParams& kernel_params, void** input, void** output);
     static void hotspot_2d(KernelParams& kernel_params, void** input, void** output);
     static void srad_2d(KernelParams& kernel_params, void** input, void** output);
     static void dwt_2d(KernelParams& kernel_params, void** input, void** output);
+    static void kmeans_2d(KernelParams& kernel_params, void** input, void** output);
 };
 #endif

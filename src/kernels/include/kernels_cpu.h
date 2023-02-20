@@ -67,7 +67,10 @@ public:
             }
             this->output_array_type.fp = output_array;
         }else{
-            // app_name not found in any table. 
+            std::cout << __func__ << ": app_name: "
+                      << app_name << " is not found in any table."
+                      << std::endl;
+            exit(0);
         }
         timing end = clk::now();
         return get_time_ms(end, start);
