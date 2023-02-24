@@ -148,13 +148,14 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
 	stats.mean = (float)(sum / (double)(elements));
     
     // sdev
-#pragma omp parallel for
+#pragma omp parallel for reduction(+:square_sum)
     for(int i = i_start ; i < i_start+row_size ; i++){
         for(int j = j_start ; j < j_start+col_size ; j++){
 			square_sum += pow(x[i*this->ldn+j] - stats.mean, 2);
         }
     }
-	stats.sdev = pow((float)(square_sum / (double)(elements)), 0.5);
+    std::cout << __func__ << ": square sum: " << square_sum << std::endl;
+    stats.sdev = pow((float)(square_sum / (double)(elements)), 0.5);
 
     // entropy(2)
     while(it != counts.end()){
@@ -169,15 +170,15 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
 
 void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, int j_start, int row_size, int col_size){
     
-    double mse = 0;
+    double mse = 0, mse_sum = 0;
 	double mean; 
     float baseline_max = FLT_MIN, baseline_min = FLT_MAX;
     float target_max = FLT_MIN, target_min = FLT_MAX;
-    double rate = 0;
+    double rate = 0, rate_sum = 0;
 	int cnt = 0;
 	int error_percentage_cnt = 0;
     double baseline_sum = 0.0;
-#pragma omp parallel for
+#pragma omp parallel for reduction(+:cnt) reduction(+:error_percentage_cnt) reduction(+:baseline_sum) reduction(max:baseline_max) reduction(max:target_max) reduction(min:baseline_min) reduction(min:target_min) reduction(+:mse_sum) reduction(+:rate_sum)
     for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
 			int idx = i*this->ldn+j;
@@ -198,20 +199,20 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
                 (this->target_mat[idx] < target_min)?
                 this->target_mat[idx]:
                 target_min;
-            mse = 
-                (mse * cnt + 
-                 pow(this->target_mat[idx] - this->baseline_mat[idx], 2)) 
-                / (cnt + 1);
-			rate = 
-                (rate * cnt + 
-                 fabs(this->target_mat[idx] - this->baseline_mat[idx])) 
-                / (cnt + 1);
-			if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
+			
+            mse_sum += pow(this->target_mat[idx] - this->baseline_mat[idx], 2);
+			
+            rate_sum += fabs(this->target_mat[idx] - this->baseline_mat[idx]);
+            
+            if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
 				error_percentage_cnt++;
 			}
 			cnt++;
 		}
 	}
+
+    mse = mse_sum / (cnt);
+    rate = rate_sum / (cnt);
 
     mean = (float)(baseline_sum / (double)(row_size*col_size));
     

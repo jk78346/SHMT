@@ -315,7 +315,10 @@ double PartitionRuntime::set_criticality_by_saliency(Params params, void** array
         array2mat(mat, (uint8_t*)*array, params.problem_size, params.problem_size);
     }else{
         array2mat(mat, (float*)*array, params.problem_size, params.problem_size);
-    }  
+    } 
+
+    std::cout << __func__ << ": calc saliency..." << std::endl;
+
     assert(saliency.computeSaliency(mat, saliency_map));
     assert(saliency.computeBinaryMap(saliency_map, binary_map));
 
@@ -344,7 +347,7 @@ double PartitionRuntime::set_criticality_by_saliency(Params params, void** array
 //                      << ", rate: " 
 //                      << (float)saliency_cnt/total_cnt << std::endl;
             saliency_ratio.push_back(std::make_pair(idx, (float)saliency_cnt/total_cnt));
-            this->criticality[idx] = (((float)saliency_cnt / total_cnt) > 1e-6)?true:false;
+            this->criticality[idx] = (((float)saliency_cnt / total_cnt) > 0.)?true:false;
         }
     }
     float saliency_rate = (float)total_saliency_cnt / total_pixel_cnt;
