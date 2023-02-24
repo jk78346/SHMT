@@ -19,6 +19,7 @@ void mat2array(Mat img, uint8_t* data);
 void mat2array(Mat img, float* data);
 void mat2array(cuda::GpuMat img, uint8_t* data);
 void mat2array(cuda::GpuMat img, float* data);
+void mat2array(cuda::GpuMat img, int* data);
 void mat2array_CV_32F2uchar(cuda::GpuMat img, uint8_t* data);
 
 void array2mat(Mat& img, float* data, int rows, int cols);

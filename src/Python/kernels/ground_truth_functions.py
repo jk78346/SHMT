@@ -88,24 +88,26 @@ class Applications:
         return ret.astype("uint8")
 
     @staticmethod
-    def histogram256(src):
+    def histogram_2d(src):
         """ This function returns historgram 256 of a array. 
             cv.calHist returns an array of histogram points of dtype float.32
             , while every src.size chunk of the array is a 8 bit chunk of output int32 result. 
         """
         hist = cv.calcHist([src], [0], None, [256], (0, 256), accumulate=False)
         hist = hist.astype(np.uint32)
-        x0 = hist
-        x1 = hist >> 8
-        x2 = hist >> 16
-        x3 = hist >> 24
+        #x0 = hist
+        #x1 = hist >> 8
+        #x2 = hist >> 16
+        #x3 = hist >> 24
 
-        x0 = np.remainder(x0, 256)
-        x1 = np.remainder(x1, 256)
-        x2 = np.remainder(x2, 256)
-        x3 = np.remainder(x3, 256)
+        #x0 = np.remainder(x0, 256)
+        #x1 = np.remainder(x1, 256)
+        #x2 = np.remainder(x2, 256)
+        #x3 = np.remainder(x3, 256)
 
-        ret = np.concatenate((x0, x1, x2, x3), axis=None)
+        #ret = np.concatenate((x0, x1, x2, x3), axis=-1)
+        ret = hist
+        print("histo: output shape: ", ret.shape)
         return ret
     
     @staticmethod
@@ -156,16 +158,12 @@ class Applications:
         func.retype = None
 
         assert src.shape[0] % 3 == 0, \
-                """ src.shape[0]: ${src.shape[0]} % 3 != 0. """
+                """ src.shape[0]: {%d} % 3 != 0. """ % src.shape[0]
         src_dim_1 = int(src.shape[0] / 3)
 
-        #dst1 = np.zeros((src_dim_1, src.shape[1])).astype("float32")
-        #dst2 = np.ones((src_dim_1, src.shape[1])).astype("float32") * -1.
-        #dst_all = np.concatenate((dst1, dst2))
-        dst = np.empty((src_dim_1 * 2, src.shape[1])).astype("float32")
-        #dst = np.copy(dst_all)
-
-        func(src.shape[0], src.shape[1], src, dst)
+        # only get call
+        dst = np.empty((src_dim_1, src.shape[1])).astype("float32")
+        func(src_dim_1, src.shape[1], src, dst)
         return dst
 
     @staticmethod

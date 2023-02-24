@@ -31,7 +31,7 @@ static double CND(double d)
 
 static void BlackScholesBodyCPU(
     float &callResult,
-    float &putResult,
+    //float &putResult,
     float Sf, //Stock price
     float Xf, //Option strike
     float Tf, //Option years
@@ -50,7 +50,7 @@ static void BlackScholesBodyCPU(
     //Calculate Call and Put simultaneously
     double expRT = exp(- R * T);
     callResult   = (float)(S * CNDD1 - X * expRT * CNDD2);
-    putResult    = (float)(X * expRT * (1.0 - CNDD2) - S * (1.0 - CNDD1));
+    //putResult    = (float)(X * expRT * (1.0 - CNDD2) - S * (1.0 - CNDD1));
 }
 
 /*
@@ -61,13 +61,9 @@ extern "C" void blackscholes_2d(int row, int col, float* input, float* output){
     int optN = row * col;
     for(int opt = 0 ; opt < optN ; opt++){
         BlackScholesBodyCPU(
-            //h_CallResult[opt],
-            //h_PutResult[opt],
-            output[opt],
-            output[opt+optN],
-            //h_StockPrice[opt],
-            //h_OptionStrike[opt],
-            //h_OptionYears[opt],
+	    // return call only
+            output[opt], // call
+//            output[opt+optN], // put
             input[opt],
             input[opt+optN],
             input[opt+2*optN],

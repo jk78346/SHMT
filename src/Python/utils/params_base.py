@@ -124,6 +124,14 @@ class TrainParams(TrainParamsBase):
                                      out_shape=(size, size),
                                      min_delta=1e-12,
                                      optimizer=keras.optimizers.Adam(learning_rate=0.1))
+        elif model_name == 'blackscholes_2d':
+            TrainParamsBase.__init__(self, 
+                                     model_name, 
+                                     size=size,
+                                     in_shape=(size, size),
+                                     out_shape=(size, size),
+                                     min_delta=1e-12,
+                                     optimizer=keras.optimizers.Adam(learning_rate=0.1))
         elif model_name == 'hotspot_2d':
             TrainParamsBase.__init__(self, 
                                      model_name, 

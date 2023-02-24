@@ -100,6 +100,32 @@ void mat2array(cuda::GpuMat img, float* data){
                 tmp.size().width * tmp.size().height * sizeof(float));
 }
 
+void mat2array(cuda::GpuMat img, int* data){
+    assert(img.type() % 8 == 4); // CV_32S series
+    
+    Mat tmp;
+    img.download(tmp);
+    // data has to be pre-allocated with proper size
+    if(!tmp.isContinuous()){
+        tmp = tmp.clone();
+    }
+
+    std::cout << __func__ << ": width: " << tmp.size().width << ", hieght: " << tmp.size().height << std::endl;
+
+    //for(int i = 0 ; i < tmp.size().width ; i++){
+    //    for(int j = 0 ; j < tmp.size().height ; j++){
+    //        std::cout << tmp.at<int>(i,j) << " "; 
+    //    }
+    //    std::cout << std::endl;
+    //}
+
+
+    // row-major
+    std::memcpy(data, 
+                (int*)tmp.data, 
+                tmp.size().width * tmp.size().height * sizeof(int));
+}
+
 void array2mat(Mat& img, uint8_t* data, int rows, int cols){
     Mat tmp = Mat(rows, cols, CV_8U, data);
     tmp.copyTo(img);

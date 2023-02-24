@@ -152,8 +152,26 @@ class KernelModels:
         """ This function returns a NN-based blackscholes model. """
         encoded_dim = 16
         inputs = keras.Input(shape=(in_shape[0]*3, in_shape[1])+(1,))
-        x = layers.Conv2D(filters=encoded_dim, strides=(3, 1), kernel_size=(3,3), padding='same', activation='relu')(inputs)
-        #x = layers.Dense(1, activation='relu')(inputs)
+        # slice 1
+        x1 = tf.slice(inputs, [0, 0, 0 ,0], [1, in_shape[0], in_shape[1], 1])
+        # slice 2
+        x2 = tf.slice(inputs, [0, in_shape[0], 0 ,0], [1, in_shape[0], in_shape[1], 1])
+        # slice 3
+        x3 = tf.slice(inputs, [0, in_shape[0]*2, 0 ,0], [1, in_shape[0], in_shape[1], 1])
+    
+        init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
+
+        for i in range(2):
+            x1 = layers.Conv2D(filters=encoded_dim, kernel_size=(1, 1), padding='same', activation='sigmoid', kernel_initializer=init)(x1)
+            x2 = layers.Conv2D(filters=encoded_dim, kernel_size=(1, 1), padding='same', activation='sigmoid', kernel_initializer=init)(x2)
+            x3 = layers.Conv2D(filters=encoded_dim, kernel_size=(1, 1), padding='same', activation='sigmoid', kernel_initializer=init)(x3)
+        
+        x = layers.Add()([x1, x2])
+        x = layers.Add()([x, x3])
+    
+        x = layers.Conv2D(filters=1, kernel_size=(1, 1), padding='same', activation='relu', kernel_initializer=init)(x)
+        #x = tf.slice(x, [0, 0, 0 ,0], [1, in_shape[0], in_shape[1], 1])
+        
         outputs = x
         return keras.Model(inputs, outputs)
     
@@ -168,7 +186,7 @@ class KernelModels:
         return keras.Model(inputs, outputs)
 
     @staticmethod
-    def histogram256(in_shape, out_shape):
+    def histogram_2d(in_shape, out_shape):
         """ This function returns a NN-based hist256 model. """
         inputs = keras.Input(shape=in_shape+(1,))
 #        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(x)

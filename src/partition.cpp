@@ -293,7 +293,9 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
         }
     }
     sort(order.begin(), order.end(), sortByVal);
-    
+   
+    std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
+
     this->criticality_kernel(this->params, order, this->params.get_criticality_ratio()); 
 
     timing e = clk::now();
@@ -419,6 +421,7 @@ double PartitionRuntime::prepare_partitions(){
     for(unsigned int i = 0 ; i < this->row_cnt ; i++){
         for(unsigned int j = 0; j < this->col_cnt ; j++){
             unsigned int idx = i*this->col_cnt+j;
+            std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[idx] << std::endl;
             if( !this->is_dynamic_block[idx] ){
                 auto device_type = this->mix_policy(idx);
                 this->create_kernel_by_type(idx, device_type);
@@ -488,6 +491,7 @@ double PartitionRuntime::run_partitions(){
        dynamic scheduling.
     */
     for(unsigned int i = 0 ; i < this->block_cnt ; i++){
+        std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[i] << std::endl;
         if(this->is_dynamic_block[i]){
             struct node_data curr_node;
             curr_node.generic_kernel = &(this->generic_kernels[i]);

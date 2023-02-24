@@ -10,6 +10,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/cudaarithm.hpp> // addWeighted()
 #include <opencv2/cudafilters.hpp> // create[XXX]Filter()
+#include <opencv2/cudaimgproc.hpp> // hist
 #include "srad.h"
 #include "BmpUtil.h"
 #include "cuda_utils.h"
@@ -80,7 +81,7 @@ __device__ inline float cndGPU(float d)
 
 __device__ inline void BlackScholesBodyGPU(
     float &CallResult,
-    float &PutResult,
+    //float &PutResult,
     float S, //Stock price
     float X, //Option strike
     float T, //Option years
@@ -101,13 +102,13 @@ __device__ inline void BlackScholesBodyGPU(
     //Calculate Call and Put simultaneously
     expRT = __expf(- R * T);
     CallResult = S * CNDD1 - X * expRT * CNDD2;
-    PutResult  = X * expRT * (1.0f - CNDD2) - S * (1.0f - CNDD1);
+    //PutResult  = X * expRT * (1.0f - CNDD2) - S * (1.0f - CNDD1);
 }
 
 __launch_bounds__(128)
 __global__ void BlackScholesGPU(
     float2 * __restrict d_CallResult,
-    float2 * __restrict d_PutResult,
+    //float2 * __restrict d_PutResult,
     float2 * __restrict d_StockPrice,
     float2 * __restrict d_OptionStrike,
     float2 * __restrict d_OptionYears,
@@ -130,7 +131,7 @@ __global__ void BlackScholesGPU(
         float putResult1, putResult2;
         BlackScholesBodyGPU(
             callResult1,
-            putResult1,
+            //putResult1,
             d_StockPrice[opt].x,
             d_OptionStrike[opt].x,
             d_OptionYears[opt].x,
@@ -139,7 +140,7 @@ __global__ void BlackScholesGPU(
         );
         BlackScholesBodyGPU(
             callResult2,
-            putResult2,
+            //putResult2,
             d_StockPrice[opt].y,
             d_OptionStrike[opt].y,
             d_OptionYears[opt].y,
@@ -147,7 +148,7 @@ __global__ void BlackScholesGPU(
             Volatility
         );
         d_CallResult[opt] = make_float2(callResult1, callResult2);
-        d_PutResult[opt] = make_float2(putResult1, putResult2);
+        //d_PutResult[opt] = make_float2(putResult1, putResult2);
      }
 }
 
@@ -164,21 +165,21 @@ void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void
     
     float
     *h_CallResultGPU = (float*)*out_img,
-    *h_PutResultGPU = &((float*)*out_img)[OPT_N],
+    //*h_PutResultGPU = &((float*)*out_img)[OPT_N],
     *h_StockPrice = (float*)*in_img,
     *h_OptionStrike = &((float*)*in_img)[OPT_N],
     *h_OptionYears = &((float*)*in_img)[2 * OPT_N];
     
     float
     *d_CallResult,
-    *d_PutResult,
+    //*d_PutResult,
     *d_StockPrice,
     *d_OptionStrike,
     *d_OptionYears;
 
     printf("...allocating GPU memory for options.\n");
     checkCudaErrors(cudaMalloc((void **)&d_CallResult,   OPT_SZ));
-    checkCudaErrors(cudaMalloc((void **)&d_PutResult,    OPT_SZ));
+    //checkCudaErrors(cudaMalloc((void **)&d_PutResult,    OPT_SZ));
     checkCudaErrors(cudaMalloc((void **)&d_StockPrice,   OPT_SZ));
     checkCudaErrors(cudaMalloc((void **)&d_OptionStrike, OPT_SZ));
     checkCudaErrors(cudaMalloc((void **)&d_OptionYears,  OPT_SZ));
@@ -193,7 +194,7 @@ void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void
     {
         BlackScholesGPU<<<DIV_UP((OPT_N/2), 128), 128/*480, 128*/>>>(
             (float2 *)d_CallResult,
-            (float2 *)d_PutResult,
+            //(float2 *)d_PutResult,
             (float2 *)d_StockPrice,
             (float2 *)d_OptionStrike,
             (float2 *)d_OptionYears,
@@ -206,12 +207,12 @@ void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void
     checkCudaErrors(cudaDeviceSynchronize());
 
     checkCudaErrors(cudaMemcpy(h_CallResultGPU, d_CallResult, OPT_SZ, cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(h_PutResultGPU,  d_PutResult,  OPT_SZ, cudaMemcpyDeviceToHost));
+    //checkCudaErrors(cudaMemcpy(h_PutResultGPU,  d_PutResult,  OPT_SZ, cudaMemcpyDeviceToHost));
 
     checkCudaErrors(cudaFree(d_OptionYears));
     checkCudaErrors(cudaFree(d_OptionStrike));
     checkCudaErrors(cudaFree(d_StockPrice));
-    checkCudaErrors(cudaFree(d_PutResult));
+    //checkCudaErrors(cudaFree(d_PutResult));
     checkCudaErrors(cudaFree(d_CallResult));
 }
 
@@ -637,16 +638,19 @@ void GpuKernel::hotspot_2d(KernelParams& kernel_params, void** input, void** out
 }
 
 typedef struct Color {
-    unsigned int g; // grayscale
+    unsigned int r, g, b; 
 } Color;
 
 void init_means(Color means[], unsigned char *im, int Size_row, int N_colors, int Size) {
     int r;
     int i;
+    srand(2023);
     for (i = 0; i < N_colors; ++i) {
         r = rand() % Size;
-        int index = r; //(r*1/Size_row) * Size_row + ((r*1)%Size_row);
-        means[i].g = im[index];
+        int index = (r*3/Size_row) * Size_row + ((r*3)%Size_row);
+        means[i].r = im[index+2];
+        means[i].g = im[index+1];
+        means[i].b = im[index];
     }
 }
 
@@ -654,11 +658,11 @@ __global__ void find_best_mean_par(Color means[], int assigns[], unsigned char *
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < N) {
         int j;
-        int index = id; //(id*1/Size_row) * Size_row + ((id*1)%Size_row);
+        int index = (id*3/Size_row) * Size_row + ((id*3)%Size_row);
         int dist_min = -1;
         int dist_act, assign;
         for (j = 0; j < ncolors; ++j) {
-            dist_act = (im[index] - means[j].g)*(im[index] - means[j].g);
+            dist_act = (im[index+2] - means[j].r)*(im[index+2] - means[j].r) + (im[index+1] - means[j].g)*(im[index+1] - means[j].g) + (im[index] - means[j].b)*(im[index] - means[j].b);
             if (dist_min == -1 || dist_act < dist_min) {
                 dist_min = dist_act;
                 assign = j;
@@ -719,13 +723,13 @@ __global__ void matrix_reduction_color(Color new_means[], int assigns[], unsigne
         unsigned int aux = 0;
  
         if (id < Size && j == assigns[id]) {
-            int index = id; // (id*1/Size_row) * Size_row + ((id*1)%Size_row);
+            int index = (id*3/Size_row) * Size_row + ((id*3)%Size_row);
             aux += im[index];
         }
  
         if (id + blockDim.x < Size && j == assigns[id + blockDim.x]) {
-            int index = id + blockDim.x; //((id + blockDim.x)*1/Size_row) * Size_row + (((id + blockDim.x)*1)%Size_row);
-            aux += im[index];
+            int index = ((id + blockDim.x)*3/Size_row) * Size_row + (((id + blockDim.x)*3)%Size_row);
+            aux += im[index+offset];
         }
  
         shared[tid*N_colors + j] = aux;
@@ -743,10 +747,14 @@ __global__ void matrix_reduction_color(Color new_means[], int assigns[], unsigne
             }
         }
         __syncthreads();
-    }//copiar valors:
+    }
+    
+    //copiar valors:
     if (tid == 0) {
-       for (int j = 0; j < N_colors; ++j) {
-            new_means[blockIdx.x*N_colors + j].g = shared[j];
+        for (int j = 0; j < N_colors; ++j) {
+            if (offset == 2) new_means[blockIdx.x*N_colors + j].r = shared[j];
+            else if (offset == 1) new_means[blockIdx.x*N_colors + j].g = shared[j];
+            else new_means[blockIdx.x*N_colors + j].b = shared[j];
         }
     }
 }
@@ -791,7 +799,10 @@ __global__ void matrix_reduction_color_2(Color new_means_2[], Color new_means[],
  
     //init shared
     for (int j = 0; j < N_colors; ++j) {
-        shared[tid*N_colors + j] = new_means[id*N_colors + j].g + new_means[(id + blockDim.x) *N_colors + j].g;
+        if (offset == 2)         shared[tid*N_colors + j] = new_means[id*N_colors + j].r + new_means[(id + blockDim.x) *N_colors + j].r;
+        else if (offset == 1)    shared[tid*N_colors + j] = new_means[id*N_colors + j].g + new_means[(id + blockDim.x) * N_colors + j].g;
+        else                     shared[tid*N_colors + j] = new_means[id*N_colors + j].b + new_means[(id + blockDim.x) *N_colors + j].b;
+
     }
  
     __syncthreads();
@@ -810,7 +821,9 @@ __global__ void matrix_reduction_color_2(Color new_means_2[], Color new_means[],
     //copiar valors:
     if (tid == 0) {
         for (int j = 0; j < N_colors; ++j) {
-            new_means_2[blockIdx.x*N_colors + j].g = shared[j];
+            if (offset == 2) new_means_2[blockIdx.x*N_colors + j].r = shared[j];
+            else if (offset == 1) new_means_2[blockIdx.x*N_colors + j].g = shared[j];
+            else new_means_2[blockIdx.x*N_colors + j].b = shared[j];
         }
     }
 }
@@ -820,15 +833,23 @@ __global__ void divide_sums_by_counts_par(Color means_device[], int N_colors, Co
     if (id < N_colors) {
         //Turn 0/0 into 0/1 to avoid zero division.
         if(counts[id] == 0) counts[id] = 1;
+        means_device[id].r = new_means[id].r / counts[id];
         means_device[id].g = new_means[id].g / counts[id];
+        means_device[id].b = new_means[id].b / counts[id];
     }
 }
 
-__global__ void assign_colors_par(Color means[], int assigns[], unsigned char *im, int Size_row, int Size) {
+__global__ void assign_colors_par(Color means[], int assigns[], unsigned char *im, int Size_row, int Size, int N_colors) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < Size) {
-        int index = id; //(id*1/Size_row) * Size_row + ((id*1)%Size_row);
-        im[index]=means[assigns[id]].g;
+        int index = (id*3/Size_row) * Size_row + ((id*3)%Size_row);
+        unsigned char step = floor(256./(N_colors-1));
+        //im[index]=means[assigns[id]].b;
+        //im[index + 1]=means[assigns[id]].g;
+        //im[index + 2]=means[assigns[id]].r;
+        im[index]= min(assigns[id] * step, 255);
+        //im[index + 1]=means[assigns[id]].g;
+        //im[index + 2]=means[assigns[id]].r;
     }
 }
 
@@ -838,8 +859,10 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
     //    std::cout << __func__ << ": input: " << (unsigned)((uint8_t*)(*input))[i] << std::endl;
     //}
     
-    int N_iterations = 10;
+    int N_iterations = 1;
     unsigned int nThreads = 1024; //THREADS;
+    int width = kernel_params.params.get_kernel_size();
+    int height = kernel_params.params.get_kernel_size();
     int Size = kernel_params.params.get_kernel_size() * kernel_params.params.get_kernel_size();
     unsigned int nBlocks = (Size + nThreads - 1)/nThreads;
     int N_colors = 4;
@@ -865,13 +888,22 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
     counts_host_red = (int*) malloc((nBlocks/(4*nThreads)) * sizeof(int) * N_colors);
  
     //inicialitzar means:
-    unsigned char* im_host = (uint8_t*)*input;
+    unsigned char* im_host = (uint8_t*) malloc(width * height * 3 * sizeof(uint8_t));  //(uint8_t*)*input;
+    unsigned char* out_tmp = (uint8_t*) malloc(width * height * 3 * sizeof(uint8_t));  //(uint8_t*)*input;
+    for(int i = 0 ; i < width ; i++){
+        for(int j = 0 ; j < height ; j++){
+            im_host[(i*height+j)*3] = ((uint8_t*)*input)[i*height+j];
+            im_host[(i*height+j)*3+1] = 0;//((uint8_t*)*input)[i*height+j];
+            im_host[(i*height+j)*3+2] = 0;//((uint8_t*)*input)[i*height+j];
+        }
+    }
+
     int Size_row = ((kernel_params.params.get_kernel_size()*3 + 3) / 4 ) * 4;
     init_means(means_host, im_host, Size_row, N_colors, Size);
    
-//    for(int i = 0 ; i < N_colors ; i++){
-//        printf("means_host[%d]: %d\n", i, means_host[i].g);
-//    }
+    for(int i = 0 ; i < N_colors ; i++){
+        printf("init means_host[%d]: %d\n", i, means_host[i].g);
+    }
 
     //obtenir memoria DEVICE:
     Color *means_device;
@@ -881,6 +913,7 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
     int *counts_2;
  
     int *assigns;
+    int *assigns_host = (int*) malloc(Size*sizeof(int));
     unsigned char *im_device;
 
     cudaMalloc((Color**)&means_device, N_colors*sizeof(Color));
@@ -891,11 +924,13 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
     cudaMalloc((Color**)&new_means_2, (nBlocks/(2*nThreads)) * N_colors*sizeof(Color));
     cudaMalloc((int**)&counts_2, (nBlocks/(2*nThreads)) * N_colors * sizeof (int));
 
+    int imgSize = ((width*3 + 3) / 4 ) * 4 * height;
+
     cudaMalloc((int**)&assigns, Size*sizeof(int));
-    cudaMalloc((unsigned char**)&im_device, Size * sizeof(unsigned char));
+    cudaMalloc((unsigned char**)&im_device,  imgSize * sizeof(unsigned char));
 
     //copiar dades al device:
-    cudaMemcpy(im_device, im_host, Size * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    cudaMemcpy(im_device, im_host, imgSize * sizeof(unsigned char), cudaMemcpyHostToDevice);
     cudaMemcpy(means_device, means_host, N_colors*sizeof(Color), cudaMemcpyHostToDevice);
     
     int shared_memory_size = N_colors * nThreads * sizeof(unsigned int);
@@ -911,12 +946,16 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
         cudaDeviceSynchronize();
 
         matrix_reduction_count<<<nBlocks/(2*nThreads), dimBlock, shared_memory_size>>>(counts, assigns, im_device, Size_row, Size, N_colors);
+        matrix_reduction_color<<<nBlocks/(2*nThreads), dimBlock, shared_memory_size>>>(new_means, assigns, im_device, Size_row, Size, N_colors, 2);
+        matrix_reduction_color<<<nBlocks/(2*nThreads), dimBlock, shared_memory_size>>>(new_means, assigns, im_device, Size_row, Size, N_colors, 1);
         matrix_reduction_color<<<nBlocks/(2*nThreads), dimBlock, shared_memory_size>>>(new_means, assigns, im_device, Size_row, Size, N_colors, 0);
 
         cudaDeviceSynchronize();
 
         //volmemos a hacer otra reduccion
         matrix_reduction_count_2<<<nBlocks/(4*nThreads), dimBlock, shared_memory_size>>>(counts_2, counts, Size_row, Size, N_colors);
+        matrix_reduction_color_2<<<nBlocks/(4*nThreads), dimBlock, shared_memory_size>>>(new_means_2, new_means, Size_row, Size, N_colors, 2);
+        matrix_reduction_color_2<<<nBlocks/(4*nThreads), dimBlock, shared_memory_size>>>(new_means_2, new_means, Size_row, Size, N_colors, 1);
         matrix_reduction_color_2<<<nBlocks/(4*nThreads), dimBlock, shared_memory_size>>>(new_means_2, new_means, Size_row, Size, N_colors, 0);
 
         cudaMemcpy(means_host_red, new_means_2, (nBlocks/(4*nThreads)) * N_colors * sizeof(Color), cudaMemcpyDeviceToHost);
@@ -930,7 +969,9 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
         for (i = 0; i < nBlocks/(4*nThreads); ++i) {
             for (j = 0; j < N_colors; ++j) {
                 counts_host[j] += counts_host_red[i*N_colors + j];
+                means_host[j].r += means_host_red[i*N_colors + j].r;
                 means_host[j].g += means_host_red[i*N_colors + j].g;
+                means_host[j].b += means_host_red[i*N_colors + j].b;
                 std::cout << __func__ << ": i: " << i << ",j: " << j << ", means_host[" << j << "]: " << (unsigned)means_host[j].g << ", counts_host: " << counts_host[j] << std::endl;
             }
         }
@@ -945,16 +986,37 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
     }
 
     //assignem colors:
-    assign_colors_par<<<dimGrid, dimBlock>>>(means_device, assigns, im_device, Size_row, Size);
+    assign_colors_par<<<dimGrid, dimBlock>>>(means_device, assigns, im_device, Size_row, Size, N_colors);
+        
+    cudaMemcpy(assigns_host, assigns, Size * sizeof(int), cudaMemcpyDeviceToHost);
  
     //copy to host:
-    uint8_t* out_tmp = (uint8_t*)*output;
-    cudaMemcpy(out_tmp, im_device, Size * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    cudaMemcpy(out_tmp, im_device, imgSize * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
-    //for(int i = 0 ; i < 100 ; i++){
-    //    std::cout << __func__ << ": output: " << (unsigned)((uint8_t*)(*output))[i] << std::endl;
-    //}
+    for(int i = 0 ; i < width ; i++){
+        for(int j = 0 ; j < height ; j++){
+            ((uint8_t*)*output)[i*height+j] = out_tmp[(i*height+j)*3];
+                                              //sqrt((out_tmp[(i*height+j)*3]   * out_tmp[(i*height+j)*3] +
+                                              //out_tmp[(i*height+j)*3+1] * out_tmp[(i*height+j)*3+1] +
+                                              //out_tmp[(i*height+j)*3+2] * out_tmp[(i*height+j)*3+2]) / 3.) ;
+        }
+    }
+    
+    for(int i = 0 ; i < 100 ; i++){
+        std::cout << __func__ << ": im_host: " << (unsigned)((uint8_t*)(im_host))[i*3] << std::endl;
+    }
+
+    for(int i = 0 ; i < 100 ; i++){
+        std::cout << __func__ << ": out_tmp: " << (unsigned)((uint8_t*)(out_tmp))[i*3] << std::endl;
+    }
+
+    for(int i = 0 ; i < Size ; i++){
+        std::cout << __func__ << ": assigns_host: " << assigns_host[i*3] << std::endl;
+    }
     //alliberar memoria DEVICE:
+    free(im_host);
+    free(out_tmp);
+
     cudaFree(means_device);
     cudaFree(new_means);
     cudaFree(new_means_2);
@@ -996,6 +1058,10 @@ void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     cuda::abs(grad_y, abs_grad_y);
   
     cuda::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
+}
+
+void GpuKernel::histogram_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+    cuda::calcHist(in_img, out_img);
 }
 
 void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output){

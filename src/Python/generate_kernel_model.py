@@ -67,10 +67,7 @@ class MyDataGen():
         else:
             x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
 
-        if self.model_name == "blackscholes_2d":
-            y = np.zeros((self.num_samples,) + (self.out_shape[0] * 2, self.out_shape[1]) + (1,), dtype="float32")
-        else:
-            y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
+        y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         
         for j in range(self.num_samples):
             if self.model_name == 'histogram256':
@@ -78,6 +75,8 @@ class MyDataGen():
                 x_slice = (x_slice / max(x_slice)) * 255
                 x_slice = x_slice.astype("uint8")
                 y_slice = self.func(x_slice)
+                x_max = 1.
+                y_max = 1.
             elif self.model_name == 'fft_2d':
                 np.random.seed(j)
                 # use the same input data range 0 ~ 15 as samples/3_Imaging/convolutionFFT2D does
@@ -104,11 +103,13 @@ class MyDataGen():
                 a_slice, b_slice, c_slice = load_blackscholes_data(self.in_shape)
                 x_slice = np.concatenate((a_slice, b_slice, c_slice))
                 y_slice = self.func(x_slice)
-                
-                print("x_slice.shape: ", x_slice.shape, ", y_slice.shape: ", y_slice.shape)
+                x_max = 1. #x_slice.max()
+                y_max = 1. #y_slice.max()
 
-                x_max = x_slice.max()
-                y_max = y_slice.max()
+                #print("x max: ", x_max, ", y max: ", y_max)
+                #print("x_slice: ", x_slice, ",\n x max: ", x_slice.max(), ", x min: ", x_slice.min())
+                #print("y_slice: ", y_slice, ",\n y max: ", y_slice.max(), ", y min: " , y_slice.min())
+
             elif self.model_name == "dwt_2d":
                 image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
                 image = image.resize(self.in_shape)
@@ -172,6 +173,13 @@ class MyDataGen():
                 power_slice -= power_slice.min()
                 power_slice /= power_slice.max()
                 x_slice = np.concatenate((temp_slice, power_slice))
+                x_slice = np.expand_dims(x_slice, axis=0)
+            elif self.model_name == "blackscholes_2d":
+        #        np.random.seed(j)
+        #        x_slice = np.random.randint(255, size=(1,) + (self.in_shape[0]*3, self.in_shape[1]), dtype="uint8")
+        #        tf.keras.utils.set_random_seed(seed)
+                a_slice, b_slice, c_slice = load_blackscholes_data(self.in_shape)
+                x_slice = np.concatenate((a_slice, b_slice, c_slice)).astype("uint8")
                 x_slice = np.expand_dims(x_slice, axis=0)
             else:
                 np.random.seed(j)
@@ -309,6 +317,19 @@ def pre_quantize_test(params, target_func, logfile):
         Y_ground_truth = target_func(np.asarray(image).astype('float32'))
         x_scale = 255.
         y_scale = 255.
+    elif params.model_name == "blackscholes_2d":
+        a_slice, b_slice, c_slice = load_blackscholes_data(params.in_shape)
+        X_test = np.concatenate((a_slice, b_slice, c_slice))
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
+    elif params.model_name == "histogram256":
+        x_slice = np.full(params.in_shape[0], binom.pmf(list(range(params.in_shape[0])), 255, random.random()))    
+        x_slice = (x_slice / max(x_slice)) * 255
+        X_test = x_slice.astype("uint8")
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -323,6 +344,7 @@ def pre_quantize_test(params, target_func, logfile):
     # get model and peek model weights
     np.set_printoptions(edgeitems=5, precision=3, linewidth=120)
     model = tf.keras.models.load_model(params.saved_model_dir)
+    print("model weights:")
     print(model.get_weights())
     
     X_test = np.expand_dims(X_test, axis=(0, len(params.in_shape)+1))
@@ -331,7 +353,9 @@ def pre_quantize_test(params, target_func, logfile):
     # get model prediction
     X_test = (X_test.astype('float32') / x_scale) 
     model.summary()
-    print(X_test[0][:,:,0])
+    #print(X_test[0][:,:,0])
+    print("X_test:")
+    print(X_test)
     print("X_test.shape: ", X_test.shape)
     Y_predict = model.predict(X_test, batch_size=1)
     Y_predict = np.asarray(Y_predict)
@@ -386,6 +410,14 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         X_test = np.asarray(image).astype('float32') / 255.
         Y_ground_truth = target_func(X_test)
         X_test = np.asarray(image).astype('uint8')
+    elif params.model_name == "blackscholes_2d":
+        a_slice, b_slice, c_slice = load_blackscholes_data(params.in_shape)
+        X_test = np.concatenate((a_slice, b_slice, c_slice))
+        Y_ground_truth = target_func(X_test)
+        X_test = X_test.astype("uint8")
+        print("X_test max: ", X_test.max(), ", min: ", X_test.min())
+        x_scale = 1.
+        y_scale = 29./98. #29./255.
     elif params.model_name == "dwt_2d":
         x_scale = 255.
         y_scale = 1.

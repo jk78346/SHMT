@@ -183,15 +183,15 @@ void init_blackscholes(Params params,
 
     float* h_CallResult_baseline = (float*)*output_array_baseline;
     float* h_CallResult_proposed = (float*)*output_array_proposed;
-    float* h_PutResult_baseline = &((float*)*output_array_baseline)[OPT_N];
-    float* h_PutResult_proposed = &((float*)*output_array_proposed)[OPT_N];
+    //float* h_PutResult_baseline = &((float*)*output_array_baseline)[OPT_N];
+    //float* h_PutResult_proposed = &((float*)*output_array_proposed)[OPT_N];
 
     for (int i = 0; i < OPT_N; i++)
     {
         h_CallResult_baseline[i] = 0.0f;
-        h_PutResult_baseline[i]  = -1.0f;
+        //h_PutResult_baseline[i]  = -1.0f;
         h_CallResult_proposed[i] = 0.0f;
-        h_PutResult_proposed[i]  = -1.0f;
+        //h_PutResult_proposed[i]  = -1.0f;
         h_StockPrice[i]    = RandFloat(5.0f, 30.0f);
         h_OptionStrike[i]  = RandFloat(1.0f, 100.0f);
         h_OptionYears[i]   = RandFloat(0.25f, 10.0f);
@@ -214,8 +214,13 @@ void data_initialization(Params params,
                   params.app_name) !=
         params.uint8_t_type_app.end() ){
         *input_array = (uint8_t*) malloc(input_total_size * sizeof(uint8_t));
-        *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
-        *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        
+        if(params.app_name == "histogram_2d"){
+            *output_array_baseline = (int*) malloc(output_total_size * sizeof(int));
+            *output_array_proposed = (int*) malloc(output_total_size * sizeof(int));        
+        }else{
+            *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
+            *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        
+        }
         Mat in_img;
         read_img(params.input_data_path,
                  rows,
@@ -259,8 +264,8 @@ void data_initialization(Params params,
             init_hotspot(rows, cols, input_array);
         }else if(params.app_name == "blackscholes_2d"){
             *input_array = (float*) malloc(3 * input_total_size * sizeof(float));
-            *output_array_baseline = (float*) malloc(2 * output_total_size * sizeof(float));
-            *output_array_proposed = (float*) malloc(2 * output_total_size * sizeof(float));   
+            *output_array_baseline = (float*) malloc(/*2 **/ output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(/*2 **/ output_total_size * sizeof(float));   
             init_blackscholes(params, rows, cols, input_array, output_array_baseline, output_array_proposed);
         }else{
             *input_array = (float*) malloc(input_total_size * sizeof(float));

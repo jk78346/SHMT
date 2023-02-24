@@ -74,10 +74,13 @@ public:
                             this->kernel_table_fp.end(),
                             app_name) !=
                   this->kernel_table_fp.end() ){
+            if(app_name == "blackscholes_2d"){
+                this->in_size  = 
+                    3 * this->params.get_kernel_size() * this->params.get_kernel_size();        
+            }
             this->input_kernel  = (uint8_t*) malloc(this->in_size * sizeof(uint8_t));
             this->output_kernel = (uint8_t*) calloc(this->out_size, sizeof(uint8_t));
             float* input_array  = reinterpret_cast<float*>(this->input);
-
             if(app_name == "fft_2d"){
                 //this->fft_2d_input_conversion();
                 float scale = 255./16.;
@@ -135,6 +138,8 @@ public:
                 adj_scale = scale * 343.76224;
             }else if(app_name == "dct8x8_2d" || app_name == "dwt_2d"){
                 adj_scale = scale;
+            }else if(app_name == "blackscholes_2d"){
+                adj_scale = scale * 29./11.5; // * 29./98.;
             }else if(app_name == "srad_2d"){
                 adj_scale = scale * (1./255.);
             }else{
