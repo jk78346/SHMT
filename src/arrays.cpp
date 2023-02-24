@@ -457,7 +457,7 @@ void output_array_partition_gathering(Params params,
         }
         mat2array(output_mat, (uint8_t*)*output);
     }else if(params.app_name == "blackscholes_2d"){
-        Mat output_mat(2 * params.problem_size, params.problem_size, CV_32F), tmp_call, tmp_put;
+        Mat output_mat(/*2 **/ params.problem_size, params.problem_size, CV_32F), tmp_call, tmp_put;
     
         int total_block_size = params.block_size * params.block_size;
 
@@ -468,10 +468,10 @@ void output_array_partition_gathering(Params params,
                           (float*)(output_pars[idx]), 
                           params.block_size, 
                           params.block_size);
-                array2mat(tmp_put,  
-                          &((float*)(output_pars[idx]))[total_block_size], 
-                          params.block_size, 
-                          params.block_size);
+                //array2mat(tmp_put,  
+                //          &((float*)(output_pars[idx]))[total_block_size], 
+                //          params.block_size, 
+                //          params.block_size);
                 int top_left_w = j*params.block_size;
                 int top_left_h = i*params.block_size;
                 Rect roi_call(top_left_w, 
@@ -479,11 +479,11 @@ void output_array_partition_gathering(Params params,
                               params.block_size, 
                               params.block_size); 
                 tmp_call.copyTo(output_mat(roi_call));
-                Rect roi_put(top_left_w, 
-                             top_left_h + params.problem_size, 
-                             params.block_size, 
-                             params.block_size); 
-                tmp_put.copyTo(output_mat(roi_put));
+                //Rect roi_put(top_left_w, 
+                //             top_left_h + params.problem_size, 
+                //             params.block_size, 
+                //             params.block_size); 
+                //tmp_put.copyTo(output_mat(roi_put));
             }
         }
         mat2array(output_mat, (float*)*output);
