@@ -107,7 +107,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
               << this->params.get_downsampling_rate() << std::endl;
     /* Downsampling tiling blocks and assign them to edgetpu. */
     std::vector<void*> input_sampling_pars;
-    std::vector<void*> cpu_output_sampling_pars;
+    std::vector<void*> gpu_output_sampling_pars;
     std::vector<void*> tpu_output_sampling_pars;
     
     array_partition_downsampling(this->params,
@@ -118,7 +118,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     array_partition_downsampling(this->params,
                                  true, // skip_init
                                  this->output_pars,
-                                 cpu_output_sampling_pars);
+                                 gpu_output_sampling_pars);
     
     array_partition_downsampling(this->params,
                                  true, // skip_init
@@ -135,12 +135,12 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
             params.block_size = this->params.block_size * params.get_downsampling_rate();
 
             // cpu part
-             CpuKernel* cpu_kernel_ptr = new CpuKernel(params,
+             GpuKernel* gpu_kernel_ptr = new GpuKernel(params,
                                                        input_sampling_pars[idx],
-                                                       cpu_output_sampling_pars[idx]);
-            sampling_overhead += cpu_kernel_ptr->input_conversion();
-            sampling_overhead += cpu_kernel_ptr->run_kernel(1);
-            sampling_overhead += cpu_kernel_ptr->output_conversion();
+                                                       gpu_output_sampling_pars[idx]);
+            sampling_overhead += gpu_kernel_ptr->input_conversion();
+            sampling_overhead += gpu_kernel_ptr->run_kernel(1);
+            sampling_overhead += gpu_kernel_ptr->output_conversion();
 
             // tpu part
             TpuKernel* tpu_kernel_ptr = new TpuKernel(params,
@@ -154,8 +154,8 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
             
             UnifyType* unify_input_type = 
                 new UnifyType(params, input_sampling_pars[idx]);          
-            UnifyType* unify_cpu_output_type =
-                new UnifyType(params, cpu_output_sampling_pars[idx]);
+            UnifyType* unify_gpu_output_type =
+                new UnifyType(params, gpu_output_sampling_pars[idx]);
             UnifyType* unify_tpu_output_type =
                 new UnifyType(params, tpu_output_sampling_pars[idx]);
                 
@@ -176,7 +176,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                                                        params.block_size,
                                                        unify_input_type->float_array,
                                                        unify_tpu_output_type->float_array,
-                                                       unify_cpu_output_type->float_array,
+                                                       unify_gpu_output_type->float_array,
                                                        dummy,
                                                        dummy2));
 //            std::cout << __func__ << ": block[" << i << ", " << j << "]: "
@@ -202,15 +202,19 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                   << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
         // objective or criticality ordering
         //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
-        //order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
         
         /* good for sobel_2d */
         //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
         
         /* testing for laplacian_2d */
-        order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
+        //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
     }
     sort(order.begin(), order.end(), sortByVal);
+
+    std::cout << __func__ << ": oracle s.t. error_rate." << std::endl;
+    
+    params.set_criticality_ratio();
     this->criticality_kernel(params, order, params.get_criticality_ratio()); 
 
     // If a block is critical, then it must be static and assigned to GPU.
