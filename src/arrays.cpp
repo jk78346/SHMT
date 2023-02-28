@@ -22,6 +22,15 @@ void init_fft(unsigned int input_total_size, void** input_array){
     }
 }
 
+void init_srad(Params params, int rows, int cols, void** input_array){
+    srand(7);
+    for(int i = 0 ; i < params.problem_size ; i++){
+        for(int j = 0 ; j < params.problem_size ; j++){
+            ((float*)*input_array)[i*params.problem_size+j] = rand()/(float)RAND_MAX;
+        }
+    }
+}
+
 void init_dct8x8(Params params, int rows, int cols, void** input_array){
     /* Reference: samples/3_Imaging/dct8x8/dct8x8.cu */
     //char SampleImageFname[256];
@@ -267,6 +276,11 @@ void data_initialization(Params params,
             *output_array_baseline = (float*) malloc(/*2 **/ output_total_size * sizeof(float));
             *output_array_proposed = (float*) malloc(/*2 **/ output_total_size * sizeof(float));   
             init_blackscholes(params, rows, cols, input_array, output_array_baseline, output_array_proposed);
+        }else if(params.app_name == "srad_2d"){
+            *input_array = (float*) malloc(input_total_size * sizeof(float));
+            *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));
+            *output_array_proposed = (float*) malloc(output_total_size * sizeof(float));   
+            init_srad(params, rows, cols, input_array);
         }else{
             *input_array = (float*) malloc(input_total_size * sizeof(float));
             *output_array_baseline = (float*) malloc(output_total_size * sizeof(float));

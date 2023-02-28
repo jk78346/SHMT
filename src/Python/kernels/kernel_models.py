@@ -178,6 +178,7 @@ class KernelModels:
     @staticmethod
     def dwt_2d(in_shape, out_shape):
         """ This function returns a NN-based dwt model. """
+        
         encoded_dim = 16
         inputs = keras.Input(shape=in_shape+(1,))
         x = layers.Conv2D(filters=encoded_dim, kernel_size=(3, 3), padding='same', activation='relu')(inputs)
@@ -191,11 +192,30 @@ class KernelModels:
         inputs = keras.Input(shape=in_shape+(1,))
 #        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(x)
 #        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(x)
-        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(inputs)
-        x = layers.Flatten()(x)
-        x = layers.Dense(256*4)(x)
-        x = layers.Dense(256*4)(x)
+#        x = layers.Conv2D(filters=1, kernel_size=1, activation='relu')(inputs)
+#        x = layers.Flatten()(inputs)
+#        x = layers.Dense(256*4)(x)
+#        x = layers.Dense(256*4)(x)
 #        x = layers.Dense(512*4)(x)
 #        x = layers.Lambda(lambda x: backend.sum(x, axis=1))(x)
+
+#        encoded_dim =1024
+#        x = layers.Conv2D(filters=encoded_dim, kernel_size=1, activation="relu")(inputs)
+#        x = tf.reduce_sum(x, [1, 2])
+        #x = layers.Conv2D(filters=256*4, kernel_size=4, strides=4, activation="relu")(x)
+#        x = layers.Reshape((256, 4, 1))(x)
+
+        #x = layers.Flatten()(x)
+        #x = layers.Dense(256*4)(x)
+ 
+
+        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', activation='relu')(inputs)
+        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', strides=(1, 4), activation='relu')(x)
+        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', strides=(1, 4), activation='relu')(x)
+        x = layers.Conv2D(filters=1, kernel_size=4,  padding='same', strides=(1, 4), activation='relu')(x)
+
+
+        #x = layers.Reshape((256, 4, 1))(x)
+
         outputs = x
         return keras.Model(inputs, outputs)

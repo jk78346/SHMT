@@ -73,15 +73,14 @@ void PartitionRuntime::criticality_kernel(Params params,
     }
 
     // show criticality
-    std::cout << __func__ << ": ground truth saliency criticality tiling:" << std::endl;
+    std::cout << __func__ << ": criticality tiling:" << std::endl;
     for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
         for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
             unsigned int idx = i * params.get_col_cnt() + j;
-            std::cout << this->criticality[idx] << " ";
+            std::cout << ((this->criticality[idx] == 2)?"g":"t") << " ";
         }
         std::cout << std::endl;
     }
-
     std::cout << std::endl;
 }
 
@@ -202,10 +201,10 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                   << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
         // objective or criticality ordering
         //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
-        order.push_back(std::make_pair(i, this->sampling_qualities[i].error_rate()));
+        //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].error_rate()));
         
         /* good for sobel_2d */
-        //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
+        order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
         
         /* testing for laplacian_2d */
         //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
@@ -365,6 +364,17 @@ double PartitionRuntime::set_criticality_by_saliency(Params params, void** array
     sort(saliency_ratio.begin(), saliency_ratio.end(), sortByVal);
     //this->criticality_kernel(params, saliency_ratio, params.get_criticality_ratio()); 
 
+    std::cout << __func__ << ": criticality tiling:" << std::endl;
+    for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+        for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+            unsigned int idx = i * params.get_col_cnt() + j;
+            std::cout << ((this->criticality[idx] == true)?"g":"t") << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    getchar();
+
     timing e = clk::now();
     return get_time_ms(e, s);
 }
@@ -408,7 +418,8 @@ double PartitionRuntime::prepare_partitions(){
                  p_mode == "c-nr-sdev" ||
                  p_mode == "c-ns-range" ||
                  p_mode == "c-nr-range"){
-            int num_pixels = 100;
+            int num_pixels = this->params.get_num_sample_pixels();;
+            std::cout << __func__ << ": num sample pixels: " << num_pixels << std::endl;
             ret += this->run_input_stats_probing(p_mode, num_pixels); 
         }else{
             std::cout << __func__ 

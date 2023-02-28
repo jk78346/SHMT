@@ -68,7 +68,7 @@ void UnifyType::save_as_img(const std::string file_name,
         uint8_t* tmp = (uint8_t*) malloc(rows * cols * sizeof(uint8_t));
 #pragma omp parallel for
         for(int i = 0 ; i < rows * cols ; i++){
-            tmp[i] = (uint8_t)(this->float_array[i] * 255.);
+            tmp[i] = (uint8_t)(this->float_array[i] /** 255.*/);
         }
         Mat mat(rows, cols, CV_8U);
         // TODO: how to show float array?

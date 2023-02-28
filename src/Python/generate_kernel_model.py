@@ -67,16 +67,26 @@ class MyDataGen():
         else:
             x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
 
-        y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
+        if self.model_name == "histogram_2d":
+            y = np.zeros((self.num_samples,) + (256, 4,) + (1,), dtype="float32")
+        else:
+            y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         
         for j in range(self.num_samples):
-            if self.model_name == 'histogram256':
-                x_slice = np.full(self.in_shape[0], binom.pmf(list(range(self.in_shape[0])), 255, random.random()))    
-                x_slice = (x_slice / max(x_slice)) * 255
-                x_slice = x_slice.astype("uint8")
+            if self.model_name == 'histogram_2d':
+                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                image = image.resize(self.in_shape)
+                x_slice = np.asarray(image)
                 y_slice = self.func(x_slice)
-                x_max = 1.
-                y_max = 1.
+                x_max = x_slice.max()
+                y_max = y_slice.max()
+                #x_slice = np.full(self.in_shape[0]*self.in_shape[1], binom.pmf(list(range(self.in_shape[0] * self.in_shape[1])), 255, random.random()))    
+                #x_slice = x_slice.reshape(self.in_shape)
+                #x_slice = (x_slice / max(x_slice)) * 255
+                #x_slice = x_slice.astype("uint8")
+                #y_slice = self.func(x_slice)
+                #x_max = 1.
+                #y_max = 1.
             elif self.model_name == 'fft_2d':
                 np.random.seed(j)
                 # use the same input data range 0 ~ 15 as samples/3_Imaging/convolutionFFT2D does
@@ -286,6 +296,7 @@ def calc_metrics(Y_ground_truth, Y_predict, logfile):
         f.write(line)
 
 def pre_quantize_test(params, target_func, logfile):
+    print("starting pre_quantize_test...")
     # get ground truth
     if params.model_name == 'fft_2d':
         X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 
@@ -323,13 +334,13 @@ def pre_quantize_test(params, target_func, logfile):
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
         y_scale = 1.
-    elif params.model_name == "histogram256":
-        x_slice = np.full(params.in_shape[0], binom.pmf(list(range(params.in_shape[0])), 255, random.random()))    
-        x_slice = (x_slice / max(x_slice)) * 255
-        X_test = x_slice.astype("uint8")
-        Y_ground_truth = target_func(X_test)
-        x_scale = 1.
-        y_scale = 1.
+    #elif params.model_name == "histogram_2d":
+    #    x_slice = np.full(params.in_shape[0], binom.pmf(list(range(params.in_shape[0])), 255, random.random()))    
+    #    x_slice = (x_slice / max(x_slice)) * 255
+    #    X_test = x_slice.astype("uint8")
+    #    Y_ground_truth = target_func(X_test)
+    #    x_scale = 1.
+    #    y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -343,6 +354,7 @@ def pre_quantize_test(params, target_func, logfile):
 
     # get model and peek model weights
     np.set_printoptions(edgeitems=5, precision=3, linewidth=120)
+    print("loading model")
     model = tf.keras.models.load_model(params.saved_model_dir)
     print("model weights:")
     print(model.get_weights())
@@ -377,11 +389,13 @@ def pre_quantize_test(params, target_func, logfile):
         f.write("----- trained fp32 model quality: -----,error_rate,error%,RMSE%,SSIM,PNSR\n")
     calc_metrics(Y_ground_truth, Y_predict, logfile) 
 
-    cv.imwrite("./ground_truth.png", Y_ground_truth)
-    cv.imwrite("./predict.png", Y_predict)
+    if params.model_name != "histogram_2d":
+        cv.imwrite("./ground_truth.png", Y_ground_truth)
+        cv.imwrite("./predict.png", Y_predict)
 
 def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
     """ This function test run the pre edgetpu_copiler compiled tflite model on CPU. """
+    print("starting pre_edgetpu_compiler_tflite_test...")
     # get ground truth
     if params.model_name == 'fft_2d':
         X_test = np.random.randint(16, size=params.in_shape, dtype="uint8") 

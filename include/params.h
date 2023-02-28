@@ -59,6 +59,8 @@ public:
         this->criticality_ratio = ratio;
     };
     float get_criticality_ratio(/*std::string app_name, int block_size*/){ return this->criticality_ratio; };
+    void set_num_sample_pixels(int v){ this->num_sample_pixels = v; };
+    int get_num_sample_pixels(){ return this->num_sample_pixels; };
 
 private:        
     unsigned int row_cnt = 0;
@@ -68,6 +70,7 @@ private:
     SamplingMode sampling_mode = center_crop;
     
     float criticality_ratio = 1./3.;
+    int num_sample_pixels = 100;
 
     /* Criticality ratio table is based on real measurement. 
         The value is the latency ratio: edgeTPU over GPU baseline

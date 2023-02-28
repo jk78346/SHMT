@@ -95,19 +95,19 @@ class Applications:
         """
         hist = cv.calcHist([src], [0], None, [256], (0, 256), accumulate=False)
         hist = hist.astype(np.uint32)
-        #x0 = hist
-        #x1 = hist >> 8
-        #x2 = hist >> 16
-        #x3 = hist >> 24
+        x0 = hist
+        x1 = hist >> 8
+        x2 = hist >> 16
+        x3 = hist >> 24
 
-        #x0 = np.remainder(x0, 256)
-        #x1 = np.remainder(x1, 256)
-        #x2 = np.remainder(x2, 256)
-        #x3 = np.remainder(x3, 256)
+        x0 = np.remainder(x0, 256)
+        x1 = np.remainder(x1, 256)
+        x2 = np.remainder(x2, 256)
+        x3 = np.remainder(x3, 256)
 
-        #ret = np.concatenate((x0, x1, x2, x3), axis=-1)
-        ret = hist
-        print("histo: output shape: ", ret.shape)
+        ret = np.concatenate((x0, x1, x2, x3), axis=-1)
+        #ret = hist
+        #print("histo (ground truth): output shape: ", ret.shape)
         return ret
     
     @staticmethod

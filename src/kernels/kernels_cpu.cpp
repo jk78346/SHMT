@@ -532,7 +532,7 @@ void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
 void CpuKernel::srad_2d(Params params, float* input, float* output){
     int rows = params.get_kernel_size();
     int cols = params.get_kernel_size();
-    int size_I, size_R, niter = 1, iter;
+    int size_I, size_R, niter = 10, iter;
     float *I, *J, lambda=0.5, q0sqr, sum, sum2, tmp, meanROI, varROI;
 
     float Jc, G2, L, num, den, qsqr;
@@ -540,7 +540,7 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
     float *dN, *dS, *dW, *dE;
     float cN, cS, cW, cE, D;
 
-    unsigned int r1 = 0, r2 = rows-1, c1 = 0, c2 = cols-1; // need init
+    unsigned int r1 = 0, r2 = 127/*rows-1*/, c1 = 0, c2 = 127/*cols-1*/; // need init
     float *c;
 
     size_I = cols * rows;
@@ -575,6 +575,8 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
 
     for (int k = 0;  k < size_I; k++ ) {
         J[k] = (float)exp(I[k]) ;
+        //printf("I[%d]: %f, J[%d]: %f\n", k, I[k], k, J[k]);
+        //getchar();
     }
 
     for(iter=0; iter < niter ; iter++){
@@ -612,6 +614,7 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
 
                 // diffusion coefficent (equ 33)
                 den = (qsqr-q0sqr) / (q0sqr * (1+q0sqr)) ;
+                
                 c[k] = 1.0 / (1.0+den) ;
  
                 // saturate diffusion coefficent
@@ -633,8 +636,9 @@ void CpuKernel::srad_2d(Params params, float* input, float* output){
  
                 // divergence (equ 58)
                 D = cN * dN[k] + cS * dS[k] + cW * dW[k] + cE * dE[k];
- 
+
                 // image update (equ 61)
+                //std::cout << __func__ << ": D: " << D << std::endl;
                 J[k] = J[k] + 0.25*lambda*D;
             }
         }

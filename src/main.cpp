@@ -114,7 +114,7 @@ std::vector<DeviceType> run_kernel(const std::string& mode,
 }
    
 int main(int argc, char* argv[]){
-    if(argc < 7){
+    if(argc < 8){
         std::cout << "Usage: " << argv[0] 
                   << " <application name>" // kernel's name
                   << " <problem_size>" // given problem size
@@ -122,6 +122,7 @@ int main(int argc, char* argv[]){
                   << " <iter>" // number of iteration on kernel execution
                   << " <baseline mode>"
                   << " <proposed mode>"
+                  << " <num_sample_pixels>"
                   << std::endl;
         return 0;
     }else{
@@ -140,8 +141,9 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
+    int num_sample_pixels     = atoi(argv[idx++]);
     std::string testing_img_path = 
-        (argc == 8)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
+        (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
     std::string testing_img_file_name = 
         testing_img_path.substr(testing_img_path.find_last_of("/") + 1);
 
@@ -157,6 +159,9 @@ int main(int argc, char* argv[]){
                            false, // default no tiling mode. can be reset anytime later
                            iter,
                            testing_img_path);
+
+    baseline_params.set_num_sample_pixels(num_sample_pixels);
+    proposed_params.set_num_sample_pixels(num_sample_pixels);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
@@ -273,6 +278,20 @@ int main(int argc, char* argv[]){
     system(cmd.c_str());    
 
     // save as png images
+   
+    std::cout << __func__ << ": input array: " << std::endl;
+    for(int i = 0 ; i < 10 ; i++){
+        for(int j = 0 ; j < 10 ; j++){
+            std::cout << ((float*)input_array)[i*baseline_params.problem_size+j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_input.png", 
+                                    baseline_params.problem_size,
+                                    baseline_params.problem_size,
+                                    input_array);
+    
     std::cout << "saving output results as images..." << std::endl;
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.png", 
                                     baseline_params.problem_size,

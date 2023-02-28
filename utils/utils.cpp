@@ -304,7 +304,7 @@ void dump_to_csv(std::string log_file_path,
            << protected_saliency_ratio * 100. << "\%,\n";
 
     bool is_tiling = (problem_size > block_size)?true:false;
-    if(0 && is_tiling){
+    if(is_tiling){
         myfile << "*****tiling quality*****,(proposed mode's partition),input stats,--,--,--,--,--,output tiling quality,\n"
                << "i,j,max,min,mean,sdev,entropy,device type,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
         int idx = 0;

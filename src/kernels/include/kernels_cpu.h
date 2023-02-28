@@ -60,7 +60,7 @@ public:
                                       sizeof(float));
 #pragma omp parallel for
                 for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
-                    this->input_array_type.fp[i] = input_array[i] / 255.;
+                    this->input_array_type.fp[i] = input_array[i] / 1.;
                 }
             }else{
                 this->input_array_type.fp  = input_array;
@@ -106,7 +106,7 @@ public:
                 //float scale = 255./max_val;
 #pragma omp parallel for
                 for (unsigned int i = 0; i < this->params.get_kernel_size() * this->params.get_kernel_size(); i++){
-                    this->output_array_type.fp[i] = log(this->output_array_type.fp[i]);
+                    this->output_array_type.fp[i] = log(this->output_array_type.fp[i]) * 255.;
                 }
             }else{
             // no need to convert from float* to float*, pass

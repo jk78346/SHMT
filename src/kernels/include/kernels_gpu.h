@@ -94,7 +94,7 @@ public:
                         this->kernel_params.params.get_kernel_size(); 
                         i++){
                         this->input_array_type.device_fp[i] = 
-                            this->input_array_type.host_fp[i] / 255.;
+                            this->input_array_type.host_fp[i] / 1.;
                 }
                 this->output_array_type.device_fp = this->output_array_type.host_fp;
             }else{
@@ -178,7 +178,7 @@ public:
                         i < this->kernel_params.params.get_kernel_size() *
                         this->kernel_params.params.get_kernel_size();
                         i++){
-                    this->output_array_type.host_fp[i] = log(this->output_array_type.host_fp[i]);
+                    this->output_array_type.host_fp[i] = log(this->output_array_type.host_fp[i]) * 255.;
                 }
             }else{
                 // TODO: currently this is true for dct8x8

@@ -88,6 +88,11 @@ public:
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
                     this->input_kernel[i] = (unsigned)(input_array[i] * scale);
                 }
+            }else if(app_name == "srad_2d"){
+#pragma omp parallel for
+                for(unsigned int i = 0 ; i < this->in_size ; i++){
+                    this->input_kernel[i] = ((int)(input_array[i] * 255.)) % 256; // float to int conversion
+                }
             }else{
 #pragma omp parallel for
                 for(unsigned int i = 0 ; i < this->in_size ; i++){
@@ -141,7 +146,7 @@ public:
             }else if(app_name == "blackscholes_2d"){
                 adj_scale = scale * 29./11.5; // * 29./98.;
             }else if(app_name == "srad_2d"){
-                adj_scale = scale * (1./255.);
+                adj_scale = scale ;//* (1./255.);
             }else{
                 adj_scale = scale * 255.;
             }

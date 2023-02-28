@@ -36,6 +36,7 @@ extern "C" void dwt_2d(int row, int col, float* input, float* output){
 
     cudaMemcpy(c_r, (float*)input, width * height * sizeof(float), cudaMemcpyHostToDevice);
     
+//    fdwt(c_r,     c_r_out, width, height, 1/*stages*/);
     fdwt(c_r,     c_r_mid, width, height, 1/*stages*/);
     rdwt(c_r_mid, c_r_out, width, height, 1/*stages*/);
 

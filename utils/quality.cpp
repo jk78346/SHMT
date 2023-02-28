@@ -54,7 +54,7 @@ Quality::Quality(int m,
                               this->col);
     bool is_tiling = (this->row > this->row_blk)?true:false;
     
-    if(0 && is_tiling){
+    if(is_tiling){
         // tiling quality
         for(int i = 0 ; i < this->row_cnt ; i++){
             for(int j = 0 ; j < this->col_cnt ; j++){
@@ -132,7 +132,7 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
     int elements = row_size * col_size;
    
     // max, min, average, entropy(1)
-//#pragma omp parallel for
+//#pragma omp parallel for reduction(+:sum) reduction(max:max) reduction(min:min)
     for(int i = i_start ; i < i_start+row_size ; i++){
         for(int j = j_start ; j < j_start+col_size ; j++){
             int idx = i*this->ldn+j;
@@ -154,7 +154,6 @@ void Quality::common_stats_kernel(DistStats& stats, float* x, int i_start, int j
 			square_sum += pow(x[i*this->ldn+j] - stats.mean, 2);
         }
     }
-    std::cout << __func__ << ": square sum: " << square_sum << std::endl;
     stats.sdev = pow((float)(square_sum / (double)(elements)), 0.5);
 
     // entropy(2)
@@ -201,7 +200,6 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
                 target_min;
 			
             mse_sum += pow(this->target_mat[idx] - this->baseline_mat[idx], 2);
-			
             rate_sum += fabs(this->target_mat[idx] - this->baseline_mat[idx]);
             
             if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
@@ -247,7 +245,8 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
 	ssim = ((2*ux*uy+c1) * (2*cov+c2)) / ((pow(ux, 2) + pow(uy, 2) + c1) * (pow(vx, 2) + pow(vy, 2) + c2));
     //assert(ssim >= 0.0 && ssim <= 1.);
     if(ssim < 0.0 || ssim > 1.){
-        std::cout << __func__ << " [WARN] ssim is out of bound. It may due to wrong value or"
+        std::cout << __func__ << " [WARN] ssim is out of bound = "
+                  << ssim << ". It may due to wrong value or"
                   << " the result of this benchmark isn't suitable for doing ssim (float type)"
                   << std::endl;
     }
