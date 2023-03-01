@@ -17,6 +17,7 @@ public:
                      unsigned int cols,
                      void* img);
     float* float_array;
+    int* int_array;
 private:
     Params params;
     uint8_t* char_array;

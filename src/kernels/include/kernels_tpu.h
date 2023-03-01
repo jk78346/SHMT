@@ -57,7 +57,9 @@ public:
         this->in_size  = 
             this->params.get_kernel_size() * this->params.get_kernel_size();        
         this->out_size = 
-            this->params.get_kernel_size() * this->params.get_kernel_size();        
+            (app_name == "histogram_2d")?
+            256:
+            (this->params.get_kernel_size() * this->params.get_kernel_size());        
 
         // tflite model input array initialization
         if( std::find(this->kernel_table_uint8.begin(),
@@ -65,11 +67,11 @@ public:
                       app_name) !=
             this->kernel_table_uint8.end() ){
             this->input_kernel  = reinterpret_cast<uint8_t*>(this->input);
-            this->output_kernel = reinterpret_cast<uint8_t*>(this->output);
-            //uint8_t* tmp = reinterpret_cast<uint8_t*>(this->input);
-            //for(unsigned int i = 0 ; i < this->in_size ; i++){
-            //    tmp[i] = (int)(tmp[i] + 128) % 256;
-            //}
+            if(app_name == "histogram_2d"){
+                this->output_kernel = (uint8_t*) calloc(256, sizeof(uint8_t));
+            }else{
+                this->output_kernel = reinterpret_cast<uint8_t*>(this->output);
+            }
         }else if( std::find(this->kernel_table_fp.begin(),
                             this->kernel_table_fp.end(),
                             app_name) !=
@@ -131,7 +133,14 @@ public:
                       this->kernel_table_uint8.end(),
                       app_name) !=
             this->kernel_table_uint8.end()){
-            this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding
+            if(app_name == "histogram_2d"){
+                int* int_tmp = reinterpret_cast<int*>(this->output);
+                for(unsigned int i = 0 ; i < 256; i++){
+                    int_tmp[i] = this->output_kernel[i]; //(int)( this->output_kernel[i] - zero_point ) * scale;
+                }
+            }else{
+                this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding
+            }
         }else if( std::find(this->kernel_table_fp.begin(),
                             this->kernel_table_fp.end(),
                             app_name) !=
@@ -193,7 +202,8 @@ private:
         "minimal_2d",
         "sobel_2d",
         "mean_2d",
-        "laplacian_2d"
+        "laplacian_2d",
+        "histogram_2d"
     };
     std::vector<std::string> kernel_table_fp = {
         "fft_2d",

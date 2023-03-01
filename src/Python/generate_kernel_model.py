@@ -68,18 +68,23 @@ class MyDataGen():
             x = np.zeros((self.num_samples,) + self.in_shape + (1,), dtype="float32")
 
         if self.model_name == "histogram_2d":
-            y = np.zeros((self.num_samples,) + (256, 4,) + (1,), dtype="float32")
+            y = np.zeros((self.num_samples,) + (256,1) + (1,), dtype="float32")
         else:
             y = np.zeros((self.num_samples,) + self.out_shape + (1,), dtype="float32")
         
         for j in range(self.num_samples):
             if self.model_name == 'histogram_2d':
-                image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
-                image = image.resize(self.in_shape)
-                x_slice = np.asarray(image)
+                #image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
+                #image = image.resize(self.in_shape)
+                x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8").astype("float32") 
+                tf.keras.utils.set_random_seed(seed)
+                #x_slice = np.asarray(image)
                 y_slice = self.func(x_slice)
                 x_max = x_slice.max()
                 y_max = y_slice.max()
+
+                #print("x_slice: ", x_slice, "x shape: ", x_slice.shape)
+                #print("y_slice: ", y_slice, "y shape: ", y_slice.shape)
                 #x_slice = np.full(self.in_shape[0]*self.in_shape[1], binom.pmf(list(range(self.in_shape[0] * self.in_shape[1])), 255, random.random()))    
                 #x_slice = x_slice.reshape(self.in_shape)
                 #x_slice = (x_slice / max(x_slice)) * 255
@@ -334,13 +339,16 @@ def pre_quantize_test(params, target_func, logfile):
         Y_ground_truth = target_func(X_test)
         x_scale = 1.
         y_scale = 1.
-    #elif params.model_name == "histogram_2d":
+    elif params.model_name == "histogram_2d":
     #    x_slice = np.full(params.in_shape[0], binom.pmf(list(range(params.in_shape[0])), 255, random.random()))    
     #    x_slice = (x_slice / max(x_slice)) * 255
     #    X_test = x_slice.astype("uint8")
     #    Y_ground_truth = target_func(X_test)
-    #    x_scale = 1.
-    #    y_scale = 1.
+        X_test = np.random.randint(255, size=params.in_shape, dtype="uint8").astype("float32") 
+        tf.keras.utils.set_random_seed(seed)
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
     else:
         image = Image.open(params.lenna_path)
         image = image.resize(params.in_shape)
@@ -358,7 +366,7 @@ def pre_quantize_test(params, target_func, logfile):
     model = tf.keras.models.load_model(params.saved_model_dir)
     print("model weights:")
     print(model.get_weights())
-    
+
     X_test = np.expand_dims(X_test, axis=(0, len(params.in_shape)+1))
     
     print("start to evaluate...")
@@ -439,6 +447,12 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         image = image.resize(params.in_shape)
         X_test = np.asarray(image).astype('uint8') 
         Y_ground_truth = target_func(np.asarray(image).astype('float32'))
+    elif params.model_name == "histogram_2d":
+        X_test = np.random.randint(256, size=params.in_shape, dtype="uint8") 
+        X_test = X_test.astype("uint8") 
+        Y_ground_truth = target_func(X_test)
+        x_scale = 1.
+        y_scale = 1.
     else:
         x_scale = 255.
         y_scale = 1.

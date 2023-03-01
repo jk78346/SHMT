@@ -5,7 +5,8 @@
 class Quality{
     public:
     	// default constructor
-        Quality(int row, 
+        Quality(std::string app_name, 
+                int row, 
                 int col, 
                 int ldn, 
                 int row_blk, 
@@ -78,6 +79,8 @@ class Quality{
         int get_col_cnt(){ return this->col_cnt; }
 
     private:
+        std::string app_name;
+
         std::vector<bool> criticality;
         std::vector<int> proposed_device_type;
 

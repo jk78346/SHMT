@@ -224,8 +224,8 @@ void data_initialization(Params params,
         params.uint8_t_type_app.end() ){
         *input_array = (uint8_t*) malloc(input_total_size * sizeof(uint8_t));
         if(params.app_name == "histogram_2d"){
-            *output_array_baseline = (int*) malloc(output_total_size * sizeof(int));
-            *output_array_proposed = (int*) malloc(output_total_size * sizeof(int));        
+            *output_array_baseline = (int*) malloc(256 * sizeof(int));
+            *output_array_proposed = (int*) malloc(256 * sizeof(int));        
         }else{
             *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
             *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        

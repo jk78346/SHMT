@@ -168,7 +168,8 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
 //                                           unify_cpu_output_type->float_array);
             std::vector<bool> dummy(1, true);
             std::vector<int> dummy2(1, 2);
-            this->sampling_qualities.push_back(Quality(params.block_size,
+            this->sampling_qualities.push_back(Quality(params.app_name,
+                                                       params.block_size,
                                                        params.block_size,
                                                        params.block_size,
                                                        params.block_size,

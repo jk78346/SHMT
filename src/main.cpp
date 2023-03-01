@@ -206,6 +206,7 @@ int main(int argc, char* argv[]){
                                           proposed_criticality_sequence);
     timing proposed_end = clk::now();
 
+
     // convert device sequence type 
     std::vector<int> proposed_device_type;
     for(unsigned int i = 0 ; i < proposed_device_sequence.size() ; i++){
@@ -213,7 +214,7 @@ int main(int argc, char* argv[]){
     }
     
     /* A quick plugin test of histogram matching on laplacian_2d */
-    if(0 && app_name == "laplacian_2d"){
+    if(0){
         histogram_matching(output_array_baseline, 
                            output_array_proposed,
                            problem_size,
@@ -239,7 +240,8 @@ int main(int argc, char* argv[]){
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
     std::cout << __func__ << ": criticality size: " << proposed_criticality_sequence.size() << std::endl;
-    Quality* quality = new Quality(proposed_params.problem_size, // m
+    Quality* quality = new Quality(app_name, 
+                                   proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
                                    proposed_params.problem_size, // ldn
                                    proposed_params.block_size,
@@ -287,16 +289,19 @@ int main(int argc, char* argv[]){
         std::cout << std::endl;
     }
 
+    if(app_name != "histogram_2d")
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_input.png", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
                                     input_array);
     
     std::cout << "saving output results as images..." << std::endl;
+    if(app_name != "histogram_2d")
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.png", 
                                     baseline_params.problem_size,
                                     baseline_params.problem_size,
                                     output_array_baseline);
+    if(app_name != "histogram_2d")
     unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.png", 
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,

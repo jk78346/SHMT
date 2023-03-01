@@ -277,7 +277,7 @@ private:
         std::make_pair<std::string, func_ptr_opencv_cuda> ("sobel_2d", this->sobel_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("mean_2d", this->mean_2d),
         std::make_pair<std::string, func_ptr_opencv_cuda> ("laplacian_2d", this->laplacian_2d),
-        std::make_pair<std::string, func_ptr_opencv_cuda> ("histogram_2d", this->laplacian_2d)
+        std::make_pair<std::string, func_ptr_opencv_cuda> ("histogram_2d", this->histogram_2d)
     };
     func_table_float func_table_fp = {
         std::make_pair<std::string, func_ptr_any> ("fft_2d", this->fft_2d),

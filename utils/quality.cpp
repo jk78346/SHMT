@@ -11,7 +11,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/saliency/saliencySpecializedClasses.hpp>
 
-Quality::Quality(int m, 
+Quality::Quality(std::string app_name,
+                 int m, 
                  int n, 
                  int ldn, 
                  int row_blk, 
@@ -21,15 +22,16 @@ Quality::Quality(int m,
                  float* y,
                  std::vector<bool> criticality,
                  std::vector<int> proposed_device_type){
-	this->row          = m;
+    this->app_name     = app_name;
+    this->row          = (app_name == "histogram_2d")?256:m;
 	this->col          = n;
-	this->ldn          = ldn;
+	this->ldn          = (app_name == "histogram_2d")?256:ldn;
     this->row_blk      = row_blk;
     this->col_blk      = col_blk;
     assert(row % row_blk == 0);
     assert(col % col_blk == 0);
     this->row_cnt = row / row_blk;
-    this->col_cnt = col / col_blk;
+    this->col_cnt = col / col_blk;//col / col_blk;
     assert(this->row_cnt >= 1);
     assert(this->col_cnt >= 1);
     this->input_mat = input_mat;
@@ -506,7 +508,7 @@ void Quality::print_results(bool is_tiling, int verbose){
         }
     }
 
-    int size = 10;
+    int size = (this->app_name == "histogram_2d")?256:10;
 
     float baseline_max = FLT_MIN;
     float baseline_min = FLT_MAX;
@@ -515,8 +517,12 @@ void Quality::print_results(bool is_tiling, int verbose){
 
     if(verbose){
         std::cout << "baseline result:" << std::endl;
-        for(int i = 0 ; i < this->row ; i++){
-            for(int j = 0 ; j < this->col ; j++){
+
+        int first_upper = (this->app_name == "histogram_2d")?1:this->row;
+        int sec_upper   = (this->app_name == "histogram_2d")?256:this->row;
+        
+        for(int i = 0 ; i < first_upper ; i++){
+            for(int j = 0 ; j < sec_upper ; j++){
                 if(i < size && j < size)
                     std::cout << baseline_mat[i*this->ldn+j] << " ";
                 if(baseline_mat[i*this->ldn+j] > baseline_max)
@@ -524,12 +530,12 @@ void Quality::print_results(bool is_tiling, int verbose){
                 if(baseline_mat[i*this->ldn+j] < baseline_min)
                     baseline_min = baseline_mat[i*this->ldn+j];
             }
-            if(i < size)
+            if(i < size && this->app_name != "histogram_2d")
                 std::cout << std::endl;
         }
-        std::cout << "proposed result:" << std::endl;
-        for(int i = 0 ; i < this->row ; i++){
-            for(int j = 0 ; j < this->col ; j++){
+        std::cout << "\nproposed result:" << std::endl;
+        for(int i = 0 ; i < first_upper ; i++){
+            for(int j = 0 ; j < sec_upper ; j++){
                 if(i < size && j < size)
                     std::cout << target_mat[i*this->ldn+j] << " ";
                 if(target_mat[i*this->ldn+j] > proposed_max)
@@ -537,12 +543,12 @@ void Quality::print_results(bool is_tiling, int verbose){
                 if(target_mat[i*this->ldn+j] < proposed_min)
                     proposed_min = target_mat[i*this->ldn+j];
             }
-            if(i < size)
+            if(i < size && this->app_name != "histogram_2d")
                 std::cout << std::endl;
         }
     }
 
-    std::cout << "baseline_mat max: " << baseline_max << ", "
+    std::cout << "\nbaseline_mat max: " << baseline_max << ", "
               << "min: " << baseline_min << std::endl;
     std::cout << "proposed_mat max: " << proposed_max << ", "
               << "min: " << proposed_min << std::endl;

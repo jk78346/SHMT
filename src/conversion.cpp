@@ -9,7 +9,13 @@ using namespace cv;
 
 UnifyType::UnifyType(Params params, void* in){
     this->params = params;
-    if( std::find(params.uint8_t_type_app.begin(),
+    if(params.app_name == "histogram_2d"){
+        int* int_tmp = reinterpret_cast<int*>(in);
+        this->float_array = (float*) malloc(256 * sizeof(float));
+        for(int i = 0 ; i < 256; i++){
+                this->float_array[i] = int_tmp[i]; // int to float conversion
+        }
+    }else if( std::find(params.uint8_t_type_app.begin(),
                   params.uint8_t_type_app.end(),
                   params.app_name) !=
         params.uint8_t_type_app.end() ){

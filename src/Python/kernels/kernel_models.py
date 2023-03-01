@@ -1,3 +1,4 @@
+import math
 import keras
 import tensorflow as tf
 from keras.backend import int_shape
@@ -207,15 +208,16 @@ class KernelModels:
 
         #x = layers.Flatten()(x)
         #x = layers.Dense(256*4)(x)
- 
 
-        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', activation='relu')(inputs)
-        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', strides=(1, 4), activation='relu')(x)
-        x = layers.Conv2D(filters=256, kernel_size=4, padding='same', strides=(1, 4), activation='relu')(x)
-        x = layers.Conv2D(filters=1, kernel_size=4,  padding='same', strides=(1, 4), activation='relu')(x)
+        iters = int(math.log(in_shape[0] / 4., 4))
 
+        init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
 
-        #x = layers.Reshape((256, 4, 1))(x)
+        encoded_dim = 16
+        x = inputs
+        for i in range(iters):
+            x = layers.Conv2D(filters=encoded_dim, kernel_size=4, strides=(1, 4), padding='same', activation='relu', kernel_initializer=init)(x)
+        x = layers.Conv2D(filters=1, kernel_size=4, strides=(1, 4), padding='same', activation='relu', kernel_initializer=init)(x)
 
         outputs = x
         return keras.Model(inputs, outputs)
