@@ -226,36 +226,19 @@ void data_initialization(Params params,
         if(params.app_name == "histogram_2d"){
             *output_array_baseline = (int*) malloc(256 * sizeof(int));
             *output_array_proposed = (int*) malloc(256 * sizeof(int));        
+            for(int i = 0 ; i < input_total_size ; i++){
+                ((uint8_t*)*input_array)[i] = (uint8_t)(rand()%256);
+            }
         }else{
             *output_array_baseline = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));
             *output_array_proposed = (uint8_t*) malloc(output_total_size * sizeof(uint8_t));        
+            Mat in_img;
+            read_img(params.input_data_path,
+                     rows,
+                     cols,
+                    in_img);
+            mat2array(in_img, (uint8_t*)*input_array);
         }
-        Mat in_img;
-        read_img(params.input_data_path,
-                 rows,
-                 cols,
-                 in_img);
-        mat2array(in_img, (uint8_t*)*input_array);
-                
-        /* extreme data partittion distribution experiment. */
-        //std::cout << __func__ << ": params - problem_size: " << params.problem_size 
-        //          << ", block_size: " << params.block_size
-        //          << ", get_row_cnt(): " << params.get_row_cnt()
-        //          << ", get_col_cnt(): " << params.get_col_cnt() << std::endl;
-        //unsigned int row_cnt = params.problem_size / params.block_size;
-        //unsigned int col_cnt = params.problem_size / params.block_size;
-        //uint8_t* tmp = reinterpret_cast<uint8_t*>(*input_array);
-        //for(unsigned int i = 0 ; i < row_cnt; i++){
-        //    for(unsigned int j = 0 ; j < col_cnt ; j++){
-        //        int step = 256 / (row_cnt * col_cnt);
-        //        uint8_t max = (i*col_cnt+j)*step+1;
-        //        for(unsigned int ii= 0 ; ii < params.block_size ; ii++){
-        //            for(unsigned int jj = 0 ; jj < params.block_size ; jj++){
-        //                tmp[(i*params.block_size+ii)*params.problem_size+(j*params.block_size+jj)] = rand() % max; //rand()%10 + max;
-        //            }
-        //        }
-        //    }
-        //}
     }else{ // others are default as float type
         if(params.app_name == "fft_2d"){
             *input_array = (float*) malloc(input_total_size * sizeof(float));

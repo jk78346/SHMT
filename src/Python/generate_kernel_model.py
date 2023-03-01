@@ -74,24 +74,16 @@ class MyDataGen():
         
         for j in range(self.num_samples):
             if self.model_name == 'histogram_2d':
-                #image = Image.open("/home/data/lena_gray_2Kx2K.bmp")
-                #image = image.resize(self.in_shape)
-                x_slice = np.random.randint(255, size=self.in_shape, dtype="uint8").astype("float32") 
+                #mu, sigma = 128, 16 # mean and standard deviation
+                #s = np.random.normal(mu, sigma, self.in_shape)
+                #x_slice = s.astype("uint8")
+                x_slice = np.random.randint(256, size=self.in_shape, dtype="uint8") 
                 tf.keras.utils.set_random_seed(seed)
-                #x_slice = np.asarray(image)
                 y_slice = self.func(x_slice)
                 x_max = x_slice.max()
                 y_max = y_slice.max()
-
                 #print("x_slice: ", x_slice, "x shape: ", x_slice.shape)
                 #print("y_slice: ", y_slice, "y shape: ", y_slice.shape)
-                #x_slice = np.full(self.in_shape[0]*self.in_shape[1], binom.pmf(list(range(self.in_shape[0] * self.in_shape[1])), 255, random.random()))    
-                #x_slice = x_slice.reshape(self.in_shape)
-                #x_slice = (x_slice / max(x_slice)) * 255
-                #x_slice = x_slice.astype("uint8")
-                #y_slice = self.func(x_slice)
-                #x_max = 1.
-                #y_max = 1.
             elif self.model_name == 'fft_2d':
                 np.random.seed(j)
                 # use the same input data range 0 ~ 15 as samples/3_Imaging/convolutionFFT2D does
@@ -196,6 +188,10 @@ class MyDataGen():
                 a_slice, b_slice, c_slice = load_blackscholes_data(self.in_shape)
                 x_slice = np.concatenate((a_slice, b_slice, c_slice)).astype("uint8")
                 x_slice = np.expand_dims(x_slice, axis=0)
+            #elif self.model_name == "histogram_2d":
+            #    mu, sigma = 128, 16 # mean and standard deviation
+            #    s = np.random.normal(mu, sigma, (1,) + self.in_shape)
+            #    x_slice = s.astype("uint8")
             else:
                 np.random.seed(j)
                 x_slice = np.random.randint(255, size=(1,) + self.in_shape, dtype="uint8")
@@ -340,10 +336,9 @@ def pre_quantize_test(params, target_func, logfile):
         x_scale = 1.
         y_scale = 1.
     elif params.model_name == "histogram_2d":
-    #    x_slice = np.full(params.in_shape[0], binom.pmf(list(range(params.in_shape[0])), 255, random.random()))    
-    #    x_slice = (x_slice / max(x_slice)) * 255
-    #    X_test = x_slice.astype("uint8")
-    #    Y_ground_truth = target_func(X_test)
+        #mu, sigma = 128, 16 # mean and standard deviation
+        #s = np.random.normal(mu, sigma, params.in_shape)
+        #X_test = s.astype("float32")
         X_test = np.random.randint(255, size=params.in_shape, dtype="uint8").astype("float32") 
         tf.keras.utils.set_random_seed(seed)
         Y_ground_truth = target_func(X_test)
@@ -448,6 +443,9 @@ def pre_edgetpu_compiler_tflite_test(params, target_func, logfile):
         X_test = np.asarray(image).astype('uint8') 
         Y_ground_truth = target_func(np.asarray(image).astype('float32'))
     elif params.model_name == "histogram_2d":
+        #mu, sigma = 128, 16 # mean and standard deviation
+        #s = np.random.normal(mu, sigma, params.in_shape)
+        #X_test = s.astype("uint8")
         X_test = np.random.randint(256, size=params.in_shape, dtype="uint8") 
         X_test = X_test.astype("uint8") 
         Y_ground_truth = target_func(X_test)

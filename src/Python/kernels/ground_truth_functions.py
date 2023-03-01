@@ -93,8 +93,10 @@ class Applications:
             cv.calHist returns an array of histogram points of dtype float.32
             , while every src.size chunk of the array is a 8 bit chunk of output int32 result. 
         """
-        hist = cv.calcHist([src], [0], None, [256], (0, 256), accumulate=False)
+        hist, bins = np.histogram(src, bins = np.arange(0, 257, 1, dtype=int))
         hist = hist.astype(np.uint32)
+        hist = np.expand_dims(hist, axis=-1)
+
         x0 = hist
         x1 = hist >> 8
         x2 = hist >> 16
@@ -105,8 +107,9 @@ class Applications:
         x2 = np.remainder(x2, 256)
         x3 = np.remainder(x3, 256)
 
-        ret = np.concatenate((x0, x1, x2, x3), axis=-1)
-        #ret = hist
+        #ret = np.concatenate((x0, x1, x2, x3), axis=-1)
+        
+        ret = hist
         #print("histo (ground truth): output shape: ", ret.shape)
         return ret
     

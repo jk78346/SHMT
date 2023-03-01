@@ -23,15 +23,16 @@ Quality::Quality(std::string app_name,
                  std::vector<bool> criticality,
                  std::vector<int> proposed_device_type){
     this->app_name     = app_name;
-    this->row          = (app_name == "histogram_2d")?256:m;
+    bool is_hist       = (app_name == "histogram_2d")?true:false; 
+    this->row          = (is_hist)?1:m;
 	this->col          = n;
-	this->ldn          = (app_name == "histogram_2d")?256:ldn;
-    this->row_blk      = row_blk;
+	this->ldn          = (is_hist)?1:m;
+    this->row_blk      = (is_hist)?1:row_blk;
     this->col_blk      = col_blk;
-    assert(row % row_blk == 0);
-    assert(col % col_blk == 0);
-    this->row_cnt = row / row_blk;
-    this->col_cnt = col / col_blk;//col / col_blk;
+    assert(row % this->row_blk == 0);
+    assert(col % this->col_blk == 0);
+    this->row_cnt = this->row / this->row_blk;
+    this->col_cnt = this->col / this->col_blk;//col / col_blk;
     assert(this->row_cnt >= 1);
     assert(this->col_cnt >= 1);
     this->input_mat = input_mat;
@@ -179,6 +180,7 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
 	int cnt = 0;
 	int error_percentage_cnt = 0;
     double baseline_sum = 0.0;
+
 #pragma omp parallel for reduction(+:cnt) reduction(+:error_percentage_cnt) reduction(+:baseline_sum) reduction(max:baseline_max) reduction(max:target_max) reduction(min:baseline_min) reduction(min:target_min) reduction(+:mse_sum) reduction(+:rate_sum)
     for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
