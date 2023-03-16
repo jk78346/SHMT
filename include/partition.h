@@ -65,6 +65,7 @@ private:
         This is for input stats probing types of sampling
      */
     double run_input_stats_probing(std::string mode, unsigned int num_pixels);
+    double run_input_homo_probing(float one_dim_ratio);
 
     /* The main algorithm to determine tiling tasks to specific device(s). */
     DeviceType mix_policy(unsigned int i);

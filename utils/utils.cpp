@@ -256,7 +256,7 @@ void dump_to_csv(std::string log_file_path,
     std::string ts_str = std::ctime(&ts);
 
     // log params and performance
-    myfile << "*****kernel name*****,problem size,block size,kernel iter,--,--,--,--,--,--,--,-->,timestamp:,"
+    myfile << "*****kernel name*****,problem size,block size,kernel iter,--,--,--,--,--,--,--,--,--,--,-->,timestamp:,"
            << ts_str
            << app_name << ","
            << problem_size << ","
@@ -305,6 +305,16 @@ void dump_to_csv(std::string log_file_path,
 
     bool is_tiling = (problem_size > block_size)?true:false;
     if(is_tiling){
+        myfile << "*****tiling seq*****,\n";
+        for(int i = 0 ; i < quality->get_row_cnt() ; i++){
+            for(int j = 0 ; j < quality->get_col_cnt() ; j++){
+                int idd = i * quality->get_col_cnt() + j;
+                myfile << ((proposed_device_sequence[idd]==2)?"g":"t") << ",";
+            }
+            myfile << std::endl;
+        }
+        
+        
         myfile << "*****tiling quality*****,(proposed mode's partition),input stats,--,--,--,--,--,output tiling quality,\n"
                << "i,j,max,min,mean,sdev,entropy,device type,rmse,rmse%,error_rate%,error%,SSIM,PNSR(dB),\n";
         int idx = 0;

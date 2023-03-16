@@ -135,8 +135,9 @@ public:
             this->kernel_table_uint8.end()){
             if(app_name == "histogram_2d"){
                 int* int_tmp = reinterpret_cast<int*>(this->output);
+                int scale_ = this->params.get_kernel_size() / 256;
                 for(unsigned int i = 0 ; i < 256; i++){
-                    int_tmp[i] = this->output_kernel[i]; //(int)( this->output_kernel[i] - zero_point ) * scale;
+                    int_tmp[i] = this->output_kernel[i] * (scale_ * scale_); 
                 }
             }else{
                 this->output = this->output_kernel; // uint8_t to uint8_t pointer forwarding

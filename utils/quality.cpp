@@ -11,6 +11,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/saliency/saliencySpecializedClasses.hpp>
 
+Quality::Quality(){}
+
 Quality::Quality(std::string app_name,
                  int m, 
                  int n, 
@@ -24,15 +26,24 @@ Quality::Quality(std::string app_name,
                  std::vector<int> proposed_device_type){
     this->app_name     = app_name;
     bool is_hist       = (app_name == "histogram_2d")?true:false; 
+
+    this->in_row = m;
+    this->in_col = n;
+    this->in_row_blk = row_blk;
+    this->in_col_blk = col_blk;
+    assert(this->in_row % this->in_row_blk == 0);
+    assert(this->in_col % this->in_col_blk == 0);
+    this->in_row_cnt = this->in_row / this->in_row_blk;
+    this->in_col_cnt = this->in_col / this->in_col_blk;
     this->row          = (is_hist)?1:m;
-	this->col          = n;
+	this->col          = (is_hist)?256:n;
 	this->ldn          = (is_hist)?1:m;
     this->row_blk      = (is_hist)?1:row_blk;
-    this->col_blk      = col_blk;
-    assert(row % this->row_blk == 0);
-    assert(col % this->col_blk == 0);
+    this->col_blk      = (is_hist)?256:col_blk;
+    assert(this->row % this->row_blk == 0);
+    assert(this->col % this->col_blk == 0);
     this->row_cnt = this->row / this->row_blk;
-    this->col_cnt = this->col / this->col_blk;//col / col_blk;
+    this->col_cnt = this->col / this->col_blk;
     assert(this->row_cnt >= 1);
     assert(this->col_cnt >= 1);
     this->input_mat = input_mat;
@@ -40,8 +51,11 @@ Quality::Quality(std::string app_name,
 	this->baseline_mat = y;
     this->criticality = criticality;
     this->proposed_device_type = proposed_device_type;
-    assert(criticality.size() == (this->row_cnt * this->col_cnt));
-
+    
+    if(app_name != "histogram_2d"){
+        assert(criticality.size() == (row_cnt * col_cnt));
+    }
+    
     this->result_pars.resize(this->row_cnt * this->col_cnt);
     this->result_critical_pars.resize(this->row_cnt * this->col_cnt);
 
@@ -57,7 +71,7 @@ Quality::Quality(std::string app_name,
                               this->col);
     bool is_tiling = (this->row > this->row_blk)?true:false;
     
-    if(is_tiling){
+    if(0 && is_tiling){
         // tiling quality
         for(int i = 0 ; i < this->row_cnt ; i++){
             for(int j = 0 ; j < this->col_cnt ; j++){
@@ -108,17 +122,7 @@ void Quality::calc_saliency_accuracy(float& saliency_ratio, float& protected_sal
             }
         }
     }
-    
-    //std::fstream myfile;
-    //std::string file_path = "./quality.csv";
-    //myfile.open(file_path.c_str(), std::ios_base::app);
-    //assert(myfile.is_open());
-    //myfile << "saliency protected area, saliency area, saliency protected rate(%), saliency rate(%)," << std::endl;
-
-    //myfile << saliency_protected_cnt << ","
-    //       << saliency_cnt << ","
-    //       << ((float)saliency_protected_cnt / saliency_cnt) * 100. << "\%,"
-    //       << ((float)saliency_cnt / (this->row * this->col)) * 100. << "\%," << std::endl;
+    getchar();
     saliency_ratio = (float)saliency_cnt / (this->row * this->col);
     protected_saliency_ratio = (float)saliency_protected_cnt / saliency_cnt;
 }
@@ -258,7 +262,8 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
     // assign results
     result.rmse = sqrt(mse);
 	result.rmse_percentage = (result.rmse/mean) * 100.0;
-	result.error_rate = (rate / mean) * 100.0;
+    result.rate = rate;
+    result.error_rate = (rate / mean) * 100.0;
     result.error_percentage = ((float)error_percentage_cnt / (float)(row_size*col_size)) * 100.0;
     result.ssim = ssim;
 	result.pnsr = 20*log10(baseline_max) - 10*log10(mse/mean);
@@ -393,6 +398,10 @@ float Quality::rmse_percentage(int i, int j){
     return this->result_pars[i * this->col_cnt + j].rmse_percentage;
 } 
 
+float Quality::rate(){
+    return this->result.rate;
+}
+
 float Quality::error_rate(){
     return this->result.error_rate;
 }
@@ -476,6 +485,7 @@ void Quality::print_results(bool is_tiling, int verbose){
     Unit total_quality = {
         this->rmse(),
         this->rmse_percentage(),
+        1, // dummy rate
         this->error_rate(),
         this->error_percentage(),
         this->ssim(),
@@ -495,6 +505,7 @@ void Quality::print_results(bool is_tiling, int verbose){
                 Unit per_quality = {
                     this->rmse(i, j),
                     this->rmse_percentage(i, j),
+                    1, // dummy rate
                     this->error_rate(i, j),
                     this->error_percentage(i, j),
                     this->ssim(i, j),
@@ -590,3 +601,82 @@ void Quality::print_results(bool is_tiling, int verbose){
     
 }
 
+float Quality::static_sdev(uint8_t* array, int num){
+    double sum = 0.;
+    double square_sum = 0.;
+    double mean;
+#pragma omp parallel for reduction(+:sum)
+    for(int i = 0 ; i < num ; i++){
+        sum += array[i];
+    }
+    mean = sum / num;
+#pragma omp parallel for reduction(+:square_sum)
+    for(int i = 0 ; i < num ; i++){
+        square_sum += pow(array[i] - mean, 2);
+    }
+    assert(num> 0);
+    return (float)pow((double)(square_sum / (double)(num)), 0.5);
+}
+
+float Quality::static_sdev(float* array, int num){
+    double sum = 0.;
+    double square_sum = 0.;
+    double mean;
+#pragma omp parallel for reduction(+:sum)
+    for(int i = 0 ; i < num ; i++){
+        sum += array[i];
+    }
+    mean = sum / num;
+#pragma omp parallel for reduction(+:square_sum)
+    for(int i = 0 ; i < num ; i++){
+        square_sum += pow(array[i] - mean, 2);
+    }
+    assert(num > 0);
+    return (float)pow((double)(square_sum / (double)(num)), 0.5);
+}
+
+float Quality::static_sdev(std::vector<float> array){
+    double sum = 0.;
+    double square_sum = 0.;
+    auto const count = static_cast<float>(array.size());
+    double mean;
+    for(auto p: array){
+        sum += p;
+    }
+    mean = sum / count;
+    for(auto p: array){
+        square_sum += pow(p - mean, 2);
+    }
+    assert(count > 0);
+    return (float)pow((double)(square_sum / (double)(count)), 0.5);
+}
+
+float Quality::static_mean(uint8_t* array, int num){
+    double sum = 0.;
+#pragma omp parallel for reduction(+:sum)
+    for(int i = 0 ; i < num ; i++){
+        sum += array[i];
+    }
+    assert(num > 0);
+    return (float) (sum / num);
+}
+
+float Quality::static_mean(float* array, int num){
+    double sum = 0.;
+#pragma omp parallel for reduction(+:sum)
+    for(int i = 0 ; i < num ; i++){
+        sum += array[i];
+    }
+    assert(num > 0);
+    return (float) (sum / num);
+}
+
+float Quality::static_mean(std::vector<float> array){
+    double sum = 0.;
+    auto const count = static_cast<float>(array.size());
+    for(auto p: array){
+        sum += p;
+    }
+    assert(count > 0);
+    return (float) (sum / count);
+}

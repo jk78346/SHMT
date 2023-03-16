@@ -16,7 +16,7 @@ class Quality{
                 float* baseline_mat,
                 std::vector<bool> criticality,
                 std::vector<int> proposed_device_type);
-
+        Quality();
         /*
             saliency ratio: 
                 percentage of critical area / full image area
@@ -32,6 +32,7 @@ class Quality{
          */
         float rmse(); 
         float rmse_percentage();
+        float rate();
         float error_rate();
         float error_percentage();
         float ssim();
@@ -78,6 +79,13 @@ class Quality{
         int get_row_cnt(){ return this->row_cnt; }
         int get_col_cnt(){ return this->col_cnt; }
 
+        float static_sdev(uint8_t* array, int num);
+        float static_sdev(float* array, int num);
+        float static_sdev(std::vector<float> array);
+        float static_mean(uint8_t* array, int num);
+        float static_mean(float* array, int num);
+        float static_mean(std::vector<float> array);
+
     private:
         std::string app_name;
 
@@ -95,6 +103,7 @@ class Quality{
         struct Unit{
             float rmse;
             float rmse_percentage;
+            float rate; //for ordering error_rate
             float error_rate;
             float error_percentage;
             float ssim;
@@ -129,6 +138,13 @@ class Quality{
         void common_kernel(Unit& result, Unit& result_critical, int i_start, int j_start, int row_size, int col_size);
         void common_stats_kernel(DistStats& stats, float* x, int i_start, int j_start, int row_size, int col_size);
         
+        int in_row;
+        int in_col;
+        int in_row_blk;
+        int in_col_blk;
+        int in_row_cnt;
+        int in_col_cnt;
+
         int row;
 	    int col;
 	    int ldn;

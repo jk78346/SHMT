@@ -76,11 +76,17 @@ std::vector<DeviceType> run_kernel_partition(const std::string& mode,
     time_breakdown->output_time_ms = p_run->transform_output();
     p_run->show_device_sequence();
     std::vector<DeviceType> ret = p_run->get_device_sequence();
+    
     criticality = p_run->get_criticality();
     std::cout << __func__ << ": criticality seq:" << std::endl;
-    for(auto c: criticality){
-        std::cout << c << " ";
+    for(int i = 0 ; i < 16/*params.get_row_cnt()*/ ; i++){
+        for(int j = 0 ; j < 16/*params.get_col_cnt()*/ ; j++){
+            std::cout << ((criticality[i*16/*params.get_col_cnt()*/+j]==1)?"g":"t") << " ";
+        }
+        std::cout << std::endl;
     }
+    
+    
     std::cout << std::endl;
     delete p_run;
     return ret;
@@ -141,7 +147,9 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
-    int num_sample_pixels     = atoi(argv[idx++]);
+    //int num_sample_pixels     = atoi(argv[idx++]);
+    float criticality_ratio     = atof(argv[idx++]);
+    
     std::string testing_img_path = 
         (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
     std::string testing_img_file_name = 
@@ -160,8 +168,11 @@ int main(int argc, char* argv[]){
                            iter,
                            testing_img_path);
 
-    baseline_params.set_num_sample_pixels(num_sample_pixels);
-    proposed_params.set_num_sample_pixels(num_sample_pixels);
+    baseline_params.set_criticality_ratio(criticality_ratio);
+    proposed_params.set_criticality_ratio(criticality_ratio);
+
+    //baseline_params.set_num_sample_pixels(num_sample_pixels);
+    //proposed_params.set_num_sample_pixels(num_sample_pixels);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
@@ -213,15 +224,14 @@ int main(int argc, char* argv[]){
         proposed_device_type.push_back(int(proposed_device_sequence[i]));
     }
     
-    /* A quick plugin test of histogram matching on laplacian_2d */
-    if(0){
+    if(app_name == "laplacian_2d"){
         histogram_matching(output_array_baseline, 
                            output_array_proposed,
                            problem_size,
                            problem_size,
                            block_size,
-                           block_size,
-                           proposed_device_type);
+                          block_size,
+                          proposed_device_type);
     }
 
     std::cout << "Converting output array to float type for quality measurement..." 
@@ -282,9 +292,9 @@ int main(int argc, char* argv[]){
     // save as png images
    
     std::cout << __func__ << ": input array: " << std::endl;
-    for(int i = 0 ; i < 10 ; i++){
-        for(int j = 0 ; j < 10 ; j++){
-            std::cout << ((float*)input_array)[i*baseline_params.problem_size+j] << " ";
+    for(int i = 0 ; i < 20 ; i++){
+        for(int j = 0 ; j < 20 ; j++){
+            std::cout << ((float*)unify_input_type->float_array)[i*baseline_params.problem_size+j] << " ";
         }
         std::cout << std::endl;
     }
@@ -363,7 +373,7 @@ int main(int argc, char* argv[]){
               << log_file_path << std::endl;
 
     float saliency_ratio, protected_saliency_ratio;
-    quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
+    //quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
     
     dump_to_csv(log_file_path, 
                 testing_img_file_name,

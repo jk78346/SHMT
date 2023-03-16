@@ -286,7 +286,42 @@ void array_partition_initialization(Params params,
                                     bool skip_init,
                                     void** input,
                                     std::vector<void*>& input_pars){
-    if( std::find(params.uint8_t_type_app.begin(), 
+    if(params.app_name == "histogram_2d"){
+        if(!skip_init){ // input mat: use this flag to check input mat or output mat
+            Mat input_mat, tmp(params.block_size, params.block_size, CV_8U);
+            array2mat(input_mat, (uint8_t*)*input, params.problem_size, params.problem_size);
+            unsigned int block_total_size = params.block_size * params.block_size;
+
+            // vector of partitions allocation
+            input_pars.resize(params.get_block_cnt());   
+            for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+                for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
+                    unsigned int idx = i * params.get_col_cnt() + j;         
+        
+                    // partition allocation
+                    input_pars[idx] = (uint8_t*) calloc(block_total_size, sizeof(uint8_t));
+
+                    // partition initialization
+                    int top_left_w = j*params.block_size;
+                    int top_left_h = i*params.block_size;
+                    Rect roi(top_left_w, top_left_h, params.block_size, params.block_size); 
+                    input_mat(roi).copyTo(tmp); 
+                    mat2array(tmp, (uint8_t*)((input_pars[idx])));
+                }
+            }
+        }else{ // output mat
+            std::cout << __func__ << ": block cnt: " << params.get_block_cnt() << std::endl;
+            input_pars.resize(params.get_block_cnt());   
+            for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+                for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
+                    unsigned int idx = i * params.get_col_cnt() + j;         
+        
+                    // partition allocation
+                    input_pars[idx] = (int*) calloc(256, sizeof(int));
+                }
+            }
+        }
+    }else if( std::find(params.uint8_t_type_app.begin(), 
                   params.uint8_t_type_app.end(), 
                   params.app_name) !=
         params.uint8_t_type_app.end() ){
@@ -435,11 +470,22 @@ void array_partition_initialization(Params params,
 void output_array_partition_gathering(Params params,
                                       void** output,
                                       std::vector<void*>& output_pars){
-    // prepare for utilizing opencv roi() to do gathering.
-    if( std::find(params.uint8_t_type_app.begin(), 
+
+    if(params.app_name == "histogram_2d"){
+        for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
+            for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
+                unsigned int idx = i * params.get_col_cnt() + j;
+                ((int*)*output)[idx] = 0;
+                for(int id = 0 ; id < 256 ; id++){
+                    ((int*)*output)[id] += ((int*)(output_pars[idx]))[id];
+                }
+            }
+        }
+    }else if( std::find(params.uint8_t_type_app.begin(), 
                   params.uint8_t_type_app.end(), 
                   params.app_name) !=
         params.uint8_t_type_app.end() ){
+        // prepare for utilizing opencv roi() to do gathering.
         Mat output_mat(params.problem_size, params.problem_size, CV_8U), tmp;
     
         for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){

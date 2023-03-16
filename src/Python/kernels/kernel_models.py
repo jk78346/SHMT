@@ -191,32 +191,15 @@ class KernelModels:
     def histogram_2d(in_shape, out_shape):
         """ This function returns a NN-based hist256 model. """
         inputs = keras.Input(shape=in_shape+(1,))
-#        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(x)
-#        x = layers.Conv1D(filters=4, kernel_size=1, activation='relu')(x)
-#        x = layers.Conv2D(filters=1, kernel_size=1, activation='relu')(inputs)
-#        x = layers.Flatten()(inputs)
-#        x = layers.Dense(256*4)(x)
-#        x = layers.Dense(256*4)(x)
-#        x = layers.Dense(512*4)(x)
-#        x = layers.Lambda(lambda x: backend.sum(x, axis=1))(x)
-
-#        encoded_dim =1024
-#        x = layers.Conv2D(filters=encoded_dim, kernel_size=1, activation="relu")(inputs)
-#        x = tf.reduce_sum(x, [1, 2])
-        #x = layers.Conv2D(filters=256*4, kernel_size=4, strides=4, activation="relu")(x)
-#        x = layers.Reshape((256, 4, 1))(x)
-
-        #x = layers.Flatten()(x)
-        #x = layers.Dense(256*4)(x)
-
         iters = int(math.log(in_shape[0] / 4., 4))
-
+        pow2 = in_shape[0] / 256.
         init = keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=2022)
-
         encoded_dim = 16
         x = inputs
+        print("pow2: ", pow2)
         for i in range(iters):
             x = layers.Conv2D(filters=encoded_dim, kernel_size=4, strides=(1, 4), padding='same', activation='relu', kernel_initializer=init)(x)
+        x = layers.AveragePooling2D(pool_size=(8, 2))(x)
         x = layers.Conv2D(filters=1, kernel_size=4, strides=(1, 4), padding='same', activation='relu', kernel_initializer=init)(x)
 
         outputs = x

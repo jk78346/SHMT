@@ -4,6 +4,8 @@
 #include "quality.h"
 #include "partition.h"
 #include "conversion.h"
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/saliency/saliencySpecializedClasses.hpp>
 
 std::atomic<int> doneProducers(0);
@@ -62,14 +64,14 @@ void PartitionRuntime::criticality_kernel(Params params,
             (error_rate worst) to be critical.
         TODO: design the criticality decision 
      */
-    std::cout << __func__ << ": criticality ratio: " << criticality_ratio << std::endl;
+    std::cout << __func__ << ": criticality ratio: " << criticality_ratio << ", order size: " << order.size() << std::endl;
     int threshold = ceil(order.size() * (1. - criticality_ratio));
     int cnt = 0;
     std::cout << __func__ << ": (idx, criticality)" << std::endl;;
     for(auto p: order){
         this->criticality[p.first] = (cnt < threshold)?false:true;
         cnt++;
-        std::cout << p.first << "," << p.second << std::endl;
+        std::cout << "idx: (" << p.first/16 << ", " << p.first%16 << "), metirc: " << p.second << std::endl;
     }
 
     // show criticality
@@ -77,10 +79,12 @@ void PartitionRuntime::criticality_kernel(Params params,
     for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
         for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
             unsigned int idx = i * params.get_col_cnt() + j;
-            std::cout << ((this->criticality[idx] == 2)?"g":"t") << " ";
+            std::cout << ((this->criticality[idx] == true)?"g":"t") << " ";
         }
         std::cout << std::endl;
     }
+    std::cout << __func__ << ": waitting..." << std::endl;
+    //getchar();
     std::cout << std::endl;
 }
 
@@ -193,29 +197,35 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     std::vector<std::pair<int, float>> order;
 
     for(unsigned int i = 0 ; i < this->sampling_qualities.size() ; i++){
-        std::cout << __func__ << ": i: " << i 
-                  << ", rmse: " << this->sampling_qualities[i].rmse()
-                  << ", rmse %: " << this->sampling_qualities[i].rmse_percentage()
-                  << ", error rate: " << this->sampling_qualities[i].error_rate()
-                  << ", error %: " << this->sampling_qualities[i].error_percentage()
-                  << ", ssim: " << this->sampling_qualities[i].ssim()
-                  << ", pnsr: " << this->sampling_qualities[i].pnsr() << std::endl;
+//        std::cout << __func__ << ": (" << i
+//                  << ", rmse: " << this->sampling_qualities[i].rmse()
+//                  << ", rmse %: " << this->sampling_qualities[i].rmse_percentage()
+//                  << ", error rate: " << this->sampling_qualities[i].error_rate()
+//                  << ", error %: " << this->sampling_qualities[i].error_percentage()
+//                  << ", ssim: " << this->sampling_qualities[i].ssim()
+//                  << ", pnsr: " << this->sampling_qualities[i].pnsr() 
+//                  << std::endl;
         // objective or criticality ordering
         //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].ssim()));
-        //order.push_back(std::make_pair(i, (-1)*this->sampling_qualities[i].error_rate()));
-        
+        if(params.app_name == "mean_2d" || params.app_name == "sobel_2d"){
+            order.push_back(std::make_pair(i, this->sampling_qualities[i].rate())); // to ordering error_rate
+        }else if(params.app_name == "laplacian_2d"){
+            order.push_back(std::make_pair(i, -1*this->sampling_qualities[i].rate())); // to ordering error_rate
+        }else{
+            order.push_back(std::make_pair(i, this->sampling_qualities[i].rate())); // to ordering error_rate
+        }
         /* good for sobel_2d */
-        order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
+        //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
         
         /* testing for laplacian_2d */
         //order.push_back(std::make_pair(i, this->sampling_qualities[i].rmse()));
     }
     sort(order.begin(), order.end(), sortByVal);
 
-    std::cout << __func__ << ": oracle s.t. error_rate." << std::endl;
+    //std::cout << __func__ << ": oracle s.t. rmse." << std::endl;
     
-    params.set_criticality_ratio();
-    this->criticality_kernel(params, order, params.get_criticality_ratio()); 
+    std::cout << __func__ << ": oracle c ratio: " << params.get_criticality_ratio() << std::endl;
+    this->criticality_kernel(params, order, params.get_criticality_ratio()/*for stable oracle*/); 
 
     // If a block is critical, then it must be static and assigned to GPU.
     // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
@@ -306,6 +316,80 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
     return get_time_ms(e, s); 
 }
 
+double PartitionRuntime::run_input_homo_probing(float one_dim_ratio){
+    timing s = clk::now();
+    std::vector<float> samples_homo_cnt(this->params.get_block_cnt(), 0.);
+    std::vector<float> samples_mean(this->params.get_block_cnt(), 0.);
+    std::vector<float> samples_sdev(this->params.get_block_cnt(), 0.);
+    std::vector<std::vector<float>> samples_pixels(this->params.get_block_cnt());
+    int w = this->params.get_kernel_size();
+    int h = this->params.get_kernel_size();
+    int s_w = one_dim_ratio * w; // downsized w
+    int s_h = one_dim_ratio * h; // downsized w
+    int total_size = w * h;
+    unsigned int offset;
+    float tmp;
+    Quality* q = new Quality();
+    for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
+        // 1. get the downsampling canary
+        if(std::find(this->params.uint8_t_type_app.begin(),
+                    this->params.uint8_t_type_app.end(),
+                    this->params.app_name) !=
+                this->params.uint8_t_type_app.end()){
+            uint8_t* ptr = reinterpret_cast<uint8_t*>(this->input_pars[i]);
+            cv::Mat mat(w, h, CV_8U), sample_mat(s_w, s_h, CV_8U);
+            array2mat(mat, ptr, w, h);
+            cv::resize(mat, 
+                       sample_mat,
+                       cv::Size(s_w, s_h), 0, 0,
+                       INTER_NEAREST);
+            uint8_t* sample_array = (uint8_t*) malloc(s_w * s_h * sizeof(uint8_t));
+            mat2array(sample_mat, sample_array);
+            samples_sdev[i] = q->static_sdev(sample_array, s_w * s_h);
+            samples_mean[i] = q->static_mean(sample_array, s_w * s_h);
+//#pragma omp parallel for
+            for(int i_idx = 0 ; i_idx < s_w ; i_idx++){
+                for(int j_idx = 0 ; j_idx < s_h ; j_idx++){
+                    samples_homo_cnt[i] += (fabs(sample_array[i_idx * s_h + j_idx] - samples_mean[i]) < samples_sdev[i])?1:0;
+                }
+            }
+        }else{
+            float* ptr = reinterpret_cast<float*>(this->input_pars[i]);
+            cv::Mat mat(w, h, CV_32F), sample_mat(s_w, s_h, CV_32F);
+            array2mat(mat, ptr, w, h);
+            cv::resize(mat, 
+                       sample_mat,
+                       cv::Size(s_w, s_h), 0, 0,
+                       INTER_NEAREST);
+            float* sample_array = (float*) malloc(s_w * s_h * sizeof(float));
+            mat2array(sample_mat, sample_array);
+            samples_sdev[i] = q->static_sdev(sample_array, s_w * s_h);
+            samples_mean[i] = q->static_mean(sample_array, s_w * s_h);
+#pragma omp parallel for
+            for(int i_idx = 0 ; i_idx < s_w ; i_idx++){
+                for(int j_idx = 0 ; j_idx < s_h ; j_idx++){
+                    samples_homo_cnt[i] += (fabs(sample_array[i_idx * s_h + j_idx] - samples_mean[i]) < samples_sdev[i])?1:0;
+                }
+            }
+        }
+    }
+
+    std::vector<std::pair<int, float>> order;
+    for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
+        std::cout << __func__ << ": homo cnt[" << i << "]: " << samples_homo_cnt[i] << ", block cnt:" << this->params.get_block_cnt() << std::endl;
+        //order.push_back(std::make_pair(i, samples_sdev[i]));
+        order.push_back(std::make_pair(i, samples_homo_cnt[i]));
+    }
+    sort(order.begin(), order.end(), sortByVal);
+   
+    std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
+
+    this->criticality_kernel(this->params, order, this->params.get_criticality_ratio()); 
+
+    timing e = clk::now();
+    return get_time_ms(e, s); 
+}
+
 double PartitionRuntime::set_criticality_by_saliency(Params params, void** array){
     timing s = clk::now();
     cv::Mat mat;
@@ -373,9 +457,6 @@ double PartitionRuntime::set_criticality_by_saliency(Params params, void** array
         }
         std::cout << std::endl;
     }
-
-    getchar();
-
     timing e = clk::now();
     return get_time_ms(e, s);
 }
@@ -398,7 +479,8 @@ double PartitionRuntime::prepare_partitions(){
     if(this->is_criticality_mode()){
         auto p_mode = this->get_partition_mode();
         std::cout << __func__ << ": mode: " << p_mode << std::endl;
-        
+
+        // TODO: set back after testing across various criticality ratio
         this->params.set_criticality_ratio();
         std::cout << __func__ << ": criticality ratio: " << this->params.get_criticality_ratio() << std::endl;
         // involves actual run types
@@ -411,10 +493,8 @@ double PartitionRuntime::prepare_partitions(){
             this->params.set_downsampling_rate(1.);
             ret += this->run_sampling(mode);
         }else if(p_mode == "c"){ // use default downsampling rate
-            SamplingMode mode = center_crop;
-            ret += this->run_sampling(mode);
-        // input stats sampling types
-        // c-ns: N pixel stridding, c-nr: N pixel random
+            //SamplingMode mode = center_crop;
+            //ret += this->run_sampling(mode);
         }else if(p_mode == "c-ns-sdev" || 
                  p_mode == "c-nr-sdev" ||
                  p_mode == "c-ns-range" ||
@@ -422,6 +502,9 @@ double PartitionRuntime::prepare_partitions(){
             int num_pixels = this->params.get_num_sample_pixels();;
             std::cout << __func__ << ": num sample pixels: " << num_pixels << std::endl;
             ret += this->run_input_stats_probing(p_mode, num_pixels); 
+        }else if(p_mode == "c-homo"){
+            float one_dim_ratio = 1/16.;
+            ret += this->run_input_homo_probing(one_dim_ratio); 
         }else{
             std::cout << __func__ 
                       << ": unknown partition mode: " << p_mode << std::endl;
@@ -435,6 +518,11 @@ double PartitionRuntime::prepare_partitions(){
     /* This is the latest moment to determine if each tiling block and device is 
        dynamic or static. */
     this->setup_dynamic_blocks();
+    
+    // simulating oracle
+    //SamplingMode mode = init_crop;
+    //this->params.set_downsampling_rate(1.);
+    //this->run_sampling(mode); 
     
     // assign partitions to corresponding type of kernel handler if is static.
     for(unsigned int i = 0 ; i < this->row_cnt ; i++){
@@ -622,6 +710,10 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
         ret = (i%2 == 0)?cpu:gpu;
     }else if(this->mode == "gt_s"){ // sequentially choose between gpu and tpu
         ret = (i%2 == 0)?gpu:tpu;
+        // simulating naive work balancing
+        //ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
+
+        //ret = (this->criticality[i] == true)?gpu:tpu;
     }else if(this->mode == "ct_s"){ // sequentially choose between cpu and tpu
         ret = (i%2 == 0)?cpu:tpu;
     }else if(this->mode == "cgt_b" ||
@@ -639,7 +731,8 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
              this->mode == "gt_c-ns-range" ||
              this->mode == "gt_c-ns-sdev" ||
              this->mode == "gt_c-nr-range" ||
-             this->mode == "gt_c-nr-sdev"){ // criticality mode on GPU/TPU mixing
+             this->mode == "gt_c-nr-sdev" ||
+             this->mode == "gt_c-homo"){ // criticality mode on GPU/TPU mixing
         ret = (this->criticality[i] == true)?gpu:undefine; // non-critical blocks are dynamic
     }else{
         std::cout << __func__ << ": undefined partition mode: "
