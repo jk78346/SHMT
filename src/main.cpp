@@ -147,8 +147,8 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
-    //int num_sample_pixels     = atoi(argv[idx++]);
-    float criticality_ratio     = atof(argv[idx++]);
+    int num_sample_pixels     = atoi(argv[idx++]);
+    //float criticality_ratio     = atof(argv[idx++]);
     
     std::string testing_img_path = 
         (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
@@ -168,11 +168,11 @@ int main(int argc, char* argv[]){
                            iter,
                            testing_img_path);
 
-    baseline_params.set_criticality_ratio(criticality_ratio);
-    proposed_params.set_criticality_ratio(criticality_ratio);
+    //baseline_params.set_criticality_ratio(criticality_ratio);
+    //proposed_params.set_criticality_ratio(criticality_ratio);
 
-    //baseline_params.set_num_sample_pixels(num_sample_pixels);
-    //proposed_params.set_num_sample_pixels(num_sample_pixels);
+    baseline_params.set_num_sample_pixels(num_sample_pixels);
+    proposed_params.set_num_sample_pixels(num_sample_pixels);
 
     void* input_array = NULL;
     void* output_array_baseline = NULL;
@@ -208,6 +208,8 @@ int main(int argc, char* argv[]){
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
+    //std::cout << __func__ << ": wait for starting..." << std::endl;
+    //getchar();
     timing proposed_start = clk::now();
     proposed_device_sequence = run_kernel(proposed_mode, 
                                           proposed_params, 
@@ -216,7 +218,8 @@ int main(int argc, char* argv[]){
                                           proposed_time_breakdown,
                                           proposed_criticality_sequence);
     timing proposed_end = clk::now();
-
+    //std::cout << __func__ << ": done e2e kernel execution (time: " << get_time_ms(proposed_end, proposed_start) << " ms). waiting..." << std::endl;
+    //getchar();
 
     // convert device sequence type 
     std::vector<int> proposed_device_type;
@@ -373,7 +376,7 @@ int main(int argc, char* argv[]){
               << log_file_path << std::endl;
 
     float saliency_ratio, protected_saliency_ratio;
-    //quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
+//    quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
     
     dump_to_csv(log_file_path, 
                 testing_img_file_name,

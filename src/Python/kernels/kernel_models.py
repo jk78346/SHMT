@@ -134,7 +134,7 @@ class KernelModels:
         y = layers.Conv2D(filters=encoded_dim, kernel_size=(1,1), padding='same', activation='relu')(y)
         
         #x = layers.Add()([x, y])
-        x = layers.Conv2D(filters=1, kernel_size=(1,1), padding='same', activation='relu')(x)
+        x = layers.Conv2D(filters=1, kernel_size=(3,3), padding='same', activation='relu')(x)
         outputs = x
         return keras.Model(inputs, outputs)
 

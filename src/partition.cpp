@@ -377,13 +377,12 @@ double PartitionRuntime::run_input_homo_probing(float one_dim_ratio){
     std::vector<std::pair<int, float>> order;
     for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
         std::cout << __func__ << ": homo cnt[" << i << "]: " << samples_homo_cnt[i] << ", block cnt:" << this->params.get_block_cnt() << std::endl;
-        //order.push_back(std::make_pair(i, samples_sdev[i]));
-        order.push_back(std::make_pair(i, samples_homo_cnt[i]));
+        order.push_back(std::make_pair(i, samples_sdev[i]));
+        //order.push_back(std::make_pair(i, samples_homo_cnt[i]));
     }
     sort(order.begin(), order.end(), sortByVal);
    
     std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
-
     this->criticality_kernel(this->params, order, this->params.get_criticality_ratio()); 
 
     timing e = clk::now();
@@ -463,6 +462,7 @@ double PartitionRuntime::set_criticality_by_saliency(Params params, void** array
 
 double PartitionRuntime::prepare_partitions(){
     double ret = 0.0;
+
     // allocate input partitions and initialization
     array_partition_initialization(this->params,
                                    false,
@@ -711,7 +711,8 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
     }else if(this->mode == "gt_s"){ // sequentially choose between gpu and tpu
         ret = (i%2 == 0)?gpu:tpu;
         // simulating naive work balancing
-        //ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
+        this->params.set_criticality_ratio();
+        ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
 
         //ret = (this->criticality[i] == true)?gpu:tpu;
     }else if(this->mode == "ct_s"){ // sequentially choose between cpu and tpu

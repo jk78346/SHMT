@@ -1043,7 +1043,6 @@ void GpuKernel::minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
 }
 
 void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
-
     cuda::GpuMat grad_x, grad_y;
     cuda::GpuMat abs_grad_x, abs_grad_y;
 

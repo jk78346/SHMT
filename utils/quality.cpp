@@ -122,8 +122,8 @@ void Quality::calc_saliency_accuracy(float& saliency_ratio, float& protected_sal
             }
         }
     }
-    getchar();
     saliency_ratio = (float)saliency_cnt / (this->row * this->col);
+    std::cout << __func__ << ": saliency ratio: " << saliency_cnt << "/" << (this->row * this->col) << " (" << saliency_ratio << ")" << std::endl;
     protected_saliency_ratio = (float)saliency_protected_cnt / saliency_cnt;
 }
 

@@ -31,10 +31,12 @@ docker run -d \
          -e IS_GPGTPU_CONTAINER='true' \
          --name ${CONTAINER_NAME} \
          --gpus all \
-         --mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
          ${IMAGE_NAME} \
          bash
+
+
+#--mount type=bind,source=${DATASET_DIR},target=${DATASET_TARGET_DIR} \
          
 
 

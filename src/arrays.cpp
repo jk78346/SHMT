@@ -24,9 +24,17 @@ void init_fft(unsigned int input_total_size, void** input_array){
 
 void init_srad(Params params, int rows, int cols, void** input_array){
     srand(7);
+    Mat in_img;
+    read_img(params.input_data_path,
+                     rows,
+                     cols,
+                    in_img);
+    in_img.convertTo(in_img, CV_32F);
+    mat2array(in_img, (float*)*input_array);
+    
     for(int i = 0 ; i < params.problem_size ; i++){
         for(int j = 0 ; j < params.problem_size ; j++){
-            ((float*)*input_array)[i*params.problem_size+j] = rand()/(float)RAND_MAX;
+            ((float*)*input_array)[i*params.problem_size+j] /= 255.; //= rand()/(float)RAND_MAX;
         }
     }
 }
@@ -104,6 +112,7 @@ void init_dct8x8(Params params, int rows, int cols, void** input_array){
 }
 
 void read_hotspot_file(float* vect, int grid_rows, int grid_cols, const char* file){
+
     int i;//, index;
     FILE *fp;
     int STR_SIZE = 256;
@@ -238,6 +247,7 @@ void data_initialization(Params params,
                      cols,
                     in_img);
             mat2array(in_img, (uint8_t*)*input_array);
+            imwrite("bird_input.png", in_img);  
         }
     }else{ // others are default as float type
         if(params.app_name == "fft_2d"){
