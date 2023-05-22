@@ -61,6 +61,7 @@ Quality::Quality(std::string app_name,
 
     std::cout << __func__ << ": calculating metrices..." << std::endl;
     // global quality
+
     std::cout << "global quality..." << std::endl;
     this->common_kernel(this->result, this->result_critical, 0, 0, this->row, this->col);
     this->common_stats_kernel(this->result.input_dist_stats, 
@@ -69,6 +70,7 @@ Quality::Quality(std::string app_name,
                               0, 
                               this->row, 
                               this->col);
+
     bool is_tiling = (this->row > this->row_blk)?true:false;
     
     if(0 && is_tiling){
@@ -92,6 +94,94 @@ Quality::Quality(std::string app_name,
             }
         }    
     }
+}
+
+//static
+void Quality::calc_saliency_accuracy(float* in_mat,
+                                            int row,
+                                            int col,
+                                            int row_blk,
+                                            int col_blk,
+                                            int row_cnt,
+                                            int col_cnt,
+                                            std::vector<int>proposed_device_type,
+                                            float& saliency_ratio, 
+                                            float& protected_saliency_ratio,
+                                            float& precision/*  TP/(TP+FP)  */){
+    cv::Mat mat;
+    cv::Mat saliency_map, binary_map;
+    std::cout << __func__ << ": start this fun..." << std::endl;
+    auto saliency = cv::saliency::StaticSaliencySpectralResidual();
+    std::cout << __func__ << ": row: " << row << ",col: " << col << std::endl; 
+    array2mat(mat, (float*)in_mat, row, col);
+
+/*
+    for(int i = 0 ; i < 10 ; i ++){
+        for(int j = 0 ; j < 10 ; j++){
+            std::cout << in_mat[i*8192+j] << " ";
+        }
+        std::cout << std::endl;
+    }
+*/
+    std::cout << __func__ << ": row: " << row << std::endl;
+    std::cout << __func__ << ": col: " << col << std::endl;
+    std::cout << __func__ << ": row_blk: " << row_blk << std::endl;
+    std::cout << __func__ << ": col_blk: " << col_blk << std::endl;
+    std::cout << __func__ << ": row_cnt: " << row_cnt << std::endl;
+    std::cout << __func__ << ": col_cnt: " << col_cnt << std::endl;
+    
+    for(auto p: proposed_device_type){
+        std::cout << "dev type: " << p << " ";
+    }
+    std::cout << std::endl;
+    
+    std::cout << __func__ << ": getting binary map..." << std::endl;
+    assert(saliency.computeSaliency(mat, saliency_map));
+    assert(saliency.computeBinaryMap(saliency_map, binary_map));
+//    imwrite("binary_map.png", binary_map);
+    std::cout << __func__ << ": binary_map type: " << binary_map.type() << std::endl;
+
+    unsigned long long int saliency_cnt = 0;
+    unsigned long long int saliency_protected_cnt = 0;
+    unsigned long long int protected_cnt = 0;
+
+    int GPU_cnt = 0;
+    int C_GPU_cnt = 0;
+
+    for(unsigned int i_idx = 0 ; i_idx < row_cnt ; i_idx++){
+        for(unsigned int j_idx = 0 ; j_idx < col_cnt ; j_idx++){
+            unsigned int i_start = i_idx * row_blk;
+            unsigned int j_start = j_idx * col_blk;
+            int idx = i_idx*col_cnt+j_idx;
+
+            GPU_cnt += (proposed_device_type[idx] == 2)?1:0;
+            
+            bool is_salience_block = false;
+
+            for(unsigned int i = i_start ; i < i_start+row_blk ; i++){
+                for(unsigned int j = j_start ; j < j_start+col_blk ; j++){
+                    bool is_saliency = ((uint8_t)binary_map.at<uint8_t>(i, j))?true:false;
+                    if(is_saliency){
+                        is_salience_block = true;
+                    }
+                    saliency_cnt += (is_saliency)?1:0;
+                    saliency_protected_cnt += (is_saliency && proposed_device_type[idx] == 2/*gpu*/)?1:0;
+                    protected_cnt += (proposed_device_type[idx] == 2)?1:0;
+                    
+                }
+            }
+            C_GPU_cnt += (is_salience_block && proposed_device_type[idx] == 2)?1:0;
+        }
+    }
+    saliency_ratio = (float)saliency_cnt / (row * col);
+    std::cout << __func__ << ": saliency ratio: " << saliency_cnt << "/" << (row * col) << " (" << saliency_ratio << ")" << std::endl;
+    protected_saliency_ratio = (float)saliency_protected_cnt / saliency_cnt;
+
+    std::cout << __func__ << ": protected_saliency_ratio(recall): " << protected_saliency_ratio << std::endl;
+    
+    std::cout << __func__ << ": precision (TP/(TP+FP)): " << (float)C_GPU_cnt / GPU_cnt 
+              << ", (" << C_GPU_cnt << "/" << GPU_cnt << ")" << std::endl;
+    precision = (float)C_GPU_cnt / GPU_cnt;
 }
 
 void Quality::calc_saliency_accuracy(float& saliency_ratio, float& protected_saliency_ratio){

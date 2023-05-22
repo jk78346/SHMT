@@ -90,7 +90,8 @@ private:
     // The main criticality determine function based on sampling qualities.
     void criticality_kernel(Params params, 
                             std::vector<std::pair<int, float>>& order, 
-                            float criticality_ratio);
+                            float criticality_ratio,
+                            std::string mode/*threshold, topK*/);
 
     /* To determine if each type of devices is static or dynamic
         by setting the the following arrays:

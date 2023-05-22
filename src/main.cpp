@@ -301,7 +301,7 @@ int main(int argc, char* argv[]){
         }
         std::cout << std::endl;
     }
-
+/*
     if(app_name != "histogram_2d")
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_input.png", 
                                     baseline_params.problem_size,
@@ -319,7 +319,7 @@ int main(int argc, char* argv[]){
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,
                                     output_array_proposed);
-    
+*/    
     // save as pixel arrays
     //std::cout << "saving output results in txt files..." << std::endl;
     //unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.csv", 
@@ -375,9 +375,20 @@ int main(int argc, char* argv[]){
     std::cout << "dumping measurement results into file: " 
               << log_file_path << std::endl;
 
-    float saliency_ratio, protected_saliency_ratio;
-//    quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
+    float saliency_ratio, protected_saliency_ratio, precision;
+    //quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
     
+    quality->calc_saliency_accuracy((float*)input_array, //(float*)unify_input_type->float_array,
+                                    proposed_params.problem_size,
+                                    proposed_params.problem_size,
+                                    proposed_params.block_size,
+                                    proposed_params.block_size,
+                                    proposed_params.problem_size/proposed_params.block_size,
+                                    proposed_params.problem_size/proposed_params.block_size,
+                                    proposed_device_type,
+                                    saliency_ratio, 
+                                    protected_saliency_ratio, // recall
+                                    precision);
     dump_to_csv(log_file_path, 
                 testing_img_file_name,
                 proposed_params.app_name,

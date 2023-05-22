@@ -1,6 +1,7 @@
 #ifndef __QUALITY_H__
 #define __QUALITY_H__
 #include <stdint.h>
+#include <vector>
 
 class Quality{
     public:
@@ -25,7 +26,21 @@ class Quality{
          */
         void calc_saliency_accuracy(float& saliency_ratio, 
                                     float& protected_saliency_ratio);
-	    /* main APIs
+
+        // static
+        void calc_saliency_accuracy(float* in_mat,
+                                           int row,
+                                           int col,
+                                           int row_blk,
+                                           int col_blk,
+                                           int row_cnt,
+                                           int col_cnt,
+                                           std::vector<int> devS_type,
+                                           float& saliency_ratio,
+                                           float& protected_saliency_ratio,
+                                           float& precision);
+        
+        /* main APIs
 	        Now each API call works on one tiling block only,
             and the block is indicated by i_blk_idx, j_blk_idx.
             block sizes are used by this->row_blk, this->col_blk.

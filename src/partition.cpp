@@ -57,13 +57,54 @@ bool sortByVal(const std::pair<int , float> &a, const std::pair<int, float> &b){
  */
 void PartitionRuntime::criticality_kernel(Params params, 
                                           std::vector<std::pair<int, float>>& order, 
-                                          float criticality_ratio){
+                                          float criticality_ratio,
+                                          std::string mode/*threshold, topK*/){
 
     /*
         Current design: mark (no more than) one third of the worst blocks 
             (error_rate worst) to be critical.
         TODO: design the criticality decision 
      */
+    std::cout << __func__ << ": criticality method: " << mode << std::endl;
+    if(mode == "c-limits"){
+        float threshold = 256.;
+        for(auto p: order){
+            std::cout << __func__ << ": p.second: " << p.second << std::endl;
+            this->criticality[p.first] = (p.second >= threshold)?true: false;
+        }
+    }else if(mode == "topK"){
+        int window_size = 256;
+        float c = params.get_criticality_ratio();
+        int K = int(window_size*c);
+        int window_cnt = 256./256.; //((int)order.size() / window_size) + (order.size()%window_size == 0)?0:1;
+        std::cout << __func__ << ": window_cnt: " << window_cnt 
+                  << "order.size: " << order.size()
+                  << "window_size: " << window_size
+            << std::endl;
+        for(int i = 0 ; i < window_cnt ; i++){
+            std::vector<std::pair<int, float>> window;
+            for(int j = 0 ; j < window_size ; j++){
+                int idx = i*window_cnt+j;
+                idx = (idx > order.size())?order.size():idx;
+                window.push_back(order[idx]);
+            } 
+            sort(window.begin(), window.end(), sortByVal);
+            for(int j = 0 ; j < window_size ; j++){
+                std::cout << __func__ << ": i: " << i << ",j: " << j << ",K: " << K
+                          << ", order: " << window[j].second
+                          << std::endl;
+                this->criticality[window[j].first] = (j <= (window_size-K))?false:true;
+                
+            }
+            window.resize(0);
+        }
+    //sort(order.begin(), order.end(), sortByVal);
+    }else{
+        std::cout << __func__ << ": unknown criticality mode(not limits or topK): "
+                  << mode << std::endl;
+        exit(0);
+    }
+/*
     std::cout << __func__ << ": criticality ratio: " << criticality_ratio << ", order size: " << order.size() << std::endl;
     int threshold = ceil(order.size() * (1. - criticality_ratio));
     int cnt = 0;
@@ -73,17 +114,20 @@ void PartitionRuntime::criticality_kernel(Params params,
         cnt++;
         std::cout << "idx: (" << p.first/16 << ", " << p.first%16 << "), metirc: " << p.second << std::endl;
     }
-
+*/
     // show criticality
     std::cout << __func__ << ": criticality tiling:" << std::endl;
+    int cnt = 0;
     for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
         for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
             unsigned int idx = i * params.get_col_cnt() + j;
+            cnt += (this->criticality[idx] == true)?1:0;
             std::cout << ((this->criticality[idx] == true)?"g":"t") << " ";
         }
         std::cout << std::endl;
     }
-    std::cout << __func__ << ": waitting..." << std::endl;
+    std::cout << __func__ << ": critical ratio: " << cnt << "/" << params.get_row_cnt() * params.get_col_cnt()
+              << "(" << (float)cnt/(params.get_row_cnt()*params.get_col_cnt())  << "): waitting..." << std::endl;
     //getchar();
     std::cout << std::endl;
 }
@@ -131,6 +175,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     double sampling_overhead = 0.0;
 
     /* run downsampled tiling blocks on edgetpu and get quality result. */
+    
     for(unsigned int i = 0 ; i < this->row_cnt ; i++){
         for(unsigned int j = 0; j < this->col_cnt ; j++){
             unsigned int idx = i*this->col_cnt+j;
@@ -192,7 +237,8 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
         }
     }
 
-    std::cout << __func__ << ": sampling timing overhead: " << sampling_overhead << " (ms)" << std::endl;
+
+    //std::cout << __func__ << ": sampling timing overhead: " << sampling_overhead << " (ms)" << std::endl;
     /* criticality policy to determine which tiling block(s) are critical. */
     std::vector<std::pair<int, float>> order;
 
@@ -225,7 +271,8 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
     //std::cout << __func__ << ": oracle s.t. rmse." << std::endl;
     
     std::cout << __func__ << ": oracle c ratio: " << params.get_criticality_ratio() << std::endl;
-    this->criticality_kernel(params, order, params.get_criticality_ratio()/*for stable oracle*/); 
+    std::string critical_mode = "topK";
+    this->criticality_kernel(params, order, params.get_criticality_ratio()/*for stable oracle*/, critical_mode); 
 
     // If a block is critical, then it must be static and assigned to GPU.
     // And for non-critical blocks, it is dynamic and upto runtime to determine device type to run.
@@ -261,9 +308,9 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
     float tmp;
     for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
         for(unsigned int idx = 0 ; idx < num_pixels ; idx++){
-            if(mode == "c-nr-sdev" || mode == "c-nr-range"){
+            if(mode == "c-tu" || mode == "c-ku"){
                 offset = rand()%total_size;
-            }else if(mode == "c-ns-sdev" || mode == "c-ns-range"){ // stride from top-left corner
+            }else if(mode == "c-ts" || mode == "c-ks"){ // stride from top-left corner
                 unsigned int stride = 32; // just a default
                 offset = (idx * stride) % total_size; // flat circular stridding to avoid segflt
             }else{
@@ -286,31 +333,23 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
             samples_min[i] = (tmp < samples_min[i])?tmp:samples_min[i];
         }
     }
-    
+    /*
     for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
         samples_sdev[i] = sdev(samples_pixels[i]);
-    }
+    }*/
 
     std::vector<std::pair<int, float>> order;
     for(unsigned int i = 0 ; i < this->params.get_block_cnt() ; i++){
         assert(samples_max[i] >= samples_min[i]);
         samples_range[i] = samples_max[i] - samples_min[i];
-        // smaller the range, more critical (?)
-        if(mode == "c-ns-range" || mode == "c-nr-range"){
-            order.push_back(std::make_pair(i, samples_range[i]));
-        }else if(mode == "c-ns-sdev" || mode == "c-nr-sdev"){
-            order.push_back(std::make_pair(i, samples_sdev[i]));
-        }else{
-            std::cout << __func__ << ": input stats sampling mode: " 
-                      << mode << " is not supported yet." << std::endl;
-            exit(0);
-        }
+        order.push_back(std::make_pair(i, samples_range[i]));
     }
-    sort(order.begin(), order.end(), sortByVal);
+    //sort(order.begin(), order.end(), sortByVal);
    
     std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
 
-    this->criticality_kernel(this->params, order, this->params.get_criticality_ratio()); 
+    std::string critical_mode = "c-limits";
+    this->criticality_kernel(this->params, order, this->params.get_criticality_ratio(), critical_mode); 
 
     timing e = clk::now();
     return get_time_ms(e, s); 
@@ -380,10 +419,11 @@ double PartitionRuntime::run_input_homo_probing(float one_dim_ratio){
         order.push_back(std::make_pair(i, samples_sdev[i]));
         //order.push_back(std::make_pair(i, samples_homo_cnt[i]));
     }
-    sort(order.begin(), order.end(), sortByVal);
+    //sort(order.begin(), order.end(), sortByVal);
    
     std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
-    this->criticality_kernel(this->params, order, this->params.get_criticality_ratio()); 
+    std::string critical_mode = "c-limits";
+    this->criticality_kernel(this->params, order, this->params.get_criticality_ratio(), critical_mode); 
 
     timing e = clk::now();
     return get_time_ms(e, s); 
@@ -476,7 +516,7 @@ double PartitionRuntime::prepare_partitions(){
                                    this->output_pars);
 
 /* sampling section if enabled */
-    if(this->is_criticality_mode()){
+    if(this->is_criticality_mode() || this->get_partition_mode() == "s"){
         auto p_mode = this->get_partition_mode();
         std::cout << __func__ << ": mode: " << p_mode << std::endl;
 
@@ -495,14 +535,15 @@ double PartitionRuntime::prepare_partitions(){
         }else if(p_mode == "c"){ // use default downsampling rate
             //SamplingMode mode = center_crop;
             //ret += this->run_sampling(mode);
-        }else if(p_mode == "c-ns-sdev" || 
-                 p_mode == "c-nr-sdev" ||
-                 p_mode == "c-ns-range" ||
-                 p_mode == "c-nr-range"){
+        }else if(p_mode == "c-ts" || 
+                 p_mode == "c-tu" ||
+                 p_mode == "c-ks" ||
+                 p_mode == "c-ku"){
             int num_pixels = this->params.get_num_sample_pixels();;
             std::cout << __func__ << ": num sample pixels: " << num_pixels << std::endl;
             ret += this->run_input_stats_probing(p_mode, num_pixels); 
-        }else if(p_mode == "c-homo"){
+        }else if(p_mode == "c-tr" ||
+                 p_mode == "c-kr"){
             float one_dim_ratio = 1/16.;
             ret += this->run_input_homo_probing(one_dim_ratio); 
         }else{
@@ -710,9 +751,12 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
         ret = (i%2 == 0)?cpu:gpu;
     }else if(this->mode == "gt_s"){ // sequentially choose between gpu and tpu
         ret = (i%2 == 0)?gpu:tpu;
+        
         // simulating naive work balancing
-        this->params.set_criticality_ratio();
-        ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
+        //this->params.set_criticality_ratio();
+        //ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
+        std::cout << __func__ << ": c[" << i << ": " << this->criticality[i] << std::endl;
+        ret = ((this->criticality[i] == true)?gpu:tpu);
 
         //ret = (this->criticality[i] == true)?gpu:tpu;
     }else if(this->mode == "ct_s"){ // sequentially choose between cpu and tpu
@@ -729,11 +773,12 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
     }else if(this->mode == "gt_c" ||
              this->mode == "gt_c-saliency" ||
              this->mode == "gt_c-oracle" ||
-             this->mode == "gt_c-ns-range" ||
-             this->mode == "gt_c-ns-sdev" ||
-             this->mode == "gt_c-nr-range" ||
-             this->mode == "gt_c-nr-sdev" ||
-             this->mode == "gt_c-homo"){ // criticality mode on GPU/TPU mixing
+             this->mode == "gt_c-ts" ||
+             this->mode == "gt_c-tu" ||
+             this->mode == "gt_c-tr" ||
+             this->mode == "gt_c-ks" ||
+             this->mode == "gt_c-ku" ||
+             this->mode == "gt_c-kr" ){ // criticality mode on GPU/TPU mixing
         ret = (this->criticality[i] == true)?gpu:undefine; // non-critical blocks are dynamic
     }else{
         std::cout << __func__ << ": undefined partition mode: "
