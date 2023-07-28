@@ -250,6 +250,7 @@ int main(int argc, char* argv[]){
     UnifyType* unify_proposed_type = 
         new UnifyType(proposed_params, output_array_proposed);    
 
+
     // Get quality measurements
     std::cout << "Getting quality results..." << std::endl;
     std::cout << __func__ << ": criticality size: " << proposed_criticality_sequence.size() << std::endl;
@@ -267,7 +268,7 @@ int main(int argc, char* argv[]){
     bool is_tiling = 
         (baseline_params.problem_size > baseline_params.block_size)?true:false;
 
-    quality->print_results(is_tiling, 1/*verbose*/);
+//    quality->print_results(is_tiling, 1/*verbose*/);
     
     /* print hist of input */
     //std::cout << __func__ << ": print hist of input array" << std::endl;
@@ -377,7 +378,7 @@ int main(int argc, char* argv[]){
 
     float saliency_ratio, protected_saliency_ratio, precision;
     //quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
-    
+/*    
     quality->calc_saliency_accuracy((float*)input_array, //(float*)unify_input_type->float_array,
                                     proposed_params.problem_size,
                                     proposed_params.problem_size,
@@ -389,6 +390,7 @@ int main(int argc, char* argv[]){
                                     saliency_ratio, 
                                     protected_saliency_ratio, // recall
                                     precision);
+*/
     dump_to_csv(log_file_path, 
                 testing_img_file_name,
                 proposed_params.app_name,
@@ -404,7 +406,7 @@ int main(int argc, char* argv[]){
                 saliency_ratio,
                 protected_saliency_ratio);
 
-    delete quality;
+//    delete quality;
     delete baseline_time_breakdown;
     delete proposed_time_breakdown;
     delete unify_baseline_type;

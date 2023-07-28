@@ -17,7 +17,7 @@ SRC_TARGET_DIR="${SRC_MOUNT}" # the src code mount point within container
 
 # build dockerfile to generate docker image
 echo "[${PROJ}] - building docker image from dockerfile..."
-nvidia-docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
+DOCKER_BUILDKIT=1 nvidia-docker build -t ${IMAGE_NAME} ${DOCKERFILE_PATH}
 
 nvidia-docker stop ${CONTAINER_NAME}
 nvidia-docker rm ${CONTAINER_NAME}
@@ -40,6 +40,7 @@ nvidia-docker run -d \
          -u $(id -u $USER):$(id -g $USER) \
          --mount type=bind,source=${SRC_DIR},target=${SRC_TARGET_DIR} \
          --mount type=bind,source=${GPTPU_LIB_BASE},target=${GPTPU_LIB_MOUNT} \
+         --mount type=bind,source=/usr/lib/aarch64-linux-gnu,target=/usr/lib/aarch64-linux-gnu,readonly \
          ${IMAGE_NAME} \
          bash
          

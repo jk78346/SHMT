@@ -246,6 +246,16 @@ void dump_to_csv(std::string log_file_path,
                  std::vector<int> proposed_device_sequence,
                  float saliency_ratio,
                  float protected_saliency_ratio){
+/*    
+    // dump to a MAPE only log file
+    std::fstream f;
+    f.open("../the_quality_only_b_SHMT_oracle_log.csv", std::ios_base::app);
+    assert(f.is_open());
+    f << quality->error_rate() << "%,\n";
+    f.close();
+    return;
+    // skip the following
+*/
     std::fstream myfile;
     // simply append baseline and proposed rows
     myfile.open(log_file_path.c_str(), std::ios_base::app);
@@ -304,7 +314,7 @@ void dump_to_csv(std::string log_file_path,
            << protected_saliency_ratio * 100. << "\%,\n";
 
     bool is_tiling = (problem_size > block_size)?true:false;
-    if(is_tiling){
+    if(0 && is_tiling){
         myfile << "*****tiling seq*****,\n";
         for(int i = 0 ; i < quality->get_row_cnt() ; i++){
             for(int j = 0 ; j < quality->get_col_cnt() ; j++){

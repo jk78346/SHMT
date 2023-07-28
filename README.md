@@ -161,3 +161,5 @@ $ cmake -D CMAKE_BUILD_TYPE=RELEASE \
 ```
 $ make -j4
 ```
+
+### 5. ```failed to create shim: OCI runtime create failed: failed to create NVIDIA Container Runtime: failed to construct OCI spec modifier: failed to construct discoverer: failed to create Xorg discoverer: failed to locate libcuda.so: pattern libcuda.so.*.*.* not found: unknown```

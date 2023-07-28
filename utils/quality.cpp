@@ -64,13 +64,14 @@ Quality::Quality(std::string app_name,
 
     std::cout << "global quality..." << std::endl;
     this->common_kernel(this->result, this->result_critical, 0, 0, this->row, this->col);
+/*
     this->common_stats_kernel(this->result.input_dist_stats, 
                               this->input_mat, 
                               0, 
                               0, 
                               this->row, 
                               this->col);
-
+*/
     bool is_tiling = (this->row > this->row_blk)?true:false;
     
     if(0 && is_tiling){
@@ -279,7 +280,9 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
     for(int i = i_start ; i < i_start+row_size ; i++){
 		for(int j = j_start ; j < j_start+col_size ; j++){
 			int idx = i*this->ldn+j;
-			baseline_sum += this->baseline_mat[idx];
+			
+            baseline_sum += this->baseline_mat[idx];
+            
             baseline_max = 
                 (this->baseline_mat[idx] > baseline_max)?
                 this->baseline_mat[idx]:
@@ -298,6 +301,7 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
                 target_min;
 			
             mse_sum += pow(this->target_mat[idx] - this->baseline_mat[idx], 2);
+            
             rate_sum += fabs(this->target_mat[idx] - this->baseline_mat[idx]);
             
             if(fabs(this->target_mat[idx] - this->baseline_mat[idx]) > 1e-8){
@@ -311,7 +315,7 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
     rate = rate_sum / (cnt);
 
     mean = (float)(baseline_sum / (double)(row_size*col_size));
-    
+
     assert(error_percentage_cnt <= (row_size * col_size));
 	
     // SSIM default parameters

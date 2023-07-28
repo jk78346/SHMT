@@ -7,7 +7,7 @@
 #
 
 ARG BASE_IMAGE=nvcr.io/nvidia/l4t-base:r32.4.4
-FROM ${BASE_IMAGE} AS OPENCV_BASE
+FROM ${BASE_IMAGE} AS opencv_base
 
 #
 # setup environment
@@ -38,57 +38,7 @@ RUN echo $(ls -lh /usr/include/$(uname -i)-linux-gnu)
 ARG CUDA_ARCH_BIN=""
 ARG ENABLE_NEON="OFF"
 
-# clone and configure OpenCV repo
-RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git && \
-    git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git && \
-    cd opencv && \
-    mkdir build && \
-    cd build && \
-    echo "configuring OpenCV ${OPENCV_VERSION}, CUDA_ARCH_BIN=${CUDA_ARCH_BIN}, ENABLE_NEON=${ENABLE_NEON}" && \
-    cmake \
-        -D CPACK_BINARY_DEB=ON \
-	    -D BUILD_EXAMPLES=OFF \
-        -D BUILD_opencv_python2=OFF \
-        -D BUILD_opencv_python3=ON \
-	    -D BUILD_opencv_java=OFF \
-        -D CMAKE_BUILD_TYPE=RELEASE \
-        -D CMAKE_INSTALL_PREFIX=/usr/local \
-        -D CUDA_ARCH_BIN=${CUDA_ARCH_BIN} \
-        -D CUDA_ARCH_PTX= \
-        -D CUDA_FAST_MATH=ON \
-        -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
-        -D CUDNN_INCLUDE_DIR=/usr/include/$(uname -i)-linux-gnu \
-        -D CUDNN_LIBRARY=/usr/lib/$(uname -i)-linux-gnu/libcudnn.so.8.2.1 \
-        -D CUDNN_VERSION=8.2.1 \
-        -D EIGEN_INCLUDE_PATH=/usr/include/eigen3 \
-	    -D WITH_EIGEN=ON \
-        -D ENABLE_NEON=${ENABLE_NEON} \
-        -D OPENCV_DNN_CUDA=ON \
-        -D OPENCV_ENABLE_NONFREE=ON \
-        -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules \
-        -D OPENCV_GENERATE_PKGCONFIG=ON \
-        -D WITH_CUBLAS=ON \
-        -D WITH_CUDA=ON \
-        -D WITH_CUDNN=ON \
-        -D WITH_GSTREAMER=ON \
-        -D WITH_LIBV4L=ON \
-        -D WITH_OPENGL=ON \
-	    -D WITH_OPENCL=OFF \
-	    -D WITH_IPP=OFF \
-        -D WITH_TBB=ON \
-	    -D BUILD_TIFF=ON \
-	    -D BUILD_PERF_TESTS=OFF \
-	    -D BUILD_TESTS=OFF \
-	   ../ && \
-       echo $(/opt/opencv/build/CMakeFiles/CMakeOutput.log)
-	   
-RUN cd opencv/build && make -j$(nproc)
-RUN cd opencv/build && make install
-RUN cd opencv/build && make package
-
-RUN cd opencv/build && tar -czvf OpenCV-${OPENCV_VERSION}-$(uname -i).tar.gz *.deb
-
-FROM OPENCV_BASE AS BUILD1
+FROM opencv_base AS build1
 RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONTAINER_TIMEZONE > /etc/timezone && \
     apt-get update && \
     apt-get install -y vim cmake g++ unzip git
@@ -100,11 +50,11 @@ RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONT
 #    DEBIAN_FRONTEND=noninteractive apt-get install -yq libopencv-dev && \
 #    apt-get install -y libatlas-base-dev
 
-FROM BASIC_BUILD AS BUILD1
-COPY buildOpenCV.sh /
-RUN  /buildOpenCV.sh
+#FROM BASIC_BUILD AS BUILD1
+#COPY buildOpenCV.sh /
+#RUN  /buildOpenCV.sh
 
-FROM BASIC_BUILDD AS BUILD1
+#FROM BASIC_BUILDD AS BUILD1
 ENV CUDA_HOME="/usr/local/cuda/"
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 COPY opencv.zip /
@@ -132,52 +82,56 @@ RUN  apt-get install -y build-essential cmake git unzip pkg-config zlib1g-dev &&
      apt-get install -y libhdf5-dev libprotobuf-dev protobuf-compiler && \
      apt-get install -y libgoogle-glog-dev libgflags-dev
 RUN /bin/bash -c "ls -lh /"
-RUN  unzip /opencv.zip -d ~/ && unzip /opencv_contrib.zip -d ~/ && \
-     mv ~/opencv-4.5.5 ~/opencv && mv ~/opencv_contrib-4.5.5 ~/opencv_contrib
-RUN cd ~/opencv && \ 
-    mkdir build && cd build && \
-    cmake -D CMAKE_BUILD_TYPE=RELEASE \
-    -D CMAKE_INSTALL_PREFIX=/usr/local \
-    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules \
-    -D EIGEN_INCLUDE_PATH=/usr/include/eigen3 \
-    -D WITH_OPENCL=OFF \
-    -D WITH_CUDA=ON \
-    -D CUDA_ARCH_BIN=5.3 \
-    -D CUDA_ARCH_PTX="" \
-    -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-10.2 \
-    -D WITH_CUDNN=ON \
-    -D WITH_CUBLAS=ON \
-    -D ENABLE_FAST_MATH=ON \
-    -D CUDA_FAST_MATH=ON \
-    -D OPENCV_DNN_CUDA=ON \
-    -D ENABLE_NEON=ON \
-    -D WITH_QT=OFF \
-    -D WITH_OPENMP=ON \
-    -D BUILD_TIFF=ON \
-    -D WITH_FFMPEG=ON \
-    -D WITH_GSTREAMER=ON \
-    -D WITH_TBB=ON \
-    -D BUILD_TBB=ON \
-    -D BUILD_TESTS=OFF \
-    -D WITH_EIGEN=ON \
-    -D WITH_V4L=ON \
-    -D WITH_LIBV4L=ON \
-    -D OPENCV_ENABLE_NONFREE=ON \
-    -D INSTALL_C_EXAMPLES=OFF \
-    -D INSTALL_PYTHON_EXAMPLES=OFF \
-    -D PYTHON3_PACKAGES_PATH=/usr/lib/python3/dist-packages \
-    -D OPENCV_GENERATE_PKGCONFIG=ON \
-    -D BUILD_EXAMPLES=OFF ..
-RUN make -j4 && \
-    rm -r /usr/include/opencv4/opencv2 && \
-    make install && \
-    ldconfig && \
-    make clean && \
-    apt-get update
+RUN cd / && \
+    wget -O ~/opencv.zip https://github.com/opencv/opencv/archive/4.5.5.zip && \
+    wget -O ~/opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.5.5.zip
+RUN unzip /opencv.zip -d / && unzip /opencv_contrib.zip -d / && \
+    mv /opencv-4.5.5 /opencv && mv /opencv_contrib-4.5.5 /opencv_contrib
+RUN /bin/bash -c "ls -lh ~/"
+#RUN cd /opencv && \ 
+#    mkdir build && cd build && \
+#    cmake -D CMAKE_BUILD_TYPE=RELEASE \
+#    -D CMAKE_INSTALL_PREFIX=/usr/local \
+#    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules \
+#    -D EIGEN_INCLUDE_PATH=/usr/include/eigen3 \
+#    -D WITH_OPENCL=OFF \
+#    -D WITH_CUDA=ON \
+#    -D CUDA_ARCH_BIN=5.3 \
+#    -D CUDA_ARCH_PTX="" \
+#    -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-10.2 \
+#    -D WITH_CUDNN=ON \
+#    -D WITH_CUBLAS=ON \
+#    -D ENABLE_FAST_MATH=ON \
+#    -D CUDA_FAST_MATH=ON \
+#    -D OPENCV_DNN_CUDA=ON \
+#    -D ENABLE_NEON=ON \
+#    -D WITH_QT=OFF \
+#    -D WITH_OPENMP=ON \
+#    -D BUILD_TIFF=ON \
+#    -D WITH_FFMPEG=ON \
+#    -D WITH_GSTREAMER=ON \
+#    -D WITH_TBB=ON \
+#    -D BUILD_TBB=ON \
+#    -D BUILD_TESTS=OFF \
+#    -D WITH_EIGEN=ON \
+#    -D WITH_V4L=ON \
+#    -D WITH_LIBV4L=ON \
+#    -D OPENCV_ENABLE_NONFREE=ON \
+#    -D INSTALL_C_EXAMPLES=OFF \
+#    -D INSTALL_PYTHON_EXAMPLES=OFF \
+#    -D PYTHON3_PACKAGES_PATH=/usr/lib/python3/dist-packages \
+#    -D OPENCV_GENERATE_PKGCONFIG=ON \
+#    -D BUILD_EXAMPLES=OFF ..
+#RUN make -j4 && \
+#    rm -r /usr/include/opencv4/opencv2 && \
+#    make install && \
+#    ldconfig && \
+#    make clean && \
+#    apt-get update
 
 
 # install libedgetpu, reference: google-coral/libedgetpu/docker/Dockerfile
-FROM BUILD1 AS BUILD2
+FROM build1 AS build2
 COPY update_sources.sh /
 RUN /update_sources.sh
 RUN dpkg --add-architecture armhf
@@ -215,10 +169,9 @@ RUN apt-get install -y libeigen3-dev && \
 # for quick scipy.signal.fftconvolve test in python2 only
 RUN apt-get install -y python-scipy 
 
-FROM BUILD2 AS FINAL 
+FROM build2  AS FINAL 
 # setup LD_LIBRARY_PATH
 RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/libedgetpu/out/direct/k8:/home/libedgetpu/out/direct/aarch64:/usr/local/cuda-10.2/lib64/" >> ~/.bashrc
 WORKDIR /home
-
 
 

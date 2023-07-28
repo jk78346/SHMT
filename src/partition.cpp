@@ -533,8 +533,9 @@ double PartitionRuntime::prepare_partitions(){
             this->params.set_downsampling_rate(1.);
             ret += this->run_sampling(mode);
         }else if(p_mode == "c"){ // use default downsampling rate
-            //SamplingMode mode = center_crop;
-            //ret += this->run_sampling(mode);
+            SamplingMode mode = center_crop;
+            //this->params.set_downsampling_rate(1./8.);
+            ret += this->run_sampling(mode);
         }else if(p_mode == "c-ts" || 
                  p_mode == "c-tu" ||
                  p_mode == "c-ks" ||
@@ -603,6 +604,7 @@ void* PartitionRuntime::RunDeviceThread(void *my_args){
         }
     }
     
+    timing start = clk::now();
     // device as dynamic consumer
     if(p_run_ptr->is_dynamic_device[device_type]){
         struct node_data curr_node;
@@ -626,6 +628,14 @@ void* PartitionRuntime::RunDeviceThread(void *my_args){
                 doneConsumers.fetch_add(1, std::memory_order_acq_rel) + 1 == 
                 (int)p_run_ptr->dev_type_cnt);
     }
+    timing end = clk::now();
+    double e2e_kernel_ms = get_time_ms(end, start);
+    std::cout << __func__ << ": e2e kernel time: " 
+                          << e2e_kernel_ms << 
+                          " (ms), HW busy time: " 
+                          << kernel_ms << " (ms), comm. overhead: "
+                          << e2e_kernel_ms - kernel_ms << " (ms)." << std::endl;
+
     args->kernel_ms = kernel_ms;
     pthread_exit(NULL);
 }
