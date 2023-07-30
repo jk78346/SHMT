@@ -57,8 +57,8 @@ RUN ln -snf /usr/share/zoneinfo/$CONTAINER_TIMEZONE /etc/localtime && echo $CONT
 #FROM BASIC_BUILDD AS BUILD1
 ENV CUDA_HOME="/usr/local/cuda/"
 ENV PATH="/usr/local/cuda/bin:${PATH}"
-COPY opencv.zip /
-COPY opencv_contrib.zip /
+#COPY opencv.zip /
+#COPY opencv_contrib.zip /
 RUN  sh -c "echo '/usr/local/cuda/lib64' >> /etc/ld.so.conf.d/nvidia-tegra.conf"
 RUN  ldconfig
 RUN  apt-get install -y build-essential cmake git unzip pkg-config zlib1g-dev && \
@@ -81,13 +81,13 @@ RUN  apt-get install -y build-essential cmake git unzip pkg-config zlib1g-dev &&
      apt-get install -y liblapack-dev liblapacke-dev libeigen3-dev gfortran && \
      apt-get install -y libhdf5-dev libprotobuf-dev protobuf-compiler && \
      apt-get install -y libgoogle-glog-dev libgflags-dev
-RUN /bin/bash -c "ls -lh /"
-RUN cd / && \
-    wget -O ~/opencv.zip https://github.com/opencv/opencv/archive/4.5.5.zip && \
-    wget -O ~/opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.5.5.zip
-RUN unzip /opencv.zip -d / && unzip /opencv_contrib.zip -d / && \
-    mv /opencv-4.5.5 /opencv && mv /opencv_contrib-4.5.5 /opencv_contrib
-RUN /bin/bash -c "ls -lh ~/"
+#RUN /bin/bash -c "ls -lh /"
+#RUN cd / && \
+#    wget -O ~/opencv.zip https://github.com/opencv/opencv/archive/4.5.5.zip && \
+#    wget -O ~/opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.5.5.zip
+#RUN unzip /opencv.zip -d / && unzip /opencv_contrib.zip -d / && \
+#    mv /opencv-4.5.5 /opencv && mv /opencv_contrib-4.5.5 /opencv_contrib
+#RUN /bin/bash -c "ls -lh ~/"
 #RUN cd /opencv && \ 
 #    mkdir build && cd build && \
 #    cmake -D CMAKE_BUILD_TYPE=RELEASE \
