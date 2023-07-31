@@ -4,15 +4,15 @@
 #include <iostream>
 #include <pthread.h>
 #include "params.h"
-#include "kernels_cpu.h"
-#include "kernels_gpu.h"
-#include "kernels_tpu.h"
+#include "hlop_cpu.h"
+#include "hlop_gpu.h"
+#include "hlop_tpu.h"
 #include "concurrentqueue.h"
 
 typedef enum _DeviceType { undefine, cpu, gpu, tpu} DeviceType;
 
 typedef struct {
-    KernelBase* kernel_base = NULL;
+    HLOPBase* kernel_base = NULL;
     DeviceType device_type;
 }GenericKernel;
 
@@ -131,9 +131,9 @@ private:
     std::string mode = "cpu_p"; // partition mode, default as cpu_p
     void* input;
     void* output;
-    CpuKernel** cpu_kernels;
-    GpuKernel** gpu_kernels;
-    TpuKernel** tpu_kernels;
+    HLOPCpu** cpu_kernels;
+    HLOPGpu** gpu_kernels;
+    HLOPTpu** tpu_kernels;
 
     GenericKernel* generic_kernels;
     DeviceType* dev_sequence; // device sequence storing device types of each tiling block

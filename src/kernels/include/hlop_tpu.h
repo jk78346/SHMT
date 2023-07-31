@@ -8,7 +8,7 @@
 #include "utils.h"
 #include "params.h"
 #include "gptpu_utils.h"
-#include "kernels_base.h"
+#include "hlop_base.h"
 //#include "CH3_pixel_operation.h"
 
 using namespace cv;
@@ -16,9 +16,9 @@ using namespace cv;
 /* edgeTPU kernel class 
 TODO: optimize function table searching algorithm.
 */
-class TpuKernel : public KernelBase{
+class HLOPTpu : public HLOPBase{
 public:
-    TpuKernel(Params params, void* input, void* output){
+    HLOPTpu(Params params, void* input, void* output){
         this->params = params;
         this->input = input;
         this->output = output;
@@ -33,7 +33,7 @@ public:
         }
     };
 
-    virtual ~TpuKernel(){
+    virtual ~HLOPTpu(){
 //        if(this->device_handler != nullptr)
 //            delete this->device_handler;
     };

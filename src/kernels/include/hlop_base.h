@@ -27,9 +27,9 @@ void kernel_existence_checking(std::unordered_map<std::string, T> func_table, co
 }
 
 /* Base class for kernels*/
-class KernelBase{
+class HLOPBase{
 public:
-    virtual ~KernelBase(){};
+    virtual ~HLOPBase(){};
     /*
         The base input_conversion() API converts input data type from void* type.
         Return: function time in millisecond.

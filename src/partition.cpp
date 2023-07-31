@@ -183,7 +183,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
             params.block_size = this->params.block_size * params.get_downsampling_rate();
 
             // cpu part
-             GpuKernel* gpu_kernel_ptr = new GpuKernel(params,
+             HLOPGpu* gpu_kernel_ptr = new HLOPGpu(params,
                                                        input_sampling_pars[idx],
                                                        gpu_output_sampling_pars[idx]);
             sampling_overhead += gpu_kernel_ptr->input_conversion();
@@ -191,7 +191,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
             sampling_overhead += gpu_kernel_ptr->output_conversion();
 
             // tpu part
-            TpuKernel* tpu_kernel_ptr = new TpuKernel(params,
+            HLOPTpu* tpu_kernel_ptr = new HLOPTpu(params,
                                                       input_sampling_pars[idx],
                                                       tpu_output_sampling_pars[idx]);
             sampling_overhead += tpu_kernel_ptr->input_conversion();
@@ -718,19 +718,19 @@ void PartitionRuntime::create_kernel_by_type(unsigned int i/*block_id*/,
     }else{
         if(device_type == cpu){
             this->generic_kernels[i].kernel_base =
-                new CpuKernel(this->params,
-                              this->input_pars[i],
-                              this->output_pars[i]);
+                new HLOPCpu(this->params,
+                            this->input_pars[i],
+                            this->output_pars[i]);
             this->generic_kernels[i].device_type = cpu;
         }else if(device_type == gpu){
             this->generic_kernels[i].kernel_base =
-                new GpuKernel(this->params,
+                new HLOPGpu(this->params,
                               this->input_pars[i],
                               this->output_pars[i]);
             this->generic_kernels[i].device_type = gpu;
         }else if(device_type == tpu){
             this->generic_kernels[i].kernel_base =
-                new TpuKernel(this->params,
+                new HLOPTpu(this->params,
                               this->input_pars[i],
                               this->output_pars[i]);
             this->generic_kernels[i].device_type = tpu;

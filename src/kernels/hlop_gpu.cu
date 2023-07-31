@@ -13,8 +13,8 @@
 #include <opencv2/cudaimgproc.hpp> // hist
 #include "srad.h"
 #include "BmpUtil.h"
+#include "hlop_gpu.h"
 #include "cuda_utils.h"
-#include "kernels_gpu.h"
 #include "srad_kernel.cu"
 #include "kernels_fft.cuh"
 #include "kernels_fft_wrapper.cu"
@@ -156,7 +156,7 @@ __global__ void BlackScholesGPU(
     GPU blackscholes
     Reference: samples/4_Finance/BlackScholes
 */
-void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void** out_img){
+void HLOPGpu::blackscholes_2d(KernelParams& kernel_params, void** in_img, void** out_img){
     int OPT_N = kernel_params.params.get_kernel_size() * kernel_params.params.get_kernel_size();
     const int OPT_SZ = OPT_N * sizeof(float);
 
@@ -220,7 +220,7 @@ void GpuKernel::blackscholes_2d(KernelParams& kernel_params, void** in_img, void
     GPU dct8x8
     Reference: samples/3_Imaging/dct8x8/dct8x8.cu: CUDA2
 */
-void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out_img){
+void HLOPGpu::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out_img){
     /* integration code */
     float* ImgF1   = reinterpret_cast<float*>(*in_img);
     float* out_tmp = reinterpret_cast<float*>(*out_img);
@@ -293,11 +293,11 @@ void GpuKernel::dct8x8_2d(KernelParams& kernel_params, void** in_img, void** out
     checkCudaErrors(cudaFree(src));
 }
 
-void GpuKernel::fft_2d_input_conversion(){
+void HLOPGpu::fft_2d_input_conversion(){
     this->input_array_type.device_fp  = this->input_array_type.host_fp;
 }
 
-void GpuKernel::fft_2d_output_conversion(){
+void HLOPGpu::fft_2d_output_conversion(){
     Mat result;
     const int kernelH = 7;
     const int kernelW = 6;
@@ -318,7 +318,7 @@ void GpuKernel::fft_2d_output_conversion(){
     GPU convolveFFT2D, this kernel used a fixed 7x6 convolving kernel.
     Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D.cu
 */
-void GpuKernel::fft_2d(KernelParams& kernel_params, void** in_array, void** out_array){
+void HLOPGpu::fft_2d(KernelParams& kernel_params, void** in_array, void** out_array){
     float* h_Data      = reinterpret_cast<float*>(*in_array);
     float* h_ResultGPU = reinterpret_cast<float*>(*out_array);
     
@@ -590,7 +590,7 @@ int compute_tran_temp(float *MatrixPower,float *MatrixTemp[2], int col, int row,
 }
 
 /* Reference code: rodinia_3.1/cuda/hotspot/hotspot.cu */
-void GpuKernel::hotspot_2d(KernelParams& kernel_params, void** input, void** output){
+void HLOPGpu::hotspot_2d(KernelParams& kernel_params, void** input, void** output){
 
     int dim = kernel_params.params.get_kernel_size();
     int grid_rows = dim;
@@ -853,7 +853,7 @@ __global__ void assign_colors_par(Color means[], int assigns[], unsigned char *i
     }
 }
 
-void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** output){
+void HLOPGpu::kmeans_2d(KernelParams& kernel_params, void** input, void** output){
 
     //for(int i = 0 ; i < 100 ; i++){
     //    std::cout << __func__ << ": input: " << (unsigned)((uint8_t*)(*input))[i] << std::endl;
@@ -1027,22 +1027,22 @@ void GpuKernel::kmeans_2d(KernelParams& kernel_params, void** input, void** outp
 
 }
 
-void GpuKernel::laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+void HLOPGpu::laplacian_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     auto laplacian = cuda::createLaplacianFilter(in_img.type(), in_img.type(), 3/*kernel size*/, 1/*scale*/, BORDER_DEFAULT);
     laplacian->apply(in_img, out_img);
     cuda::abs(out_img, out_img);
 }
 
-void GpuKernel::mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+void HLOPGpu::mean_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     auto median = cuda::createBoxFilter(in_img.type(), in_img.type(), Size(3, 3),     Point(-1, -1), BORDER_DEFAULT);
     median->apply(in_img, out_img);
 }
 
-void GpuKernel::minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+void HLOPGpu::minimum_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     out_img = in_img;
 }
 
-void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+void HLOPGpu::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     cuda::GpuMat grad_x, grad_y;
     cuda::GpuMat abs_grad_x, abs_grad_y;
 
@@ -1059,11 +1059,11 @@ void GpuKernel::sobel_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     cuda::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
 
-void GpuKernel::histogram_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
+void HLOPGpu::histogram_2d(const cuda::GpuMat in_img, cuda::GpuMat& out_img){
     cuda::calcHist(in_img, out_img);
 }
 
-void GpuKernel::srad_2d(KernelParams& kernel_params, void** input, void** output){
+void HLOPGpu::srad_2d(KernelParams& kernel_params, void** input, void** output){
     int rows = kernel_params.params.get_kernel_size();
     int cols = kernel_params.params.get_kernel_size();
     int size_I, size_R, niter = 1, iter;
@@ -1145,7 +1145,7 @@ inline void rdwt(float *in, float *out, int width, int height, int levels){
     dwt_cuda::rdwt97(in, out, width, height, levels);
 }
 
-void GpuKernel::dwt_2d(KernelParams& kernel_params, void** input, void** output){
+void HLOPGpu::dwt_2d(KernelParams& kernel_params, void** input, void** output){
     int width  = kernel_params.params.get_kernel_size();
     int height = kernel_params.params.get_kernel_size();
     int componentSize = width * height * sizeof(float);

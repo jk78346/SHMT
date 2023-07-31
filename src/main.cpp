@@ -9,11 +9,11 @@
 #include "arrays.h"
 #include "params.h"
 #include "quality.h"
+#include "hlop_cpu.h"
+#include "hlop_gpu.h"
+#include "hlop_tpu.h"
 #include "partition.h"
 #include "conversion.h"
-#include "kernels_cpu.h"
-#include "kernels_gpu.h"
-#include "kernels_tpu.h"
 #include "performance.h"
 
 using namespace cv;
@@ -25,15 +25,15 @@ std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode,
                                                     TimeBreakDown* time_breakdown,
                                                     std::vector<bool>& criticality){
     std::vector<DeviceType> ret;
-    KernelBase* kernel = NULL;
+    HLOPBase* kernel = NULL;
     if(mode == "cpu"){
-        kernel = new CpuKernel(params, input, output);
+        kernel = new HLOPCpu(params, input, output);
         ret.push_back(cpu);
     }else if(mode == "gpu"){
-        kernel = new GpuKernel(params, input, output);
+        kernel = new HLOPGpu(params, input, output);
         ret.push_back(gpu);
     }else if(mode == "tpu"){
-        kernel = new TpuKernel(params, input, output);
+        kernel = new HLOPTpu(params, input, output);
         ret.push_back(tpu);
     }else{
         std::cout << __func__ << ": undefined execution mode: " << mode 

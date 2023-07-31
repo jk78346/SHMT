@@ -7,7 +7,7 @@
 #include "utils.h"
 #include "params.h"
 #include "cuda_utils.h"
-#include "kernels_base.h"
+#include "hlop_base.h"
 
 #include <cuda_runtime.h>
 #include <cufft.h>
@@ -20,9 +20,9 @@ using namespace cv;
 /* GPU kernel class 
 TODO: optimize function table searching algorithm.
 */
-class GpuKernel : public KernelBase{
+class HLOPGpu : public HLOPBase{
 public:
-    GpuKernel(Params params, void* input, void* output){
+    HLOPGpu(Params params, void* input, void* output){
         this->kernel_params.params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
@@ -32,7 +32,7 @@ public:
 //        std::cout << __func__ << " - findCudaDevice() time: " << get_time_ms(end, start) << " (ms) " << std::endl;
     };
 
-    virtual ~GpuKernel(){};
+    virtual ~HLOPGpu(){};
 
     /* input conversion - search over func_tables to do correct input conversion */
     virtual double input_conversion(){

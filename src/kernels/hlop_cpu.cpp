@@ -11,8 +11,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include "srad.h"
 #include "BmpUtil.h"
+#include "hlop_cpu.h"
 #include "cuda_utils.h"
-#include "kernels_cpu.h"
 
 #define IN_RANGE(x, min, max)   ((x)>=(min) && (x)<=(max))
 #define CLAMP_RANGE(x, min, max) x = (x<(min)) ? min : ((x>(max)) ? max : x )
@@ -118,7 +118,7 @@ static void BlackScholesBodyCPU(
     CPU blackscholes
     Reference: samples/
 */
-void CpuKernel::blackscholes_2d(Params params, float* input, float* output){
+void HLOPCpu::blackscholes_2d(Params params, float* input, float* output){
     int optN = params.get_kernel_size() * params.get_kernel_size();
     for(int opt = 0 ; opt < optN ; opt++){
         BlackScholesBodyCPU(
@@ -267,7 +267,7 @@ void computeIDCT8x8Gold2(const float *fSrc, float *fDst, int Stride, int width, 
     arrays to be multiply of 8. Incorrect otherwise.
     Reference: samples/3_Imaging/dct8x8/dct8x8.cu: Gold2
 */
-void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
+void HLOPCpu::dct8x8_2d(Params params, float* input, float* output){
     int width  = params.get_kernel_size();
     int height = params.get_kernel_size();
     int StrideF = width;
@@ -292,7 +292,7 @@ void CpuKernel::dct8x8_2d(Params params, float* input, float* output){
     CPU convolveFFT2D, this kernel used a fixed 7x6 convolving kernel.
     Reference: samples/3_Imaging/convolutionFFT2D/convolutionFFT2D_gold.cpp
 */
-void CpuKernel::fft_2d(Params params, float* input, float* output){
+void HLOPCpu::fft_2d(Params params, float* input, float* output){
     float fft_2d_kernel_array[7*6] = {
         13, 12, 13,  0,  1,  1,
         0,  7,  8,  2,  8,  0,
@@ -439,7 +439,7 @@ void single_iteration(float* result,
     }
 }
 
-void CpuKernel::hotspot_2d(Params params, float* input, float* output){
+void HLOPCpu::hotspot_2d(Params params, float* input, float* output){
 
     int num_iterations = 1;
 
@@ -477,7 +477,7 @@ void CpuKernel::hotspot_2d(Params params, float* input, float* output){
     }
 }
 
-void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
+void HLOPCpu::kmeans_2d(const Mat in_img, Mat& out_img){
     int k = 4;
     std::vector<int> labels;
     cv::Mat1f centers;
@@ -500,22 +500,22 @@ void CpuKernel::kmeans_2d(const Mat in_img, Mat& out_img){
     out_img.convertTo(out_img, CV_8U);
 }
 
-void CpuKernel::laplacian_2d(const Mat in_img, Mat& out_img){
+void HLOPCpu::laplacian_2d(const Mat in_img, Mat& out_img){
     int ddepth = CV_32F;
     Laplacian(in_img, out_img, ddepth, 3/*kernel size*/, 1/*scale*/, 0/*delta*/, BORDER_DEFAULT);
     convertScaleAbs(out_img, out_img);
 }
 
-void CpuKernel::mean_2d(const Mat in_img, Mat& out_img){
+void HLOPCpu::mean_2d(const Mat in_img, Mat& out_img){
     blur(in_img, out_img, Size(3, 3), Point(-1, -1), BORDER_DEFAULT);
 }
 
 /* A dummy kernel for testing only. */
-void CpuKernel::minimum_2d(const Mat in_img, Mat& out_img){
+void HLOPCpu::minimum_2d(const Mat in_img, Mat& out_img){
     out_img = in_img;
 }
 
-void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
+void HLOPCpu::sobel_2d(const Mat in_img, Mat& out_img){
     Mat grad_x, grad_y;
     Mat abs_grad_x, abs_grad_y;
 
@@ -529,7 +529,7 @@ void CpuKernel::sobel_2d(const Mat in_img, Mat& out_img){
     addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, out_img);
 }
 
-void CpuKernel::srad_2d(Params params, float* input, float* output){
+void HLOPCpu::srad_2d(Params params, float* input, float* output){
     int rows = params.get_kernel_size();
     int cols = params.get_kernel_size();
     int size_I, size_R, niter = 10, iter;

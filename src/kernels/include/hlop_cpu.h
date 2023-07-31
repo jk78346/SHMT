@@ -7,22 +7,22 @@
 #include "types.h"
 #include "utils.h"
 #include "params.h"
-#include "kernels_base.h"
+#include "hlop_base.h"
 
 using namespace cv;
 
 /* CPU kernel class 
 TODO: optimize function table searching algorithm.
 */
-class CpuKernel : public KernelBase{
+class HLOPCpu : public HLOPBase{
 public:
-    CpuKernel(Params params, void* input, void* output){
+    HLOPCpu(Params params, void* input, void* output){
         this->params = params;
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
     };
 
-    virtual ~CpuKernel(){};
+    virtual ~HLOPCpu(){};
     
     /* input conversion - search over func_tables to do correct input conversion */
     virtual double input_conversion(){
