@@ -26,7 +26,7 @@ public:
                                                     params.get_kernel_size(),
                                                     params.get_kernel_size());
         this->device_handler = new gptpu_utils::EdgeTpuHandler;
-        bool verbose = true;
+        bool verbose = false;
         this->dev_cnt = this->device_handler->list_devices(verbose); 
         for(unsigned int tpuid = 0 ; tpuid < this->dev_cnt ; tpuid++){
             this->device_handler->open_device(tpuid, verbose);
@@ -128,7 +128,7 @@ public:
                                              this->model_id, 
                                              zero_point,
                                              scale);
-        std::cout << __func__ << ": zero_point: " << (unsigned)zero_point << ", scale: " << scale << std::endl;
+        //std::cout << __func__ << ": zero_point: " << (unsigned)zero_point << ", scale: " << scale << std::endl;
         if( std::find(this->kernel_table_uint8.begin(),
                       this->kernel_table_uint8.end(),
                       app_name) !=

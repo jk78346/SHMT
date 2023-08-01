@@ -54,8 +54,6 @@ public:
         unsigned int idx = log2(this->problem_size / 1024);
         assert(this->criticality_ratio_table.find(this->app_name) != this->criticality_ratio_table.end());
         float ratio = this->criticality_ratio_table[this->app_name][idx];// 1. / (this->criticality_ratio_table[this->app_name][idx] + 1.);
-        std::cout << __func__ << ": idx: " << idx << ", app_name: " << this->app_name << std::endl;
-        std::cout << __func__ << ": table value: " << this->criticality_ratio_table[this->app_name][idx] << ", ratio: " << ratio << std::endl;
         this->criticality_ratio = ratio;
     };
     float get_criticality_ratio(/*std::string app_name, int block_size*/){ return this->criticality_ratio; };

@@ -27,7 +27,7 @@ public:
         this->input_array_type.ptr = input;
         this->output_array_type.ptr = output;
 //        timing start = clk::now();
-        findCudaDevice(1, (const char **)NULL);
+//        findCudaDevice(1, (const char **)NULL);
 //        timing end = clk::now();
 //        std::cout << __func__ << " - findCudaDevice() time: " << get_time_ms(end, start) << " (ms) " << std::endl;
     };

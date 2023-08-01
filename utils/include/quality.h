@@ -15,7 +15,7 @@ class Quality{
                 float* input_mat,
                 float* target_mat, 
                 float* baseline_mat,
-                std::vector<bool> criticality,
+                //std::vector<bool> criticality,
                 std::vector<int> proposed_device_type);
         Quality();
         /*

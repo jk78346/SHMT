@@ -22,8 +22,8 @@ std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode,
                                                     Params params, 
                                                     void* input, 
                                                     void* output,
-                                                    TimeBreakDown* time_breakdown,
-                                                    std::vector<bool>& criticality){
+                                                    TimeBreakDown* time_breakdown
+                                                    /*std::vector<bool>& criticality*/){
     std::vector<DeviceType> ret;
     HLOPBase* kernel = NULL;
     if(mode == "cpu"){
@@ -39,15 +39,13 @@ std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode,
         std::cout << __func__ << ": undefined execution mode: " << mode 
                   << ", execution is skipped." << std::endl;
     }
-    criticality.push_back(true); // dummy
+    //criticality.push_back(true); // dummy
 
     // input array conversion from void* input
     time_breakdown->input_time_ms = kernel->input_conversion();
     
     // Actual kernel call
-    std::cout << mode << " mode of kernel starts." << std::endl;
     time_breakdown->kernel_time_ms = kernel->run_kernel(params.iter);
-    std::cout << mode << " mode of kernel ends." << std::endl;
     
     // output array conversion back to void* output
     time_breakdown->output_time_ms = kernel->output_conversion();
@@ -60,8 +58,8 @@ std::vector<DeviceType> run_kernel_partition(const std::string& mode,
                                              Params params, 
                                              void* input, 
                                              void* output,
-                                             TimeBreakDown* time_breakdown,
-                                             std::vector<bool>& criticality){
+                                             TimeBreakDown* time_breakdown
+                                             /*std::vector<bool>& criticality*/){
     PartitionRuntime* p_run = new PartitionRuntime(params,
                                                    mode,
                                                    input,
@@ -69,25 +67,14 @@ std::vector<DeviceType> run_kernel_partition(const std::string& mode,
     time_breakdown->input_time_ms = p_run->prepare_partitions();
     
     // Actual kernel call
-    std::cout << mode << " mode of kernel starts." << std::endl;
     time_breakdown->kernel_time_ms = p_run->run_partitions();
-    std::cout << mode << " mode of kernel ends." << std::endl;
 
     time_breakdown->output_time_ms = p_run->transform_output();
-    p_run->show_device_sequence();
+
+    //p_run->show_device_sequence();
     std::vector<DeviceType> ret = p_run->get_device_sequence();
+//    criticality = p_run->get_criticality();
     
-    criticality = p_run->get_criticality();
-    std::cout << __func__ << ": criticality seq:" << std::endl;
-    for(int i = 0 ; i < 16/*params.get_row_cnt()*/ ; i++){
-        for(int j = 0 ; j < 16/*params.get_col_cnt()*/ ; j++){
-            std::cout << ((criticality[i*16/*params.get_col_cnt()*/+j]==1)?"g":"t") << " ";
-        }
-        std::cout << std::endl;
-    }
-    
-    
-    std::cout << std::endl;
     delete p_run;
     return ret;
 }
@@ -96,25 +83,23 @@ std::vector<DeviceType> run_kernel(const std::string& mode,
                                    Params& params, 
                                    void* input, 
                                    void* output,
-                                   TimeBreakDown* time_breakdown,
-                                   std::vector<bool>& criticality){
-    std::cout << __func__ << ": start running kernel in " << mode << " mode" 
-              << " with iter = " << params.iter << std::endl;
+                                   TimeBreakDown* time_breakdown
+                                   /*std::vector<bool>& criticality*/){
     std::vector<DeviceType> ret;
     if(mode == "cpu" || mode == "gpu" || mode == "tpu"){
         ret = run_kernel_on_single_device(mode, 
                                           params, 
                                           input, 
                                           output,
-                                          time_breakdown,
-                                          criticality); 
+                                          time_breakdown
+                                          /*criticality*/); 
     }else{
         ret = run_kernel_partition(mode, 
                                    params, 
                                    input, 
                                    output,
-                                   time_breakdown,
-                                   criticality);
+                                   time_breakdown
+                                   /*criticality*/);
     }
     return ret;
 }
@@ -159,7 +144,7 @@ int main(int argc, char* argv[]){
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           1/*iter*/,
+                           iter,
                            testing_img_path); 
     Params proposed_params(app_name,
                            problem_size, 
@@ -182,7 +167,7 @@ int main(int argc, char* argv[]){
         All arrays will be casted to corresponding data type
         depending on application.
      */
-    std::cout << __func__ << ": data init..." << std::endl;
+    std::cout << "data init..." << std::endl;
     data_initialization(proposed_params, 
                         &input_array,
                         &output_array_baseline,
@@ -198,28 +183,26 @@ int main(int argc, char* argv[]){
     std::vector<bool> proposed_criticality_sequence;
 
     // Start to run baseline version of the application's implementation.
+    std::cout << "run baseline... " << baseline_mode << std::endl; 
     timing baseline_start = clk::now();
     baseline_device_sequence = run_kernel(baseline_mode, 
                                baseline_params, 
                                input_array, 
                                output_array_baseline,
-                               baseline_time_breakdown,
-                               baseline_criticality_sequence);
+                               baseline_time_breakdown
+                               /*baseline_criticality_sequence*/);
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
-    //std::cout << __func__ << ": wait for starting..." << std::endl;
-    //getchar();
+    std::cout << "run experiment... " << proposed_mode << std::endl; 
     timing proposed_start = clk::now();
     proposed_device_sequence = run_kernel(proposed_mode, 
                                           proposed_params, 
                                           input_array, 
                                           output_array_proposed,
-                                          proposed_time_breakdown,
-                                          proposed_criticality_sequence);
+                                          proposed_time_breakdown
+                                          /*proposed_criticality_sequence*/);
     timing proposed_end = clk::now();
-    //std::cout << __func__ << ": done e2e kernel execution (time: " << get_time_ms(proposed_end, proposed_start) << " ms). waiting..." << std::endl;
-    //getchar();
 
     // convert device sequence type 
     std::vector<int> proposed_device_type;
@@ -237,12 +220,6 @@ int main(int argc, char* argv[]){
                           proposed_device_type);
     }
 
-    std::cout << "Converting output array to float type for quality measurement..." 
-              << std::endl;
-    std::cout << "[WARN] now input and output mats are assumed to have the "
-              << "same params setting, " 
-              << "quality result will fail if not so." << std::endl;
-
     UnifyType* unify_input_type = 
         new UnifyType(baseline_params, input_array);
     UnifyType* unify_baseline_type = 
@@ -252,8 +229,7 @@ int main(int argc, char* argv[]){
 
 
     // Get quality measurements
-    std::cout << "Getting quality results..." << std::endl;
-    std::cout << __func__ << ": criticality size: " << proposed_criticality_sequence.size() << std::endl;
+    std::cout << "Result evaluating..." << std::endl;
     Quality* quality = new Quality(app_name, 
                                    proposed_params.problem_size, // m
                                    proposed_params.problem_size, // n
@@ -263,7 +239,7 @@ int main(int argc, char* argv[]){
                                    unify_input_type->float_array,
                                    unify_proposed_type->float_array, 
                                    unify_baseline_type->float_array,
-                                   proposed_criticality_sequence,
+                                   //proposed_criticality_sequence,
                                    proposed_device_type);
     bool is_tiling = 
         (baseline_params.problem_size > baseline_params.block_size)?true:false;
@@ -294,7 +270,7 @@ int main(int argc, char* argv[]){
     system(cmd.c_str());    
 
     // save as png images
-   
+    /*
     std::cout << __func__ << ": input array: " << std::endl;
     for(int i = 0 ; i < 20 ; i++){
         for(int j = 0 ; j < 20 ; j++){
@@ -302,6 +278,7 @@ int main(int argc, char* argv[]){
         }
         std::cout << std::endl;
     }
+    */
 /*
     if(app_name != "histogram_2d")
     unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_input.png", 

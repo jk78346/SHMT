@@ -65,11 +65,11 @@ void PartitionRuntime::criticality_kernel(Params params,
             (error_rate worst) to be critical.
         TODO: design the criticality decision 
      */
-    std::cout << __func__ << ": criticality method: " << mode << std::endl;
+    //std::cout << __func__ << ": criticality method: " << mode << std::endl;
     if(mode == "c-limits"){
         float threshold = 256.;
         for(auto p: order){
-            std::cout << __func__ << ": p.second: " << p.second << std::endl;
+            //std::cout << __func__ << ": p.second: " << p.second << std::endl;
             this->criticality[p.first] = (p.second >= threshold)?true: false;
         }
     }else if(mode == "topK"){
@@ -77,10 +77,6 @@ void PartitionRuntime::criticality_kernel(Params params,
         float c = params.get_criticality_ratio();
         int K = int(window_size*c);
         int window_cnt = 256./256.; //((int)order.size() / window_size) + (order.size()%window_size == 0)?0:1;
-        std::cout << __func__ << ": window_cnt: " << window_cnt 
-                  << "order.size: " << order.size()
-                  << "window_size: " << window_size
-            << std::endl;
         for(int i = 0 ; i < window_cnt ; i++){
             std::vector<std::pair<int, float>> window;
             for(int j = 0 ; j < window_size ; j++){
@@ -90,9 +86,6 @@ void PartitionRuntime::criticality_kernel(Params params,
             } 
             sort(window.begin(), window.end(), sortByVal);
             for(int j = 0 ; j < window_size ; j++){
-                std::cout << __func__ << ": i: " << i << ",j: " << j << ",K: " << K
-                          << ", order: " << window[j].second
-                          << std::endl;
                 this->criticality[window[j].first] = (j <= (window_size-K))?false:true;
                 
             }
@@ -116,20 +109,19 @@ void PartitionRuntime::criticality_kernel(Params params,
     }
 */
     // show criticality
-    std::cout << __func__ << ": criticality tiling:" << std::endl;
+    //std::cout << __func__ << ": criticality tiling:" << std::endl;
     int cnt = 0;
     for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
         for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){
             unsigned int idx = i * params.get_col_cnt() + j;
             cnt += (this->criticality[idx] == true)?1:0;
-            std::cout << ((this->criticality[idx] == true)?"g":"t") << " ";
+            //std::cout << ((this->criticality[idx] == true)?"g":"t") << " ";
         }
-        std::cout << std::endl;
+        //std::cout << std::endl;
     }
-    std::cout << __func__ << ": critical ratio: " << cnt << "/" << params.get_row_cnt() * params.get_col_cnt()
-              << "(" << (float)cnt/(params.get_row_cnt()*params.get_col_cnt())  << "): waitting..." << std::endl;
-    //getchar();
-    std::cout << std::endl;
+    //std::cout << __func__ << ": critical ratio: " << cnt << "/" << params.get_row_cnt() * params.get_col_cnt()
+    //          << "(" << (float)cnt/(params.get_row_cnt()*params.get_col_cnt())  << "): waitting..." << std::endl;
+    //std::cout << std::endl;
 }
 
 double PartitionRuntime::run_sampling(SamplingMode mode){
@@ -148,10 +140,10 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
  */
     
     this->params.set_sampling_mode(mode);
-    std::cout << __func__ << ": start sampling run, mode: " 
-              << this->params.get_sampling_mode() 
-              << ", downsampling rate: "
-              << this->params.get_downsampling_rate() << std::endl;
+    //std::cout << __func__ << ": start sampling run, mode: " 
+    //          << this->params.get_sampling_mode() 
+    //          << ", downsampling rate: "
+    //          << this->params.get_downsampling_rate() << std::endl;
     /* Downsampling tiling blocks and assign them to edgetpu. */
     std::vector<void*> input_sampling_pars;
     std::vector<void*> gpu_output_sampling_pars;
@@ -226,7 +218,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
                                                        unify_input_type->float_array,
                                                        unify_tpu_output_type->float_array,
                                                        unify_gpu_output_type->float_array,
-                                                       dummy,
+                                                       //dummy,
                                                        dummy2));
 //            std::cout << __func__ << ": block[" << i << ", " << j << "]: "
 //                      << "rmse: " << quality->rmse()
@@ -270,7 +262,7 @@ double PartitionRuntime::run_sampling(SamplingMode mode){
 
     //std::cout << __func__ << ": oracle s.t. rmse." << std::endl;
     
-    std::cout << __func__ << ": oracle c ratio: " << params.get_criticality_ratio() << std::endl;
+    //std::cout << __func__ << ": oracle c ratio: " << params.get_criticality_ratio() << std::endl;
     std::string critical_mode = "topK";
     this->criticality_kernel(params, order, params.get_criticality_ratio()/*for stable oracle*/, critical_mode); 
 
@@ -518,11 +510,11 @@ double PartitionRuntime::prepare_partitions(){
 /* sampling section if enabled */
     if(this->is_criticality_mode() || this->get_partition_mode() == "s"){
         auto p_mode = this->get_partition_mode();
-        std::cout << __func__ << ": mode: " << p_mode << std::endl;
+        //std::cout << __func__ << ": mode: " << p_mode << std::endl;
 
         // TODO: set back after testing across various criticality ratio
         this->params.set_criticality_ratio();
-        std::cout << __func__ << ": criticality ratio: " << this->params.get_criticality_ratio() << std::endl;
+        //std::cout << __func__ << ": criticality ratio: " << this->params.get_criticality_ratio() << std::endl;
         // involves actual run types
         if(p_mode == "c-saliency"){
             ret += this->set_criticality_by_saliency(this->params, &(this->input));
@@ -541,7 +533,7 @@ double PartitionRuntime::prepare_partitions(){
                  p_mode == "c-ks" ||
                  p_mode == "c-ku"){
             int num_pixels = this->params.get_num_sample_pixels();;
-            std::cout << __func__ << ": num sample pixels: " << num_pixels << std::endl;
+            //std::cout << __func__ << ": num sample pixels: " << num_pixels << std::endl;
             ret += this->run_input_stats_probing(p_mode, num_pixels); 
         }else if(p_mode == "c-tr" ||
                  p_mode == "c-kr"){
@@ -570,7 +562,7 @@ double PartitionRuntime::prepare_partitions(){
     for(unsigned int i = 0 ; i < this->row_cnt ; i++){
         for(unsigned int j = 0; j < this->col_cnt ; j++){
             unsigned int idx = i*this->col_cnt+j;
-            std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[idx] << std::endl;
+            //std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[idx] << std::endl;
             if( !this->is_dynamic_block[idx] ){
                 auto device_type = this->mix_policy(idx);
                 this->create_kernel_by_type(idx, device_type);
@@ -630,11 +622,11 @@ void* PartitionRuntime::RunDeviceThread(void *my_args){
     }
     timing end = clk::now();
     double e2e_kernel_ms = get_time_ms(end, start);
-    std::cout << __func__ << ": e2e kernel time: " 
-                          << e2e_kernel_ms << 
-                          " (ms), HW busy time: " 
-                          << kernel_ms << " (ms), comm. overhead: "
-                          << e2e_kernel_ms - kernel_ms << " (ms)." << std::endl;
+    //std::cout << __func__ << ": e2e kernel time: " 
+    //                      << e2e_kernel_ms << 
+    //                      " (ms), HW busy time: " 
+    //                      << kernel_ms << " (ms), comm. overhead: "
+    //                      << e2e_kernel_ms - kernel_ms << " (ms)." << std::endl;
 
     args->kernel_ms = kernel_ms;
     pthread_exit(NULL);
@@ -649,7 +641,7 @@ double PartitionRuntime::run_partitions(){
        dynamic scheduling.
     */
     for(unsigned int i = 0 ; i < this->block_cnt ; i++){
-        std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[i] << std::endl;
+        //std::cout << __func__ << ": is_dynamic_block[" << i << "]: " << this->is_dynamic_block[i] << std::endl;
         if(this->is_dynamic_block[i]){
             struct node_data curr_node;
             curr_node.generic_kernel = &(this->generic_kernels[i]);
@@ -688,11 +680,11 @@ double PartitionRuntime::run_partitions(){
         pthread_join(threads[i], NULL);
     }
     timing end = clk::now();
-    std::cout << __func__ << ": CPU thread latency: " << td[0].kernel_ms << " (ms)" << std::endl;
-    std::cout << __func__ << ": GPU thread latency: " << td[1].kernel_ms << " (ms)" << std::endl;
-    std::cout << __func__ << ": TPU thread latency: " << td[2].kernel_ms << " (ms)" << std::endl;
+    //std::cout << __func__ << ": CPU thread latency: " << td[0].kernel_ms << " (ms)" << std::endl;
+    //std::cout << __func__ << ": GPU thread latency: " << td[1].kernel_ms << " (ms)" << std::endl;
+    //std::cout << __func__ << ": TPU thread latency: " << td[2].kernel_ms << " (ms)" << std::endl;
     double e2e_kernel_ms = get_time_ms(end, start);
-    std::cout << __func__ << ": e2e kernel time: " << e2e_kernel_ms << " (ms) (pthread overhead included)" << std::endl;
+    //std::cout << __func__ << ": e2e kernel time: " << e2e_kernel_ms << " (ms) (pthread overhead included)" << std::endl;
     return e2e_kernel_ms;
 }
 
@@ -765,7 +757,7 @@ DeviceType PartitionRuntime::mix_policy(unsigned i
         // simulating naive work balancing
         //this->params.set_criticality_ratio();
         //ret = (((double)rand()/RAND_MAX) <= this->params.get_criticality_ratio())?gpu:tpu;
-        std::cout << __func__ << ": c[" << i << ": " << this->criticality[i] << std::endl;
+        //std::cout << __func__ << ": c[" << i << ": " << this->criticality[i] << std::endl;
         ret = ((this->criticality[i] == true)?gpu:tpu);
 
         //ret = (this->criticality[i] == true)?gpu:tpu;

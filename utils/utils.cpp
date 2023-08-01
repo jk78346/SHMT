@@ -110,7 +110,7 @@ void mat2array(cuda::GpuMat img, int* data){
         tmp = tmp.clone();
     }
 
-    std::cout << __func__ << ": width: " << tmp.size().width << ", hieght: " << tmp.size().height << std::endl;
+    //std::cout << __func__ << ": width: " << tmp.size().width << ", hieght: " << tmp.size().height << std::endl;
 
     //for(int i = 0 ; i < tmp.size().width ; i++){
     //    for(int j = 0 ; j < tmp.size().height ; j++){
@@ -175,7 +175,6 @@ void histogram_matching(void* output_array_baseline,
                         int blk_cols,
                         std::vector<int> dev_sequence){
     
-    std::cout << __func__ << ": testing histogram matching..." << std::endl;
     assert(rows % blk_rows == 0);
     assert(cols % blk_cols == 0);
     unsigned int row_cnt = rows / blk_rows;
@@ -215,7 +214,6 @@ void histogram_matching(void* output_array_baseline,
             proposed_mat(roi).copyTo(proposed_tmp);
 
             // tiling HM
-            std::cout << __func__ << ": dev_sequence[" << idx << "]: " << dev_sequence[idx] <<std::endl;
             if(dev_sequence[idx] == 3){ // tpu
                 timing hm_s = clk::now();
                 assert(Histst(proposed_tmp, baseline_tmp)); // HS the proposed one based on hist. of baseline.
@@ -229,7 +227,6 @@ void histogram_matching(void* output_array_baseline,
         }
     }
     mat2array(proposed_mat, (uint8_t*)output_array_proposed);
-    std::cout << __func__ << ": hm time: " << hm_time_ms << " (ms)" << std::endl;
 }
 
 void dump_to_csv(std::string log_file_path,

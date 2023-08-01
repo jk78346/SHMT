@@ -14,7 +14,6 @@
  */
 
 void init_fft(unsigned int input_total_size, void** input_array){
-    printf("...generating random input data\n");
     srand(2010);
     float* tmp = reinterpret_cast<float*>(*input_array);
     for(unsigned int i = 0 ; i < input_total_size ; i++){
@@ -173,11 +172,6 @@ void init_hotspot(int rows, int cols, void** input_array){
         }
         power_sum += float_ptr[i+offset];
     }
-    std::cout << __func__ << ": temp max: " << temp_max
-                          << ", min: " << temp_min << std::endl;
-    std::cout << __func__ << ": power max: " << power_max
-                          << ", min: " << power_min << std::endl;
-    std::cout << __func__ << ": power sum: " << power_sum << std::endl;
 }
 
 float RandFloat(float low, float high)
@@ -193,7 +187,7 @@ void init_blackscholes(Params params,
                        void** output_array_baseline, 
                        void** output_array_proposed){
     int OPT_N = rows * cols;
-    printf("...generating input data in CPU mem.\n");
+    //printf("...generating input data in CPU mem.\n");
     srand(5347);
     float* h_StockPrice = (float*)*input_array;
     float* h_OptionStrike = &((float*)*input_array)[OPT_N];
@@ -320,7 +314,6 @@ void array_partition_initialization(Params params,
                 }
             }
         }else{ // output mat
-            std::cout << __func__ << ": block cnt: " << params.get_block_cnt() << std::endl;
             input_pars.resize(params.get_block_cnt());   
             for(unsigned int i = 0 ; i < params.get_row_cnt() ; i++){
                 for(unsigned int j = 0 ; j < params.get_col_cnt() ; j++){ 
