@@ -4,17 +4,10 @@
 #include <iostream>
 #include <stdlib.h>
 #include <opencv2/opencv.hpp>
-#include "types.h"
-#include "utils.h"
-#include "arrays.h"
-#include "params.h"
-#include "quality.h"
-#include "hlop_cpu.h"
-#include "hlop_gpu.h"
-#include "hlop_tpu.h"
-#include "partition.h"
-#include "conversion.h"
-#include "performance.h"
+#include "shmt.h"
+#include "types.h"       // utils
+#include "utils.h"       // utils
+#include "performance.h" // utils
 
 using namespace cv;
 
@@ -153,12 +146,6 @@ int main(int argc, char* argv[]){
                            iter,
                            testing_img_path);
 
-    //baseline_params.set_criticality_ratio(criticality_ratio);
-    //proposed_params.set_criticality_ratio(criticality_ratio);
-
-    baseline_params.set_num_sample_pixels(num_sample_pixels);
-    proposed_params.set_num_sample_pixels(num_sample_pixels);
-
     void* input_array = NULL;
     void* output_array_baseline = NULL;
     void* output_array_proposed = NULL;
@@ -182,26 +169,26 @@ int main(int argc, char* argv[]){
     std::vector<bool> baseline_criticality_sequence;
     std::vector<bool> proposed_criticality_sequence;
 
+    // VOPS
+    VOPS baseline_vops;
+    VOPS proposed_vops;
+
     // Start to run baseline version of the application's implementation.
     std::cout << "run baseline... " << baseline_mode << std::endl; 
     timing baseline_start = clk::now();
-    baseline_device_sequence = run_kernel(baseline_mode, 
-                               baseline_params, 
-                               input_array, 
-                               output_array_baseline,
-                               baseline_time_breakdown
-                               /*baseline_criticality_sequence*/);
+    baseline_device_sequence = baseline_vops.run_kernel(baseline_mode,
+                                                        baseline_params,
+                                                        input_array,
+                                                        output_array_baseline);
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
     std::cout << "run experiment... " << proposed_mode << std::endl; 
     timing proposed_start = clk::now();
-    proposed_device_sequence = run_kernel(proposed_mode, 
-                                          proposed_params, 
-                                          input_array, 
-                                          output_array_proposed,
-                                          proposed_time_breakdown
-                                          /*proposed_criticality_sequence*/);
+    proposed_device_sequence = proposed_vops.run_kernel(proposed_mode,
+                                                        proposed_params,
+                                                        input_array,
+                                                        output_array_proposed);
     timing proposed_end = clk::now();
 
     // convert device sequence type 
@@ -241,14 +228,6 @@ int main(int argc, char* argv[]){
                                    unify_baseline_type->float_array,
                                    //proposed_criticality_sequence,
                                    proposed_device_type);
-    bool is_tiling = 
-        (baseline_params.problem_size > baseline_params.block_size)?true:false;
-
-//    quality->print_results(is_tiling, 1/*verbose*/);
-    
-    /* print hist of input */
-    //std::cout << __func__ << ": print hist of input array" << std::endl;
-    //quality->print_histogram(unify_input_type->float_array);
 
     // save result arrays as image files
     const std::string path_prefix = proposed_params.app_name + "/"
@@ -269,46 +248,6 @@ int main(int argc, char* argv[]){
     std::string cmd = "mkdir -p ../log/" + path_prefix;
     system(cmd.c_str());    
 
-    // save as png images
-    /*
-    std::cout << __func__ << ": input array: " << std::endl;
-    for(int i = 0 ; i < 20 ; i++){
-        for(int j = 0 ; j < 20 ; j++){
-            std::cout << ((float*)unify_input_type->float_array)[i*baseline_params.problem_size+j] << " ";
-        }
-        std::cout << std::endl;
-    }
-    */
-/*
-    if(app_name != "histogram_2d")
-    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_input.png", 
-                                    baseline_params.problem_size,
-                                    baseline_params.problem_size,
-                                    input_array);
-    
-    std::cout << "saving output results as images..." << std::endl;
-    if(app_name != "histogram_2d")
-    unify_baseline_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.png", 
-                                    baseline_params.problem_size,
-                                    baseline_params.problem_size,
-                                    output_array_baseline);
-    if(app_name != "histogram_2d")
-    unify_proposed_type->save_as_img("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.png", 
-                                    proposed_params.problem_size,
-                                    proposed_params.problem_size,
-                                    output_array_proposed);
-*/    
-    // save as pixel arrays
-    //std::cout << "saving output results in txt files..." << std::endl;
-    //unify_baseline_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_baseline.csv", 
-    //                                baseline_params.problem_size,
-    //                                baseline_params.problem_size,
-    //                                output_array_baseline);
-    //unify_proposed_type->save_as_csv("../log/"+path_prefix+"/"+testing_img_file_name+"_"+ts_str+"_proposed.csv", 
-    //                                proposed_params.problem_size,
-    //                                proposed_params.problem_size,
-    //                                output_array_proposed);
-    
     std::string log_file_path = "../log/" + path_prefix + "/"
                                + app_name + "_"
                                +std::to_string(problem_size) + "_"
@@ -354,20 +293,6 @@ int main(int argc, char* argv[]){
               << log_file_path << std::endl;
 
     float saliency_ratio, protected_saliency_ratio, precision;
-    //quality->calc_saliency_accuracy(saliency_ratio, protected_saliency_ratio);
-/*    
-    quality->calc_saliency_accuracy((float*)input_array, //(float*)unify_input_type->float_array,
-                                    proposed_params.problem_size,
-                                    proposed_params.problem_size,
-                                    proposed_params.block_size,
-                                    proposed_params.block_size,
-                                    proposed_params.problem_size/proposed_params.block_size,
-                                    proposed_params.problem_size/proposed_params.block_size,
-                                    proposed_device_type,
-                                    saliency_ratio, 
-                                    protected_saliency_ratio, // recall
-                                    precision);
-*/
     dump_to_csv(log_file_path, 
                 testing_img_file_name,
                 proposed_params.app_name,
