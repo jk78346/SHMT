@@ -2,6 +2,8 @@
 #define __VOPS_H__
 #include <iostream>
 #include <algorithm>
+#include "types.h" // utils
+#include "utils.h" // utils
 #include "arrays.h"
 #include "params.h"
 #include "quality.h"
@@ -10,6 +12,7 @@
 #include "hlop_tpu.h"
 #include "partition.h"
 #include "conversion.h"
+#include "performance.h"
 
 class VOPS{
 public:

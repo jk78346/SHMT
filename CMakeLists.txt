@@ -11,7 +11,7 @@ enable_language(CUDA)
 include(CheckLanguage)
 check_language(CUDA)
 
-set(CMAKE_C_FLAGS "-Wall -pthread -std=c++17")
+set(CMAKE_C_FLAGS "-pthread -std=c++17")
 set(CMAKE_C_FLAGS_DEBUG "-g -O4")
 set(CMAKE_C_FLAGS_RELEASE "-O4")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")

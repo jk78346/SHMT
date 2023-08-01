@@ -52,18 +52,18 @@ Quality::Quality(std::string app_name,
     //this->criticality = criticality;
     this->proposed_device_type = proposed_device_type;
     
-    //if(app_name != "histogram_2d"){
-//	std::cout << "c.size(): " << criticality.size() << ", row_cnt: " << row_cnt << ", col_cnt: " << col_cnt << std::endl;
-//        assert(criticality.size() == (row_cnt * col_cnt));
-//    }
-    
     this->result_pars.resize(this->row_cnt * this->col_cnt);
     this->result_critical_pars.resize(this->row_cnt * this->col_cnt);
+    if(app_name == "laplacian_2d"){
+        histogram_matching(y,
+                           x,
+                           m,
+                           n,
+                           row_blk,
+                           col_blk,
+                           proposed_device_type);
+    }
 
-//    std::cout << __func__ << ": calculating metrices..." << std::endl;
-    // global quality
-
-//    std::cout << "global quality..." << std::endl;
     this->common_kernel(this->result, this->result_critical, 0, 0, this->row, this->col);
 /*
     this->common_stats_kernel(this->result.input_dist_stats, 

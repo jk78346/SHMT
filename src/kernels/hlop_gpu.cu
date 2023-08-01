@@ -128,10 +128,8 @@ __global__ void BlackScholesGPU(
     if (opt < (optN / 2))
     {
         float callResult1, callResult2;
-        float putResult1, putResult2;
         BlackScholesBodyGPU(
             callResult1,
-            //putResult1,
             d_StockPrice[opt].x,
             d_OptionStrike[opt].x,
             d_OptionYears[opt].x,
@@ -140,7 +138,6 @@ __global__ void BlackScholesGPU(
         );
         BlackScholesBodyGPU(
             callResult2,
-            //putResult2,
             d_StockPrice[opt].y,
             d_OptionStrike[opt].y,
             d_OptionYears[opt].y,
@@ -148,7 +145,6 @@ __global__ void BlackScholesGPU(
             Volatility
         );
         d_CallResult[opt] = make_float2(callResult1, callResult2);
-        //d_PutResult[opt] = make_float2(putResult1, putResult2);
      }
 }
 

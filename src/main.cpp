@@ -3,102 +3,10 @@
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
-#include <opencv2/opencv.hpp>
 #include "shmt.h"
-#include "types.h"       // utils
-#include "utils.h"       // utils
-#include "performance.h" // utils
-
-using namespace cv;
-
-std::vector<DeviceType> run_kernel_on_single_device(const std::string& mode, 
-                                                    Params params, 
-                                                    void* input, 
-                                                    void* output,
-                                                    TimeBreakDown* time_breakdown
-                                                    /*std::vector<bool>& criticality*/){
-    std::vector<DeviceType> ret;
-    HLOPBase* kernel = NULL;
-    if(mode == "cpu"){
-        kernel = new HLOPCpu(params, input, output);
-        ret.push_back(cpu);
-    }else if(mode == "gpu"){
-        kernel = new HLOPGpu(params, input, output);
-        ret.push_back(gpu);
-    }else if(mode == "tpu"){
-        kernel = new HLOPTpu(params, input, output);
-        ret.push_back(tpu);
-    }else{
-        std::cout << __func__ << ": undefined execution mode: " << mode 
-                  << ", execution is skipped." << std::endl;
-    }
-    //criticality.push_back(true); // dummy
-
-    // input array conversion from void* input
-    time_breakdown->input_time_ms = kernel->input_conversion();
-    
-    // Actual kernel call
-    time_breakdown->kernel_time_ms = kernel->run_kernel(params.iter);
-    
-    // output array conversion back to void* output
-    time_breakdown->output_time_ms = kernel->output_conversion();
-
-    delete kernel;
-    return ret;
-}
-
-std::vector<DeviceType> run_kernel_partition(const std::string& mode, 
-                                             Params params, 
-                                             void* input, 
-                                             void* output,
-                                             TimeBreakDown* time_breakdown
-                                             /*std::vector<bool>& criticality*/){
-    PartitionRuntime* p_run = new PartitionRuntime(params,
-                                                   mode,
-                                                   input,
-                                                   output);
-    time_breakdown->input_time_ms = p_run->prepare_partitions();
-    
-    // Actual kernel call
-    time_breakdown->kernel_time_ms = p_run->run_partitions();
-
-    time_breakdown->output_time_ms = p_run->transform_output();
-
-    //p_run->show_device_sequence();
-    std::vector<DeviceType> ret = p_run->get_device_sequence();
-//    criticality = p_run->get_criticality();
-    
-    delete p_run;
-    return ret;
-}
-
-std::vector<DeviceType> run_kernel(const std::string& mode, 
-                                   Params& params, 
-                                   void* input, 
-                                   void* output,
-                                   TimeBreakDown* time_breakdown
-                                   /*std::vector<bool>& criticality*/){
-    std::vector<DeviceType> ret;
-    if(mode == "cpu" || mode == "gpu" || mode == "tpu"){
-        ret = run_kernel_on_single_device(mode, 
-                                          params, 
-                                          input, 
-                                          output,
-                                          time_breakdown
-                                          /*criticality*/); 
-    }else{
-        ret = run_kernel_partition(mode, 
-                                   params, 
-                                   input, 
-                                   output,
-                                   time_breakdown
-                                   /*criticality*/);
-    }
-    return ret;
-}
    
 int main(int argc, char* argv[]){
-    if(argc < 8){
+    if(argc < 7){
         std::cout << "Usage: " << argv[0] 
                   << " <application name>" // kernel's name
                   << " <problem_size>" // given problem size
@@ -106,7 +14,6 @@ int main(int argc, char* argv[]){
                   << " <iter>" // number of iteration on kernel execution
                   << " <baseline mode>"
                   << " <proposed mode>"
-                  << " <num_sample_pixels>"
                   << std::endl;
         return 0;
     }else{
@@ -125,14 +32,30 @@ int main(int argc, char* argv[]){
     int iter             = atoi(argv[idx++]);
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
-    int num_sample_pixels     = atoi(argv[idx++]);
-    //float criticality_ratio     = atof(argv[idx++]);
     
     std::string testing_img_path = 
-        (argc == 9)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
+        (argc == 8)?argv[idx++]:"../data/lena_gray_2Kx2K.bmp";
     std::string testing_img_file_name = 
         testing_img_path.substr(testing_img_path.find_last_of("/") + 1);
+    
+    void* input_array = NULL;
+    void* output_array_baseline = NULL;
+    void* output_array_proposed = NULL;
 
+    TimeBreakDown* baseline_time_breakdown = new TimeBreakDown;
+    TimeBreakDown* proposed_time_breakdown = new TimeBreakDown;
+
+    std::vector<DeviceType> baseline_device_sequence; // typically will be gpu mode
+    std::vector<DeviceType> proposed_device_sequence;
+
+    std::vector<bool> baseline_criticality_sequence;
+    std::vector<bool> proposed_criticality_sequence;
+
+    // VOPS
+    VOPS baseline_vops;
+    VOPS proposed_vops;
+
+    // create parameter instances
     Params baseline_params(app_name,
                            problem_size, 
                            block_size, 
@@ -146,10 +69,6 @@ int main(int argc, char* argv[]){
                            iter,
                            testing_img_path);
 
-    void* input_array = NULL;
-    void* output_array_baseline = NULL;
-    void* output_array_proposed = NULL;
-
     /* input/output array allocation and inititalization
         All arrays will be casted to corresponding data type
         depending on application.
@@ -159,19 +78,6 @@ int main(int argc, char* argv[]){
                         &input_array,
                         &output_array_baseline,
                         &output_array_proposed);
-    
-    TimeBreakDown* baseline_time_breakdown = new TimeBreakDown;
-    TimeBreakDown* proposed_time_breakdown = new TimeBreakDown;
-
-    std::vector<DeviceType> baseline_device_sequence; // typically will be gpu mode
-    std::vector<DeviceType> proposed_device_sequence;
-
-    std::vector<bool> baseline_criticality_sequence;
-    std::vector<bool> proposed_criticality_sequence;
-
-    // VOPS
-    VOPS baseline_vops;
-    VOPS proposed_vops;
 
     // Start to run baseline version of the application's implementation.
     std::cout << "run baseline... " << baseline_mode << std::endl; 
@@ -196,16 +102,6 @@ int main(int argc, char* argv[]){
     for(unsigned int i = 0 ; i < proposed_device_sequence.size() ; i++){
         proposed_device_type.push_back(int(proposed_device_sequence[i]));
     }
-    
-    if(app_name == "laplacian_2d"){
-        histogram_matching(output_array_baseline, 
-                           output_array_proposed,
-                           problem_size,
-                           problem_size,
-                           block_size,
-                          block_size,
-                          proposed_device_type);
-    }
 
     UnifyType* unify_input_type = 
         new UnifyType(baseline_params, input_array);
@@ -213,7 +109,6 @@ int main(int argc, char* argv[]){
         new UnifyType(baseline_params, output_array_baseline);    
     UnifyType* unify_proposed_type = 
         new UnifyType(proposed_params, output_array_proposed);    
-
 
     // Get quality measurements
     std::cout << "Result evaluating..." << std::endl;
@@ -226,7 +121,6 @@ int main(int argc, char* argv[]){
                                    unify_input_type->float_array,
                                    unify_proposed_type->float_array, 
                                    unify_baseline_type->float_array,
-                                   //proposed_criticality_sequence,
                                    proposed_device_type);
 
     // save result arrays as image files
@@ -308,7 +202,7 @@ int main(int argc, char* argv[]){
                 saliency_ratio,
                 protected_saliency_ratio);
 
-//    delete quality;
+    delete quality;
     delete baseline_time_breakdown;
     delete proposed_time_breakdown;
     delete unify_baseline_type;
