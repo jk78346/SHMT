@@ -1,18 +1,21 @@
 #!/bin/sh
 
-iter=100
+iter=1
 baseline_mode="gpu"
 
-for app_name in "mean_2d" "sobel_2d" "laplacian_2d" "fft_2d" "dct8x8_2d" "srad_2d" "hotspot_2d" "dwt_2d" "blackscholes_2d" "histogram_2d"
+for problem_size in 8192
 do
-    for problem_size in 8192
+    for proposed_mode in "gt_c-ks" # QAWS-KS
     do
-        for block_size in 2048
-        do
-            for proposed_mode in "gt_c"
-             do
-                sudo ./gpgtpu ${app_name} ${problem_size} ${block_size} ${iter} ${baseline_mode} ${proposed_mode}  #../data/super5.png
-            done
-        done
+        sudo ./gpgtpu "mean_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "sobel_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "laplacian_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "fft_2d" ${problem_size} 1024 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "dct8x8_2d" ${problem_size} 1024 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "srad_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "hotspot_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "dwt_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "blackscholes_2d" ${problem_size} 256 ${iter} ${baseline_mode} ${proposed_mode}  
+        sudo ./gpgtpu "histogram_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
     done
 done

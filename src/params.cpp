@@ -28,6 +28,10 @@ void Params::set_tiling_mode(bool flag){
     this->tiling_mode = flag;
 }
 
+void Params::set_kernel_size(unsigned int size){
+    this->block_size = size;
+}
+
 bool Params::get_tiling_mode(){
     return this->tiling_mode;
 }

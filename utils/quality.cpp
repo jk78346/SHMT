@@ -326,12 +326,13 @@ void Quality::common_kernel(Unit& result, Unit& result_critical, int i_start, in
 	float k2 = 0.03;
 	float c1 = 6.5025;  // (k1*L)^2
 	float c2 = 58.5225; // (k2*L)^2
+/*
     if(target_max > 255.){
         std::cout << __func__ 
                   << ": [WARN] should ignore ssim since array.max = " 
                   << target_max << std::endl;
     }
-
+*/
 	// update dynamic range
 	L = fabs(target_max - target_min); 
 	c1 = (k1*L)*(k1*L);

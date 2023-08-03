@@ -26,6 +26,7 @@ public:
     unsigned int get_col_cnt();
     unsigned int get_block_cnt();
     unsigned int get_kernel_size();
+    void set_kernel_size(unsigned int size);
     void set_downsampling_rate(float r){this->downsampling_rate = r; };
     float get_downsampling_rate(){ return this->downsampling_rate; };
     void set_sampling_mode(SamplingMode mode){ this->sampling_mode = mode; };

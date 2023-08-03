@@ -85,7 +85,8 @@ int main(int argc, char* argv[]){
     baseline_device_sequence = baseline_vops.run_kernel(baseline_mode,
                                                         baseline_params,
                                                         input_array,
-                                                        output_array_baseline);
+                                                        output_array_baseline,
+                                                        baseline_time_breakdown);
     timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
@@ -94,7 +95,8 @@ int main(int argc, char* argv[]){
     proposed_device_sequence = proposed_vops.run_kernel(proposed_mode,
                                                         proposed_params,
                                                         input_array,
-                                                        output_array_proposed);
+                                                        output_array_proposed,
+                                                        proposed_time_breakdown);
     timing proposed_end = clk::now();
 
     // convert device sequence type 
@@ -123,84 +125,22 @@ int main(int argc, char* argv[]){
                                    unify_baseline_type->float_array,
                                    proposed_device_type);
 
-    // save result arrays as image files
-    const std::string path_prefix = proposed_params.app_name + "/"
-                                   +std::to_string(proposed_params.problem_size) + "x"
-                                   +std::to_string(proposed_params.problem_size) + "/"
-                                   +proposed_params.app_name + "_" 
-                                   +std::to_string(proposed_params.problem_size) + "_"
-                                   +std::to_string(proposed_params.block_size) + "_"
-                                   +std::to_string(proposed_params.iter) + "_"
-                                   +baseline_mode + "_"
-                                   +proposed_mode;
-     
-    // dump output images
-    auto t = std::chrono::system_clock::now();
-    std::time_t ts = std::chrono::system_clock::to_time_t(t);
-    std::string ts_str = std::ctime(&ts);
-    
-    std::string cmd = "mkdir -p ../log/" + path_prefix;
-    system(cmd.c_str());    
-
-    std::string log_file_path = "../log/" + path_prefix + "/"
-                               + app_name + "_"
-                               +std::to_string(problem_size) + "_"
-                               +std::to_string(block_size) + "_"
-                               +std::to_string(iter) + "_"
-                               +baseline_mode + "_"
-                               +proposed_mode + ".csv";
-
     // Calculate end to end latency of each implementation
     double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
     double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
     
-    std::cout << "=============== Latency ===============" << std::endl;
-    std::cout << std::setprecision(7);
-    std::cout << "        modes compared: \t" << baseline_mode << "\t" 
-                                              << proposed_mode << std::endl;
-    std::cout << " input conversion time: " 
-              << baseline_time_breakdown->input_time_ms << " (ms), " 
-              << proposed_time_breakdown->input_time_ms << " (ms)" << std::endl;
-    std::cout << "           kernel time: " 
-              << baseline_time_breakdown->kernel_time_ms/baseline_params.iter 
-              << " (ms), "
-              << proposed_time_breakdown->kernel_time_ms/proposed_params.iter 
-              << " (ms)"
-              << ", averaged over " << proposed_params.iter 
-              << " time(s)." << std::endl;
-    std::cout << "output conversion time: " 
-              << baseline_time_breakdown->output_time_ms << " (ms), " 
-              << proposed_time_breakdown->output_time_ms << " (ms)" << std::endl;
     std::cout << "--------------- Summary ---------------" << std::endl;
-    std::cout << "     averaged e2e time: " 
+    std::cout << "averaged e2e time: " 
               << baseline_time_breakdown->get_total_time_ms(baseline_params.iter) 
               << " (ms), " 
               << proposed_time_breakdown->get_total_time_ms(proposed_params.iter) 
-              << " (ms), (iteration averaged)" << std::endl;
-    std::cout << "      overall e2e time: " 
-              << baseline_e2e_ms << " (ms), " 
-              << proposed_e2e_ms << " (ms), (iteration included)" << std::endl;
+              << " (ms), speedup: " 
+              << baseline_time_breakdown->get_total_time_ms(baseline_params.iter) / 
+                 proposed_time_breakdown->get_total_time_ms(proposed_params.iter)  
+              << std::endl;
     
-    
-    // dump record to csv file
-    std::cout << "dumping measurement results into file: " 
-              << log_file_path << std::endl;
-
-    float saliency_ratio, protected_saliency_ratio, precision;
-    dump_to_csv(log_file_path, 
-                testing_img_file_name,
-                proposed_params.app_name,
-                baseline_mode,
-                proposed_mode,
-                proposed_params.problem_size,
-                proposed_params.block_size,
-                proposed_params.iter,
-                quality, 
-                baseline_time_breakdown,
-                proposed_time_breakdown,
-                proposed_device_type,
-                saliency_ratio,
-                protected_saliency_ratio);
+    std::cout << "mape: " << quality->error_rate() << " %" << std::endl;
+    std::cout << std::endl;
 
     delete quality;
     delete baseline_time_breakdown;

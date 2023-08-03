@@ -173,7 +173,7 @@ void HLOPGpu::blackscholes_2d(KernelParams& kernel_params, void** in_img, void**
     *d_OptionStrike,
     *d_OptionYears;
 
-    printf("...allocating GPU memory for options.\n");
+    //printf("...allocating GPU memory for options.\n");
     checkCudaErrors(cudaMalloc((void **)&d_CallResult,   OPT_SZ));
     //checkCudaErrors(cudaMalloc((void **)&d_PutResult,    OPT_SZ));
     checkCudaErrors(cudaMalloc((void **)&d_StockPrice,   OPT_SZ));
@@ -620,10 +620,10 @@ void HLOPGpu::hotspot_2d(KernelParams& kernel_params, void** input, void** outpu
  
     cudaMalloc((void**)&MatrixPower, sizeof(float)*size);
     cudaMemcpy(MatrixPower, FilesavingPower, sizeof(float)*size, cudaMemcpyHostToDevice);
-    printf("Start computing the transient temperature\n");
+    //printf("Start computing the transient temperature\n");
     int ret = compute_tran_temp(MatrixPower,MatrixTemp,grid_cols,grid_rows, \
      total_iterations,pyramid_height, blockCols, blockRows, borderCols, borderRows);
-    printf("Ending simulation\n");
+    //printf("Ending simulation\n");
     cudaMemcpy(MatrixOut, MatrixTemp[ret], sizeof(float)*size, cudaMemcpyDeviceToHost);
  
     //writeoutput(MatrixOut,grid_rows, grid_cols, ofile);

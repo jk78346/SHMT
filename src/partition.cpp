@@ -338,7 +338,7 @@ double PartitionRuntime::run_input_stats_probing(std::string mode, unsigned int 
     }
     //sort(order.begin(), order.end(), sortByVal);
    
-    std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
+    //std::cout << __func__ << ": criticlaity ratio: " << this->params.get_criticality_ratio() << std::endl;
 
     std::string critical_mode = "c-limits";
     this->criticality_kernel(this->params, order, this->params.get_criticality_ratio(), critical_mode); 
