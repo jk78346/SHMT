@@ -1,5 +1,5 @@
-# GPGTPU
-General-Purposed GPU and TPU project (Jetson nano + edgeTPU). \
+# SHMT
+The Simultaneous and Heterogenous Multithreading project (Jetson nano + edgeTPU). \
 This project contains two major parts: kernel model training scheme and the acutal partition execution scheme. These two schemes require two different cooresponding platforms. 
 
 ## Tested platforms
