@@ -11,7 +11,7 @@ int main(int argc, char* argv[]){
                   << " <application name>" // kernel's name
                   << " <problem_size>" // given problem size
                   << " <block_size>" // desired blocking size (effective only if tiling mode(s) is chosen.)
-                  << " <iter>" // number of iteration on kernel execution
+                  << " <test_mode>" // perf or quality
                   << " <baseline mode>"
                   << " <proposed mode>"
                   << std::endl;
@@ -29,7 +29,8 @@ int main(int argc, char* argv[]){
     std::string app_name = argv[idx++];
     int problem_size     = atoi(argv[idx++]);
     int block_size       = atoi(argv[idx++]);
-    int iter             = atoi(argv[idx++]);
+    //int iter             = atoi(argv[idx++]);
+    std::string test_mode     = argv[idx++];
     std::string baseline_mode = argv[idx++];
     std::string proposed_mode = argv[idx++];
     
@@ -60,13 +61,13 @@ int main(int argc, char* argv[]){
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           iter,
+                           test_mode,
                            testing_img_path); 
     Params proposed_params(app_name,
                            problem_size, 
                            block_size, 
                            false, // default no tiling mode. can be reset anytime later
-                           iter,
+                           test_mode,
                            testing_img_path);
 
     /* input/output array allocation and inititalization
@@ -81,23 +82,19 @@ int main(int argc, char* argv[]){
 
     // Start to run baseline version of the application's implementation.
     std::cout << "run baseline... " << baseline_mode << std::endl; 
-    timing baseline_start = clk::now();
     baseline_device_sequence = baseline_vops.run_kernel(baseline_mode,
                                                         baseline_params,
                                                         input_array,
                                                         output_array_baseline,
                                                         baseline_time_breakdown);
-    timing baseline_end = clk::now();
     
     // Start to run proposed version of the application's implementation
     std::cout << "run experiment... " << proposed_mode << std::endl; 
-    timing proposed_start = clk::now();
     proposed_device_sequence = proposed_vops.run_kernel(proposed_mode,
                                                         proposed_params,
                                                         input_array,
                                                         output_array_proposed,
                                                         proposed_time_breakdown);
-    timing proposed_end = clk::now();
 
     // convert device sequence type 
     std::vector<int> proposed_device_type;
@@ -124,13 +121,10 @@ int main(int argc, char* argv[]){
                                    unify_proposed_type->float_array, 
                                    unify_baseline_type->float_array,
                                    proposed_device_type);
-
-    // Calculate end to end latency of each implementation
-    double baseline_e2e_ms = get_time_ms(baseline_end, baseline_start);
-    double proposed_e2e_ms = get_time_ms(proposed_end, proposed_start);
     
     std::cout << "--------------- Summary ---------------" << std::endl;
-    std::cout << "averaged e2e time: " 
+    if(test_mode == "performance"){
+    std::cout << "e2e time: " 
               << baseline_time_breakdown->get_total_time_ms(baseline_params.iter) 
               << " (ms), " 
               << proposed_time_breakdown->get_total_time_ms(proposed_params.iter) 
@@ -138,8 +132,9 @@ int main(int argc, char* argv[]){
               << baseline_time_breakdown->get_total_time_ms(baseline_params.iter) / 
                  proposed_time_breakdown->get_total_time_ms(proposed_params.iter)  
               << std::endl;
-    
-    std::cout << "mape: " << quality->error_rate() << " %" << std::endl;
+    }
+    if(test_mode == "quality")    
+    	std::cout << "mape: " << quality->error_rate() << " %" << std::endl;
     std::cout << std::endl;
 
     delete quality;

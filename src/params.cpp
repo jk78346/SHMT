@@ -6,14 +6,18 @@ Params::Params(
     int problem_size,
     int block_size,
     bool tiling_mode,
-    int iter,
+    std::string test_mode,
     std::string input_data_path){
 
     this->app_name        = app_name;
     this->problem_size    = problem_size;
     this->block_size      = block_size;
     this->tiling_mode     = tiling_mode,
-    this->iter            = iter;
+    assert(test_mode == "performance" || test_mode == "quality");
+    this->iter            = (test_mode == "performance")?
+	    			100:((test_mode == "quality")?1:0);
+    if(app_name == "fft_2d")
+	    this->iter = 1; // to avoid OOM
     this->input_data_path = input_data_path;
 
     assert(problem_size >= block_size);

@@ -15,7 +15,7 @@ public:
           int problem_size=2048,
           int block_size=2048,
           bool tiling_mode = false,
-          int iter=1,
+          std::string test_mode = "performance", // perf or quality
           //std::string input_data_path="../data/lena_gray_2Kx2K.bmp"
           std::string input_data_path="../data/super5.png"
           );

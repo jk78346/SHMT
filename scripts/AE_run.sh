@@ -1,21 +1,25 @@
 #!/bin/sh
 
-iter=1
+problem_size=8192
+proposed_mode="gt_c-ks" # QAWS-KS
 baseline_mode="gpu"
 
-for problem_size in 8192
-do
-    for proposed_mode in "gt_c-ks" # QAWS-KS
-    do
-        sudo ./gpgtpu "mean_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "sobel_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "laplacian_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "fft_2d" ${problem_size} 1024 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "dct8x8_2d" ${problem_size} 1024 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "srad_2d" ${problem_size} 512 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "hotspot_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "dwt_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "blackscholes_2d" ${problem_size} 256 ${iter} ${baseline_mode} ${proposed_mode}  
-        sudo ./gpgtpu "histogram_2d" ${problem_size} 2048 ${iter} ${baseline_mode} ${proposed_mode}  
-    done
-done
+run()
+{
+	for problem_size in $1
+	do
+        	./gpgtpu "mean_2d" ${problem_size} 512 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "sobel_2d" ${problem_size} 512 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "laplacian_2d" ${problem_size} 2048 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "fft_2d" ${problem_size} 1024 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "dct8x8_2d" ${problem_size} 1024 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "srad_2d" ${problem_size} 512 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "hotspot_2d" ${problem_size} 2048 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "dwt_2d" ${problem_size} 2048 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "blackscholes_2d" ${problem_size} 256 $2 ${baseline_mode} ${proposed_mode}  
+        	./gpgtpu "histogram_2d" ${problem_size} 2048 $2 ${baseline_mode} ${proposed_mode}  
+	done
+}
+
+run ${problem_size} "performance"
+run ${problem_size} "quality"
